@@ -1,4 +1,4 @@
-# KAIROS — Backend Implementation Plan
+# Kairos — Backend Implementation Plan
 
 ## Current State
 

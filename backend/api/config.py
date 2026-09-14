@@ -1,5 +1,5 @@
 """
-KAIROS — Application Configuration
+Kairos — Application Configuration
 All settings are read from environment variables (via .env file in development).
 """
 
@@ -256,7 +256,7 @@ class Settings(BaseSettings):
 
     # HMAC-SHA256 shared secret for the inbound MoC resolution webhook
     # (POST /governance/moc/webhook). ARCHITECTURE.md requires the plant's MoC system to sign
-    # resolutions before KAIROS updates the canonical graph. `routers/governance.py` read this via
+    # resolutions before Kairos updates the canonical graph. `routers/governance.py` read this via
     # getattr() long before the field existed, so the check silently never ran whatever .env said.
     # None = unsigned webhooks accepted (dev default). Once set, requests MUST carry a valid
     # X-Webhook-Signature — a missing header is rejected, not waved through.

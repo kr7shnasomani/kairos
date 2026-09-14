@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/ui";
 import { SystemTabs } from "@/components/system-tabs";
 
-// How KAIROS works — a static, visual explainer. No data fetching; informational only.
+// How Kairos works — a static, visual explainer. No data fetching; informational only.
 
 const PIPELINE: { n: string; title: string; body: string; tech: string[] }[] = [
   { n: "1", title: "Ingest & perceive", body: "Documents, operational events, and voice notes enter through one gate. OCR and NER lift entities from unstructured text; P&ID drawings are parsed into topology.", tech: ["NVIDIA NIM", "Groq Whisper", "Jina embeddings"] },
@@ -57,7 +57,7 @@ export default function SystemInformationPage() {
       <PageHeader
         eyebrow="Architecture"
         title="System Information"
-        lede="How KAIROS turns fragmented, tribal knowledge into governed, cited, point-of-action intelligence."
+        lede="How Kairos turns fragmented, tribal knowledge into governed, cited, point-of-action intelligence."
       />
 
       {/* Core principles */}

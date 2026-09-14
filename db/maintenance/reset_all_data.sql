@@ -1,5 +1,5 @@
 -- =============================================================================
--- KAIROS — FULL Supabase data reset (destructive)
+-- Kairos — FULL Supabase data reset (destructive)
 -- =============================================================================
 -- Empties EVERY table in the public schema (schema, RLS, and auth users kept).
 -- Use to return the cloud DB to a pristine state before reloading the golden

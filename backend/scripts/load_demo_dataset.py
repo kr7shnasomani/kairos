@@ -1,5 +1,5 @@
 """
-Load the KAIROS golden dataset (``dataset/``) into a running stack.
+Load the Kairos golden dataset (``dataset/``) into a running stack.
 
 Drives the *real* API endpoints so the true pipeline runs (OCR -> NER -> graph ->
 index for documents; brief assembly for events) — the same path a production
@@ -402,7 +402,7 @@ def _wait_for_pipelines(timeout_s: float = 900.0) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Load the KAIROS golden demo dataset into a running stack.")
+    parser = argparse.ArgumentParser(description="Load the Kairos golden demo dataset into a running stack.")
     parser.add_argument("--fast", action="store_true", help="Skip the document pipeline + voice (structured backbone + events only).")
     args = parser.parse_args()
 

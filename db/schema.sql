@@ -1,5 +1,5 @@
 -- =============================================================================
--- KAIROS — Consolidated Supabase (PostgreSQL) schema
+-- Kairos — Consolidated Supabase (PostgreSQL) schema
 -- =============================================================================
 -- Single source of truth for the relational schema: migrations 001–016 folded
 -- into their base tables. Apply to a fresh database to get the full current schema.

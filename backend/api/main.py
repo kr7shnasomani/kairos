@@ -1,5 +1,5 @@
 """
-KAIROS — FastAPI Application Entry Point
+Kairos — FastAPI Application Entry Point
 """
 
 from collections.abc import AsyncGenerator
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="KAIROS API",
+        title="Kairos API",
         description=(
             "Industrial Operational Intelligence Platform — "
             "proactive, event-driven knowledge delivery for asset-intensive industries."

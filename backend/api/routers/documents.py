@@ -44,7 +44,7 @@ def _access_tags(current_user: dict, authority_level: int) -> dict:
     """Permission tags stamped onto a vault artifact at ingestion (Layer 2).
 
     ARCHITECTURE.md L2 specifies six things each artifact receives; this was the missing one.
-    The spec says the tags are "derived from the source system's IAM configuration" — KAIROS has
+    The spec says the tags are "derived from the source system's IAM configuration" — Kairos has
     **no external source-system IAM feed** (no SAP/Maximo/DMS identity plane), so deriving them
     from an imaginary one would be fabrication. They are derived instead from the deployment's
     own enforced RBAC, and `derived_from` says so plainly rather than implying an upstream
@@ -1003,7 +1003,9 @@ async def supersede_document(
             body={"doc": {"status": "superseded"}},
         )
     except Exception as exc:
-        index_errors.append(f"elasticsearch: {exc}")
+        # Only the store name goes back to the caller; the exception text stays in the log
+        # (code scanning py/stack-trace-exposure).
+        index_errors.append("elasticsearch")
         log.warning("document.supersede_es_update_failed", document_id=document_id, error=str(exc))
 
     try:
@@ -1011,7 +1013,7 @@ async def supersede_document(
             settings_dep.QDRANT_COLLECTION_DOCUMENTS, document_id
         )
     except Exception as exc:
-        index_errors.append(f"qdrant: {exc}")
+        index_errors.append("qdrant")
         log.warning("document.supersede_qdrant_update_failed", document_id=document_id, error=str(exc))
 
     # Blast-radius analysis

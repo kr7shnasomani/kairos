@@ -1,5 +1,5 @@
 """
-KAIROS — Layer smoke + latency verification.
+Kairos — Layer smoke + latency verification.
 
 Runs one real action per architecture layer against the LIVE stack and prints a
 PASS/FAIL + latency (ms) table. Doubles as a smoke test and a light perf check.
@@ -101,7 +101,7 @@ async def _synthesize(c: httpx.AsyncClient, headers: dict) -> tuple[bool, str]:
 
 def _print_table() -> None:
     passed = sum(1 for r in _results if r[2])
-    print("\n  KAIROS — Layer Verification")
+    print("\n  Kairos — Layer Verification")
     print("  " + "=" * 78)
     print(f"  {'LAYER':<22}{'CHECK':<38}{'STATUS':<7}{'ms':>7}")
     print("  " + "-" * 78)
@@ -112,6 +112,6 @@ def _print_table() -> None:
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="KAIROS per-layer smoke + latency check")
+    ap = argparse.ArgumentParser(description="Kairos per-layer smoke + latency check")
     ap.add_argument("--full", action="store_true", help="include slow LLM/VLM checks (hit NIM)")
     asyncio.run(main(ap.parse_args().full))

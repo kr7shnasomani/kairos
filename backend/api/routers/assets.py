@@ -112,7 +112,7 @@ async def bulk_import_assets(
     """
     Layer 1's golden-record bootstrap — the half of the MDM import that had no endpoint.
 
-    The architecture opens with "KAIROS begins every deployment by ingesting the enterprise
+    The architecture opens with "Kairos begins every deployment by ingesting the enterprise
     golden record", then separately describes a human bootstrap for assets the golden record is
     *missing*. Only the second existed: `POST /assets/` takes one asset at a time, so a plant
     could only be bootstrapped by hand.
@@ -185,7 +185,9 @@ async def bulk_import_assets(
             # Row-level, so one bad row is one bad row. The graph write is idempotent, so a
             # retry of this file re-attempts exactly the rows that did not land.
             log.warning("asset.bulk_row_failed", row=idx, asset_id=asset_id, error=str(exc))
-            failed.append({"row": idx, "asset_id": asset_id, "error": str(exc)[:200]})
+            # The exception text stays in the log: returned to the caller it exposed store
+            # internals (code scanning py/stack-trace-exposure). The row id is enough to retry.
+            failed.append({"row": idx, "asset_id": asset_id, "error": "write_failed"})
 
     # ES is a search index, not a system of record — a failed index must not fail the import.
     # The asset is already canonical in Neo4j and Supabase; it is only harder to search for.

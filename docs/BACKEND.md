@@ -1,12 +1,12 @@
-# KAIROS — Backend Reference
+# Kairos — Backend Reference
 
-> **For AI coding agents:** This document covers every service, worker, data model, and configuration parameter in the KAIROS backend. Read alongside `ARCHITECTURE.md` (layer design), `docs/API.md` (endpoint reference), `docs/INFRA.md` (containers, ports, Redis/Qdrant/ES, observability, dev commands), and `docs/FIXTURES.md` (mock data fallbacks). All 34 implementation tasks are verified complete.
+> **For AI coding agents:** This document covers every service, worker, data model, and configuration parameter in the Kairos backend. Read alongside `ARCHITECTURE.md` (layer design), `docs/API.md` (endpoint reference), `docs/INFRA.md` (containers, ports, Redis/Qdrant/ES, observability, dev commands), and `docs/FIXTURES.md` (mock data fallbacks). All 34 implementation tasks are verified complete.
 
 ---
 
 ## Table of Contents
 
-1. [What KAIROS Does](#1-what-kairos-does)
+1. [What Kairos Does](#1-what-kairos-does)
 2. [Repository Layout](#2-repository-layout)
 3. [Infrastructure Stack](#3-infrastructure-stack)
 4. [FastAPI Application](#4-fastapi-application)
@@ -23,9 +23,9 @@
 
 ---
 
-## 1. What KAIROS Does
+## 1. What Kairos Does
 
-KAIROS is an **Industrial Operational Intelligence Platform**. It continuously monitors the operational pulse of asset-intensive facilities (oil & gas, power, pharma, steel, mining) and delivers the right knowledge to the right person at the exact moment it is needed — without being asked.
+Kairos is an **Industrial Operational Intelligence Platform**. It continuously monitors the operational pulse of asset-intensive facilities (oil & gas, power, pharma, steel, mining) and delivers the right knowledge to the right person at the exact moment it is needed — without being asked.
 
 Three-phase architecture:
 - **Phase 1 (live):** Retrieval — ingest documents, build a temporal knowledge graph, answer queries with source-cited results.
@@ -784,7 +784,7 @@ Source: `backend/connectors/cmd/connector/main.go`.
 | `POST` | `/eam/work-order` | Proxies incoming JSON body to FastAPI `POST /events/work-order`. |
 
 > **External systems — mock by design.** The OT historian (PI Web API) and EAM sync
-> (SAP/Maximo) integrate with **plant enterprise systems KAIROS does not own**. With no
+> (SAP/Maximo) integrate with **plant enterprise systems Kairos does not own**. With no
 > live plant to connect to, they run on mock/fixture data by design — the intended state,
 > not a gap. The real paths exist (`PIWebAPIClient` built; SAP ODS + OPC-UA are stubs) and
 > would activate via `PI_WEBAPI_BASE_URL` / `EAM_ODS_ENDPOINT` if a plant were ever
@@ -1133,7 +1133,7 @@ These apply to every code change in this codebase. Violations are bugs.
 
 9. **Secrets via env vars.** All config through `api/config.py` Settings. Never hardcode.
 
-10. **OT data is ephemeral.** Query historian data in memory, reason with it, discard. Never store time-series in KAIROS.
+10. **OT data is ephemeral.** Query historian data in memory, reason with it, discard. Never store time-series in Kairos.
 
 11. **structlog only.** Never `print()`, never `import logging`. `workflow.logger` in Temporal is a stdlib logger — use f-strings for message formatting, not keyword args.
 

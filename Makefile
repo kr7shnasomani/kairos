@@ -1,4 +1,4 @@
-# KAIROS — Developer Makefile (100% Dockerized)
+# Kairos — Developer Makefile (100% Dockerized)
 # Usage: make <target>
 
 # Every target here is a command, not a file. `benchmark` in particular MUST stay
@@ -16,7 +16,7 @@
 # Default target
 help:
 	@echo ""
-	@echo "  KAIROS — Industrial Operational Intelligence Platform"
+	@echo "  Kairos — Industrial Operational Intelligence Platform"
 	@echo "  ======================================================="
 	@echo ""
 	@echo "  Infrastructure & Apps"
@@ -57,7 +57,7 @@ dev:
 prod:
 	docker compose -f docker-compose.yml up -d --build
 	@echo ""
-	@echo "  KAIROS (production mode) — only ports 3000 (frontend) + 8000 (API) published."
+	@echo "  Kairos (production mode) — only ports 3000 (frontend) + 8000 (API) published."
 	@echo ""
 
 stop:

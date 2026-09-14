@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# KAIROS Frontend — multi-stage build (Next.js 16 / React 19)
+# Kairos Frontend — multi-stage build (Next.js 16 / React 19)
 #   deps     → install node_modules once (shared by dev + builder)
 #   dev      → hot-reload dev server (selected by docker-compose.override.yml)
 #   builder  → produces the standalone production bundle (next build)

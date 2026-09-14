@@ -23,7 +23,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
+          # Off: release notes are written by hand. With this on, every tag push appended GitHub's
+          # "What's Changed" changelog to the existing release body.
+          generate_release_notes: false
           make_latest: true
 
       - name: Set up Docker Buildx

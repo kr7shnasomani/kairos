@@ -1,5 +1,5 @@
 """
-KAIROS custom OTEL metrics instruments.
+Kairos custom OTEL metrics instruments.
 Instruments are created against the global MeterProvider set up in telemetry.py.
 All are no-ops when MeterProvider is not configured (avoids import-order issues).
 """

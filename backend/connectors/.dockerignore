@@ -1,5 +1,5 @@
 # =============================================================================
-# KAIROS — backend/connectors/.dockerignore
+# Kairos — backend/connectors/.dockerignore
 # Build context: ./backend/connectors  (used by kairos-backend-go)
 # Multi-stage build: only the compiled binary lands in the release image.
 # This file speeds up the builder stage by trimming the COPY . . sent to it.

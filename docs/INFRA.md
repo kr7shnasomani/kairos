@@ -1,6 +1,6 @@
-# KAIROS — Infrastructure Reference
+# Kairos — Infrastructure Reference
 
-> **For AI coding agents:** This document is the single source of truth for every Docker container, service port, data store configuration, network topology, observability pipeline, and dev command in KAIROS. Read alongside `BACKEND.md` (app-level services) and `ARCHITECTURE.md` (layer design).
+> **For AI coding agents:** This document is the single source of truth for every Docker container, service port, data store configuration, network topology, observability pipeline, and dev command in Kairos. Read alongside `BACKEND.md` (app-level services) and `ARCHITECTURE.md` (layer design).
 
 ---
 
@@ -169,8 +169,8 @@ Grafana Cloud instance. (Pre-cloud, dashboards ran in a local `kairos-grafana` c
 
 | Dashboard | UID | Panels |
 |-----------|-----|--------|
-| KAIROS — Ingestion Pipeline | `kairos-ingestion` | 6 panels: docs/hr, p50/p95 duration, ingest rate, type breakdown, request rate, error rate |
-| KAIROS — Operational Intelligence | `kairos-operational` | 9 panels: briefs/hr, governor suppression, open conflicts, suppression rate, briefs over time, briefs by priority, conflicts by track, governor per-user, traces explorer |
+| Kairos — Ingestion Pipeline | `kairos-ingestion` | 6 panels: docs/hr, p50/p95 duration, ingest rate, type breakdown, request rate, error rate |
+| Kairos — Operational Intelligence | `kairos-operational` | 9 panels: briefs/hr, governor suppression, open conflicts, suppression rate, briefs over time, briefs by priority, conflicts by track, governor per-user, traces explorer |
 
 **Both dashboards are imported and live** (2026-08-15) at `/d/kairos-ingestion` and
 `/d/kairos-operational`, wired to `grafanacloud-prom` and `grafanacloud-traces`.

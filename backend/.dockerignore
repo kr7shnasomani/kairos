@@ -1,5 +1,5 @@
 # =============================================================================
-# KAIROS — backend/.dockerignore
+# Kairos — backend/.dockerignore
 # Build context: ./backend  (used by kairos-backend-api, kairos-celery-worker,
 # kairos-temporal-activity-worker, kairos-elicitation-worker)
 # =============================================================================

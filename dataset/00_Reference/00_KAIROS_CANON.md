@@ -1,4 +1,4 @@
-# KAIROS Demo Dataset — Canon Reference
+# Kairos Demo Dataset — Canon Reference
 
 **Purpose:** Single source of truth for every fact used across the dataset. Every file generated in Phases 1–4 must pull dates, tag numbers, and narrative details from here — nothing gets independently invented downstream. If a new fact is needed later, it gets added here first.
 
@@ -50,7 +50,7 @@ EQ-101 installed 2010. XV-203 last inspected 12-May-2025, 18-month interval (nex
 | 2023 | EQ-103 seal failure (sister asset #3) | WO-2023-0349 |
 | **15-Jan-2025 (T-18mo)** | Fischer issues bulletin: seal P/N FSL-2240A → **FSL-2240B**, improved thermal cycling tolerance | FP-SB-2025-04 |
 | 12-May-2025 | XV-203 formal inspection | INSP-XV203-2025-Q2 |
-| **15-May-2025 (T-14mo)** | EQ-101 Failure #3 — mechanical seal, preceded by thermal cycling; repaired using **old P/N FSL-2240A** (bulletin hadn't reached maintenance stores/technician awareness) — *this gap is the story KAIROS exists to close* | WO-2025-0631 |
+| **15-May-2025 (T-14mo)** | EQ-101 Failure #3 — mechanical seal, preceded by thermal cycling; repaired using **old P/N FSL-2240A** (bulletin hadn't reached maintenance stores/technician awareness) — *this gap is the story Kairos exists to close* | WO-2025-0631 |
 | **15-Jan-2026 (T-6mo)** | Unverified: Suresh Yadav notes unusual vibration on EQ-101, not formally logged | (quarantine, no formal ID) |
 | **1-Jun-2026** | Meridian issues bulletin: HE-3xx max operating pressure **18.5 bar → 16.2 bar** | MHT-PB-2026-11 (supersedes MHT-PB-2022-07) |
 | 2-Mar-2026 | EQ-102 seal replaced (routine) | WO-2026-0203 |

@@ -3,7 +3,7 @@
 The architecture asks for out-of-sequence events to be "buffered and reordered before being
 committed to the trigger queue", with a configurable late-arrival window.
 
-KAIROS implements this by delaying the **derived output** rather than the source of record:
+Kairos implements this by delaying the **derived output** rather than the source of record:
 events are written to `operational_events` immediately, and brief assembly is deferred by
 `LATE_ARRIVAL_WINDOW_MINUTES`. A later event for the same asset revokes the pending task and
 re-enqueues, so the brief waits for stragglers; assembly then reads events back ordered by

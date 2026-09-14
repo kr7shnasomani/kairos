@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# KAIROS Go OT Connector — multi-stage build
+# Kairos Go OT Connector — multi-stage build
 #   builder  → compiles the static binary (also used for `go run` in dev via
 #              docker-compose.override.yml, target: builder)
 #   release  → tiny non-root Alpine image with just the binary (default / AWS)

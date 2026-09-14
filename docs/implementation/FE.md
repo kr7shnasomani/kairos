@@ -1,4 +1,4 @@
-# KAIROS — Frontend Implementation Plan
+# Kairos — Frontend Implementation Plan
 
 > ⚠️ **Superseded on the data-source policy.** This build plan predates the **live-only** switch. Tasks
 > below that say "keep the live→fixture `{data, source}` pattern", "1500 ms abort", "show the demo chip", or
@@ -132,7 +132,7 @@ The frontend is a Next.js 16 / React 19 / Tailwind v4 app (`frontend/`) with **a
 
 # Group B — Field / Point-of-Action Interface (Layer 12 mobile, Layers 8/9/3)
 
-This is the largest gap and the architectural heart of KAIROS: knowledge delivered at the kairos moment, on any device, in field conditions.
+This is the largest gap and the architectural heart of Kairos: knowledge delivered at the kairos moment, on any device, in field conditions.
 
 ## Task 5: Field-mode responsive shell + point-of-action layout
 
@@ -467,7 +467,7 @@ This is the largest gap and the architectural heart of KAIROS: knowledge deliver
 
 ## Task 27: MoC workflow UI
 
-**Layer:** 7 · **Objective:** Surface the Management-of-Change items KAIROS auto-drafts on engineering conflicts/supersessions, and the warning banners that ride on affected facts until sign-off (Flow C). `ponytail:` a manual approval UI stands in for the full webhook cycle, per the architecture's mock note.
+**Layer:** 7 · **Objective:** Surface the Management-of-Change items Kairos auto-drafts on engineering conflicts/supersessions, and the warning banners that ride on affected facts until sign-off (Flow C). `ponytail:` a manual approval UI stands in for the full webhook cycle, per the architecture's mock note.
 
 - Route `src/app/(app)/governance/moc/page.tsx` + `[id]`: `GET /governance/moc` list (status, affected asset/parameter, conflicting sources with authority, blast-radius count, created_at); detail shows the auto-drafted EWR content, both sources, and the blast-radius list (Task 18).
 - Warning-banner integration: any fact/conflict/asset touched by a pending MoC shows a banner naming the MoC number and linking here (copilot answers, conflict detail, asset detail).

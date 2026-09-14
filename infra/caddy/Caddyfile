@@ -1,4 +1,4 @@
-# KAIROS — HTTPS reverse proxy (prod/AWS). Auto-TLS via Let's Encrypt.
+# Kairos — HTTPS reverse proxy (prod/AWS). Auto-TLS via Let's Encrypt.
 # One domain, same-origin: browser hits https://DOMAIN (frontend) and https://DOMAIN/api/* (API),
 # so no CORS. Requires KAIROS_DOMAIN (+ optional KAIROS_TLS_EMAIL) in the environment, and the
 # frontend built with NEXT_PUBLIC_API_URL=https://DOMAIN/api. DNS A record → the EC2 IP first.

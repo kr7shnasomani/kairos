@@ -6,7 +6,7 @@ against per-equipment-class historical distributions) needs a distribution this 
 supply and stays recorded as a known limitation rather than half-built.
 
 WHY "MODEL WEIGHT SIGNING" IS NOT WHAT THIS DOES
-  The architecture asks for "cryptographic signing of all model weight files at source". KAIROS
+  The architecture asks for "cryptographic signing of all model weight files at source". Kairos
   runs **no local weights** — inference is NIM, Jina and Groq over HTTPS, so there is no artifact
   in its custody to sign, and a signature it generated itself would attest to nothing.
 

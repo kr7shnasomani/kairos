@@ -1,9 +1,9 @@
-# KAIROS — Golden Demo Dataset
+# Kairos — Golden Demo Dataset
 
 The `dataset/` directory is a purpose-built, internally-consistent corpus that serves two roles:
 
 1. **Canonical demo state** — a deterministic set of documents, events, and structured records that
-   exercises every KAIROS flow (A–D) and layer end-to-end.
+   exercises every Kairos flow (A–D) and layer end-to-end.
 2. **Evaluation benchmark** — `00_Reference/00_KAIROS_CANON.md` is the single source of truth for every
    fact (assets, dates, tag numbers, the failure narrative), so answers can be scored against it.
 
@@ -21,7 +21,7 @@ The `dataset/` directory is a purpose-built, internally-consistent corpus that s
 
 ## The narrative it encodes
 
-- **Flow A — the knowledge gap KAIROS exists to close.** Fischer issues seal bulletin `FSL-2240A → FSL-2240B`
+- **Flow A — the knowledge gap Kairos exists to close.** Fischer issues seal bulletin `FSL-2240A → FSL-2240B`
   (Jan 2025); it never reaches the stores before EQ-101's third seal failure (May 2025), which is repaired
   with the *old* part. On demo day a new EQ-101 work order opens with live telemetry matching that signature.
 - **Flow B — PTW dual sign-off.** `PTW-2026-0714` isolates V-247; a quarantined PG-18 deviation rides along.

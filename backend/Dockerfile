@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# KAIROS Backend — multi-stage build (FastAPI API + Celery/Temporal workers)
+# Kairos Backend — multi-stage build (FastAPI API + Celery/Temporal workers)
 # One image, four roles (command is set per-service in docker-compose).
 #   builder  → installs all deps into a venv (needs the build toolchain)
 #   runtime  → slim image with only runtime libs + the venv, runs as non-root

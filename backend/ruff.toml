@@ -1,4 +1,4 @@
-# Ruff configuration for the KAIROS backend.
+# Ruff configuration for the Kairos backend.
 #
 # WHY THIS FILE EXISTS
 #   There was no ruff config, so CI ran `ruff check ./backend` with whatever rule set the

@@ -134,7 +134,7 @@ async def main() -> int:
         print(f"  running {name} …")
         arms.append(await _arm(name, questions, settings))
 
-    print(f"\n  KAIROS — Retrieval Baseline   n={len(questions)} golden questions")
+    print(f"\n  Kairos — Retrieval Baseline   n={len(questions)} golden questions")
     print(f"\n  {'arm':<16}{'reach':>8}{'  95% CI':>18}")
     print("  " + "-" * 44)
     for a in arms:

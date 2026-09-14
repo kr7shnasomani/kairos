@@ -1,4 +1,4 @@
-# KAIROS — Agent Context
+# Kairos — Agent Context
 
 ## YOU MUST DO THIS BEFORE EVERY TASK
 

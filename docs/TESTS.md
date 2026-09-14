@@ -1,4 +1,4 @@
-# KAIROS — Integration Test Suite
+# Kairos — Integration Test Suite
 
 ## How to run
 

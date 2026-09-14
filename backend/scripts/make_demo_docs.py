@@ -1,4 +1,4 @@
-"""Generate fresh, ingestable demo documents for the KAIROS presentation.
+"""Generate fresh, ingestable demo documents for the Kairos presentation.
 
 WHY THIS EXISTS
   `POST /documents/ingest` dedups on SHA-256, so any file already in the vault returns

@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-KAIROS — time-to-answer versus traditional keyword search.
+Kairos — time-to-answer versus traditional keyword search.
 
 Measures the "time-to-answer versus traditional search" evaluation criterion, which
-previously had no baseline attached to it — only KAIROS's own latency, with nothing to
+previously had no baseline attached to it — only Kairos's own latency, with nothing to
 compare it against.
 
 WHY A NAIVE LATENCY COMPARISON IS DISHONEST
-  Keyword search returns a document list in ~50 ms; KAIROS returns a cited answer in
+  Keyword search returns a document list in ~50 ms; Kairos returns a cited answer in
   ~8 s. On machine time alone, traditional search "wins" — and that framing is wrong,
   because keyword search hands back a list the engineer must then read. The cost lives in
   human reading time, not in the query.
 
 WHAT THIS MEASURES
-  Both halves, separately, and it never hides the half where KAIROS is slower:
+  Both halves, separately, and it never hides the half where Kairos is slower:
 
-  1. MACHINE TIME     BM25-only Elasticsearch latency vs KAIROS retrieval+synthesis.
+  1. MACHINE TIME     BM25-only Elasticsearch latency vs Kairos retrieval+synthesis.
   2. DOCUMENTS OPENED How far down a BM25-only ranking the first answer-bearing document
                       sits — i.e. how many documents an engineer opens before finding the
-                      fact. KAIROS cites the source directly, so this is 1 by construction.
+                      fact. Kairos cites the source directly, so this is 1 by construction.
   3. HUMAN TIME       documents_opened × SECONDS_PER_DOCUMENT + machine time.
 
   SECONDS_PER_DOCUMENT is an explicit, overridable assumption, not a measurement. Change
@@ -110,7 +110,7 @@ async def main() -> int:
 
             rank, bm25_ms = await _bm25_rank(es, index, q["question"], expect_any)
 
-            # KAIROS: retrieval + synthesis, end to end, exactly as the copilot calls it.
+            # Kairos: retrieval + synthesis, end to end, exactly as the copilot calls it.
             t = time.perf_counter()
             params = {"q": q["question"], "limit": 6}
             if q.get("asset_id"):
@@ -186,22 +186,22 @@ async def main() -> int:
     print("  " + "=" * 74)
     print(f"  Questions: {n}   assumption: {SECONDS_PER_DOCUMENT:.0f}s to read one document")
     print()
-    print("  MACHINE TIME (KAIROS is slower — synthesis is a model call)")
+    print("  MACHINE TIME (Kairos is slower — synthesis is a model call)")
     print(f"    BM25-only mean:            {mean('bm25_ms'):9.1f} ms")
-    print(f"    KAIROS retrieve+synth:     {mean('kairos_ms'):9.1f} ms")
+    print(f"    Kairos retrieve+synth:     {mean('kairos_ms'):9.1f} ms")
     print()
     print("  DOCUMENTS OPENED BEFORE THE FACT")
     print(f"    BM25-only mean rank:       {mean('docs_opened'):9.2f}")
     print(f"    fact in top-10 for:        {len(found)}/{n} questions")
-    print(f"    KAIROS:                    {1:9.2f}  (cited source, verified once)")
+    print(f"    Kairos:                    {1:9.2f}  (cited source, verified once)")
     print()
     print("  MODELLED HUMAN TIME TO A TRUSTED ANSWER")
     print(f"    traditional:               {trad_total/60:9.1f} min total  ({trad_total/n/60:.1f} min/question)")
-    print(f"    KAIROS:                    {kairos_total/60:9.1f} min total  ({kairos_total/n/60:.1f} min/question)")
+    print(f"    Kairos:                    {kairos_total/60:9.1f} min total  ({kairos_total/n/60:.1f} min/question)")
     if kairos_total:
         print(f"    reduction:                 {100 * (1 - kairos_total / trad_total):9.1f} %")
     print()
-    print("  Machine latency is reported unrounded and unweighted: KAIROS loses that")
+    print("  Machine latency is reported unrounded and unweighted: Kairos loses that")
     print("  comparison. The claim is about time to a *trusted, cited* answer, and it")
     print("  depends entirely on the reading-time assumption printed above.")
     return 0

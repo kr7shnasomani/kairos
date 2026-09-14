@@ -21,7 +21,7 @@ _QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION_DOCUMENTS", "kairos_documents"
 _ES_INDEX = os.getenv("ELASTICSEARCH_INDEX_DOCUMENTS", "kairos_documents")
 
 _SAMPLE = b"""
-KAIROS DB-Write Test Document
+Kairos DB-Write Test Document
 Asset: P-101 Centrifugal Pump
 Procedure: Inspect bearing every 8 hours during high-load operation.
 Failure mode: Impeller cavitation due to low suction pressure.

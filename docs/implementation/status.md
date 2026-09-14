@@ -1,4 +1,4 @@
-# KAIROS — Implementation Status
+# Kairos — Implementation Status
 
 > **Single source of truth for open work.** What's **built** ([Layer completion](#layer-completion)),
 > how faithfully it matches the design ([Conformance](#architecture--implementation-conformance)),
@@ -40,7 +40,7 @@ Four deviations are deliberate and cap the score by construction (P&ID Path A, O
 GraphQL connectors, PuppyGraph federated MDM, separate handwriting + form models). The rest of the
 gap is real and listed per layer below.
 
-**Corpus and plant connectivity are a fixed scope boundary, not open work.** KAIROS has **no
+**Corpus and plant connectivity are a fixed scope boundary, not open work.** Kairos has **no
 connection to a live industrial plant** (no OSIsoft PI historian, no SAP/Maximo EAM, single-site) and
 no access to a real industrial document archive — every benchmark figure is measured against the
 authored golden dataset in `dataset/`. Reviewers should not log "synthetic corpus" or "no real plant
@@ -98,7 +98,7 @@ are the external-plant integrations, which are mock **by design**.
 |---|:--:|:--:|---|
 | 0 · Empirical Validation & Model Safety | 🟡 | 94 | Corpus grows from human promotions/annotations; scores per entity type, per asset class **and per document type**; `make model-gate` exits non-zero on regression. **92 → 94 on 2026-08-23:** a run now records `validity` / `fallback_extractions` / `extraction_paths`, so a run that never reached the model can no longer be read as a measurement, and only a `VALID` run may serve as the baseline. Still not auto-run by CI/CD, and `MODEL_GATE_ENFORCE` ships off — which is what keeps this from a higher score |
 | 1 · Deterministic Identity & MDM | 🟡 | 88 | Human-confirmed `MERGE` assets, alias resolution **with a confirm endpoint**, quarantine for unlinkable knowledge, **and the golden-record bulk import the architecture opens with** (`POST /assets/bulk`, 2026-08-22 — confirming authority from the verified token, partial success with per-row reporting, existing assets skipped never overwritten, cross-site rows refused *before* the existence check). The EAM *connector* is still a fixture; the import path it would feed is now real |
-| 2 · Immutable Evidence Vault | ✅ | 97 | Supabase Storage, SHA-256 dedup, version chain, never-delete; supersession now propagates to ES + Qdrant. **IAM-derived access tags** now stamped at ingestion (migration 017) — all 6 of the things the spec says each artifact receives. Tags derive from KAIROS's own enforced RBAC and say so (`derived_from: kairos_rbac`); there is no external source-system IAM feed to read |
+| 2 · Immutable Evidence Vault | ✅ | 97 | Supabase Storage, SHA-256 dedup, version chain, never-delete; supersession now propagates to ES + Qdrant. **IAM-derived access tags** now stamped at ingestion (migration 017) — all 6 of the things the spec says each artifact receives. Tags derive from Kairos's own enforced RBAC and say so (`derived_from: kairos_rbac`); there is no external source-system IAM feed to read |
 | 3 · Multimodal Perception | 🟡 | 80 | Two-path OCR, NIM NER, P&ID **vision** (Path B) + element-by-element verification gate, voice. Form/checklist parsing now has a live path to quarantine (2026-08-23); layout-awareness outstanding. **The 80 is understated and the reason was misattributed.** It was read as a handwriting-model gap; probing the CV endpoint on 2026-08-23 showed the model transcribes the handwritten notes at 0.91 confidence. The OCR path fails for two *engineering* reasons instead — a response key the parser never reads (`text_prediction.text`), and a 180 KB base64 ceiling the degraded scans exceed 11-13x. **Both fixed 2026-08-23** and all four images now return text (see Pending). The score still cannot move yet: nothing downstream reads OCR output that never reached Elasticsearch, so re-scoring waits on the one-off re-extraction, not on further code. |
 | 4 · Temporal Reality Graph | 🟡 | 92 | 6 edge props ✅, time-travel ✅, blast-radius ✅, **all 6 node types now written** (Event via `OCCURRED_ON` from all 6 event routes; Person/Organisation from extraction), and **timestamp alignment now runs on the document-ingestion path** by correlating a document against sibling events for the same asset. Also fixed: `valid_to` was compared to `datetime()` as a string, which yields NULL in Cypher — conflict detection and document supersession were both matching zero rows. Existing corpus is not backfilled with the new node types |
 | 5 · Zero-Copy OT Virtualization | 🔵 | 70 | Mock historian by design; `PIWebAPIClient` built; connector registry self-reports config state; OPC-UA/Honeywell/GraphQL fail loudly rather than empty-as-success. Coverage map is derived from verified topology **only — never joined to the historian tag registry**, which is half the spec's derivation |
@@ -195,7 +195,7 @@ the layer table in the same document.)*
 
 ## Mock-by-design (final — not pending)
 
-Mock because the real counterpart is an **external system KAIROS does not own**, or an enterprise
+Mock because the real counterpart is an **external system Kairos does not own**, or an enterprise
 scale-out beyond the single-site MVP:
 
 | Item | Where | To go live (if a plant is ever connected) |
@@ -294,7 +294,7 @@ Methodology: [`docs/BENCHMARKS.md`](../BENCHMARKS.md).
   model path is never exercised by either.
 - **Time-to-answer's reduction fell 25.6% → 9.5%, for two honest reasons, not a regression.** BM25's
   mean rank *improved* on the wider question set (1.52 → 1.35), so the baseline itself got better;
-  and KAIROS machine time rose (15.7 s → 26.7 s) because the 60 s cap keeps work on NIM instead of
+  and Kairos machine time rose (15.7 s → 26.7 s) because the 60 s cap keeps work on NIM instead of
   truncating onto a faster fallback. The old figure also used a **180 s** client budget — twice what
   the browser allows — so it counted calls the product would have aborted. Now pinned to the
   frontend's real 90 s budget, paced like `run_benchmark.py`.
@@ -656,7 +656,7 @@ updates `pipeline_stage`/`progress_pct`, not those two. Visible only on
 
 ### Triaged from an external bug report — 2026-08-23
 
-A handover list written against branch `feat/beautify` ("KAIROS — non-frontend bugs", B-1…B-7) was
+A handover list written against branch `feat/beautify` ("Kairos — non-frontend bugs", B-1…B-7) was
 verified item by item against `main` and the live stack. Two claims did not reproduce, one was
 already fixed, and the rest are recorded below with what verification actually showed. Kept because
 the report will circulate again and the corrections are worth more than the original list.

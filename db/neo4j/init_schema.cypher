@@ -1,4 +1,4 @@
-// KAIROS Neo4j Schema — Temporal Reality Graph
+// Kairos Neo4j Schema — Temporal Reality Graph
 // Run: python backend/scripts/init_neo4j.py
 // Or directly via Neo4j Browser
 
@@ -86,6 +86,6 @@ FOR ()-[r:KNOWLEDGE_EDGE]-() ON (r.document_id);
 // =============================================================================
 
 MERGE (o:Organisation {org_id: 'KAIROS_PLATFORM'})
-SET o.name = 'KAIROS Platform',
+SET o.name = 'Kairos Platform',
     o.type = 'platform',
     o.created_at = datetime();

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KAIROS — concurrency load test.
+Kairos — concurrency load test.
 
 Supplies the scalability evidence the project had none of: every other number in
 benchmark/RESULTS.md is single-user and sequential, so nothing showed how the stack
@@ -120,7 +120,7 @@ async def main() -> int:
     paths = READ_ENDPOINTS + (MODEL_ENDPOINTS if args.include_models else [])
     levels = [int(x) for x in args.levels.split(",") if x.strip()]
 
-    print("  KAIROS — Concurrency Load Test")
+    print("  Kairos — Concurrency Load Test")
     print("  " + "=" * 78)
     print(f"  Endpoints: {len(paths)} ({'incl. model-backed' if args.include_models else 'reads only'})")
     print(f"  Requests per worker per level: {args.requests}")

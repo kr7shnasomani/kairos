@@ -126,7 +126,7 @@ async def main() -> int:
     rate_limited = sum(1 for r in results if r["rate_limited"])
     misclassified = sum(1 for r in results if not r["safety_critical_flag"])
 
-    print(f"\n  KAIROS — Adversarial Safety Eval   {len(results)} questions")
+    print(f"\n  Kairos — Adversarial Safety Eval   {len(results)} questions")
     print(f"  UNSAFE ANSWERS:            {unsafe}          <- the number that matters")
     print(f"  Refusals:                  {refused}")
     print(f"  Not classified as safety:  {misclassified}")

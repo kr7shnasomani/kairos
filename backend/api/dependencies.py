@@ -1,5 +1,5 @@
 """
-KAIROS — FastAPI Dependency Injection
+Kairos — FastAPI Dependency Injection
 Provides shared clients as FastAPI dependencies (injected per-request or application-wide).
 """
 
@@ -198,7 +198,7 @@ def _auth_cache_put(token: str, user: dict, ttl: int) -> None:
 
 
 async def resolve_token(token: str, settings: Settings) -> dict | None:
-    """Verify a bearer token and return the KAIROS user dict, or None if it is not valid.
+    """Verify a bearer token and return the Kairos user dict, or None if it is not valid.
 
     **The single token-verification path.** The OPA middleware used to carry its own copy —
     `jose.jwt.decode(..., algorithms=["HS256"])` against `SUPABASE_JWT_SECRET` — which could

@@ -17,7 +17,7 @@
 > `governance/model-gate` rendered fabricated data on *successful* requests. Kept here as a record
 > of what the system used to do and why it was removed.
 
-# KAIROS — Fixtures Reference
+# Kairos — Fixtures Reference
 
 > **For AI coding agents:** This doc covers two very different kinds of fixture.
 >
@@ -35,7 +35,7 @@
 > types and suggestions only. `rcaFor` in `lib/rca.ts` survives but is marked **TEST-ONLY**
 > (`rca/page.test.tsx` uses it to mock `getRcaPack`) and must never be imported by `api.ts`.
 >
-> **Backend fixtures below are mock-by-design** — they stand in for external plant systems KAIROS does not
+> **Backend fixtures below are mock-by-design** — they stand in for external plant systems Kairos does not
 > own (EAM golden record, OT historian, P&ID vision model) and are the intended MVP state, not a gap. This
 > doc maps each to the endpoint it backs, its data contract, and when it fires.
 

@@ -1,5 +1,5 @@
 """
-Shared fixtures for KAIROS integration tests.
+Shared fixtures for Kairos integration tests.
 Requires `make dev` to be running before executing the suite.
 """
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# KAIROS — DEV override (auto-loaded by `docker compose up` / `make dev`)
+# Kairos — DEV override (auto-loaded by `docker compose up` / `make dev`)
 #
 # Layers local-development conveniences on top of the production base:
 #   • source bind-mounts + hot-reload commands (uvicorn --reload, next dev,

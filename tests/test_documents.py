@@ -4,7 +4,7 @@ import asyncio
 from tests.conftest import uid
 
 _SAMPLE_TEXT = b"""
-KAIROS Integration Test Document
+Kairos Integration Test Document
 Asset: P-101 Centrifugal Pump
 Procedure: Check bearing temperature every 4 hours during operation.
 Failure mode: Seal leak due to shaft misalignment.

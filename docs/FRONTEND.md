@@ -1,4 +1,4 @@
-# KAIROS — Frontend Reference
+# Kairos — Frontend Reference
 
 Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Docker
 

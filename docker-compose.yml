@@ -1,7 +1,7 @@
 name: kairos
 
 # =============================================================================
-# KAIROS — BASE stack (production / AWS-safe defaults)
+# Kairos — BASE stack (production / AWS-safe defaults)
 #
 #   Local dev :  docker compose up -d --build
 #                (auto-merges docker-compose.override.yml → hot-reload, debug

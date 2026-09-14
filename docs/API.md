@@ -1,4 +1,4 @@
-# KAIROS — API Reference
+# Kairos — API Reference
 
 > **For AI coding agents:** Every HTTP endpoint is documented here. Base URL: `http://localhost:8000`. All endpoints except `/health` and `POST /auth/login` require `Authorization: Bearer <access_token>`.
 >
@@ -966,7 +966,7 @@ time-travel query (`as_of`) still reaches it.
 
 `moc_id` is non-null when any affected edge carried `authority_level <= 3`.
 
-**`index_errors` is the one field to check.** Non-empty means the vault row is superseded but a
+**`index_errors` is the one field to check.** It names the stores that failed (`elasticsearch`, `qdrant`); the error detail is in the server log, never in the response. Non-empty means the vault row is superseded but a
 search index still serves the old version as current — re-run the supersede once that store is
 reachable. It is reported rather than raised because Supabase is the source of truth.
 
@@ -2980,7 +2980,7 @@ Aggregated annotation statistics for dashboard display.
 
 **Prefix:** `/audit-log`
 
-Immutable audit trail. Every write operation in KAIROS appends an entry. Read-only API.
+Immutable audit trail. Every write operation in Kairos appends an entry. Read-only API.
 
 > **Note:** The time column is `timestamp`, not `created_at`.
 
@@ -3072,13 +3072,13 @@ Query historian time-series. Uses `PIWebAPIClient` if `PI_WEBAPI_BASE_URL` is co
 }
 ```
 
-`mock: true` when using `MockHistorianClient`. OT data is ephemeral — never stored in KAIROS.
+`mock: true` when using `MockHistorianClient`. OT data is ephemeral — never stored in Kairos.
 
 ---
 
 ### `POST /eam/sync`
 
-Sync EAM assets into KAIROS. Reads `fixtures/sample_assets.json` if `EAM_ODS_ENDPOINT` is not configured (5 assets: P-101, V-201, HX-301, C-401, T-501). POSTs each to FastAPI `POST /assets`.
+Sync EAM assets into Kairos. Reads `fixtures/sample_assets.json` if `EAM_ODS_ENDPOINT` is not configured (5 assets: P-101, V-201, HX-301, C-401, T-501). POSTs each to FastAPI `POST /assets`.
 
 **Response `200`:**
 ```json
@@ -3093,7 +3093,7 @@ Sync EAM assets into KAIROS. Reads `fixtures/sample_assets.json` if `EAM_ODS_END
 
 ### `POST /eam/work-order`
 
-Proxy an EAM work order into KAIROS event ingestion. Forwards raw body to FastAPI `POST /events/work-order`.
+Proxy an EAM work order into Kairos event ingestion. Forwards raw body to FastAPI `POST /events/work-order`.
 
 **Request body:** Same as `POST /events/work-order`.
 

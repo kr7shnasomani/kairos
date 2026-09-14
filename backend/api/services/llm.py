@@ -566,7 +566,7 @@ class LLMService:
                 f"support an answer from the retrieved evidence "
                 f"(self-reported confidence {answer_confidence if answer_confidence is not None else 'none'}, "
                 f"{len(cited)} source(s) cited). "
-                "KAIROS does not hedge on safety-critical parameters. Verify directly against the "
+                "Kairos does not hedge on safety-critical parameters. Verify directly against the "
                 "source documents below and consult the responsible engineering authority."
             ),
             "sources": retrieved_context,
@@ -585,7 +585,7 @@ class LLMService:
         return "\n\n---\n\n".join(blocks)
 
     def _build_synthesis_prompt(self, query: str, context: str) -> str:
-        return f"""You are the KAIROS synthesis engine for an industrial operational intelligence platform.
+        return f"""You are the Kairos synthesis engine for an industrial operational intelligence platform.
 
 Your task is to answer the following query using ONLY the provided source documents.
 - NEVER invent or infer information not present in the sources.
@@ -852,7 +852,7 @@ SOURCES_USED: [comma-separated source numbers]"""
 
         evidence_text = self._format_context(evidence) if evidence else "No evidence documents found."
 
-        prompt = f"""You are the KAIROS RCA engine for an industrial operational intelligence platform.
+        prompt = f"""You are the Kairos RCA engine for an industrial operational intelligence platform.
 
 Generate a Root Cause Analysis (RCA) pack for failure code: {failure_code}
 

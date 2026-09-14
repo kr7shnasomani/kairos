@@ -156,7 +156,7 @@ function RcaResult({ pack }: { pack: RcaPack }) {
 
       {pack.refused ? (
         <RefusalCard
-          reason="This failure code is safety-critical. KAIROS does not synthesize hypotheses — source documents are returned directly for engineer review."
+          reason="This failure code is safety-critical. Kairos does not synthesize hypotheses — source documents are returned directly for engineer review."
           sources={briefSources}
           escalateTo="Reliability Engineer or Plant Safety Officer"
         />

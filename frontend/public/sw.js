@@ -1,4 +1,4 @@
-// KAIROS Service Worker — shell cache + selective API data cache.
+// Kairos Service Worker — shell cache + selective API data cache.
 // Navigations: network-first (fresh HTML + current chunk hashes always win online;
 // cache is offline fallback only). Static assets: stale-while-revalidate.
 // API GETs: cache-first-with-revalidate for offline reads. Write queue lives in idb.ts.

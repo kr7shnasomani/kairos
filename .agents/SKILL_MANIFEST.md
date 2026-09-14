@@ -1,4 +1,4 @@
-# KAIROS Agent Skills Manifest
+# Kairos Agent Skills Manifest
 
 All skills installed in `.agents/skills/`, grouped by domain for fast lookup.
 

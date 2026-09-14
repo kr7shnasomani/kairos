@@ -1,4 +1,4 @@
-# KAIROS Demo Dataset — Verification Report
+# Kairos Demo Dataset — Verification Report
 
 Ran three layers of automated checks against all 31 dataset files + canon + manifest. This is not a self-assessment — every check below is an actual script run against the real files.
 

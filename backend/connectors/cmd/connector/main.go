@@ -1,4 +1,4 @@
-// KAIROS Go Connector Service
+// Kairos Go Connector Service
 // Layer 5: Zero-Copy OT Virtualization Layer
 // Provides: OT historian federation (PI Web API, OPC-UA), high-throughput ingestion
 package main

@@ -2,7 +2,7 @@
 
 Proactive-brief quality (Layer 8) — the eval the suite was missing.
 
-WHY THIS EXISTS. Every other benchmark measures retrieval and Q&A: whether KAIROS answers a
+WHY THIS EXISTS. Every other benchmark measures retrieval and Q&A: whether Kairos answers a
 question well. But the project's thesis is that *retrieval is the wrong paradigm* and the unit of
 value is a brief delivered before anyone asks. That claim had exactly one check behind it —
 `verify_layers.py` asserting `GET /briefs` returns 200 — which is liveness, not quality.
@@ -143,7 +143,7 @@ async def main(report_only: bool) -> int:
     passed = sum(1 for r in results if r["passed"])
     total = len(results)
 
-    print(f"\n  KAIROS — Proactive Brief Quality (Layer 8)   {passed}/{total} cases pass\n")
+    print(f"\n  Kairos — Proactive Brief Quality (Layer 8)   {passed}/{total} cases pass\n")
     print(f"  {'case':<6} {'result':<8} detail")
     print("  " + "-" * 76)
     for r in results:
@@ -172,7 +172,7 @@ async def main(report_only: bool) -> int:
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="KAIROS proactive-brief quality eval")
+    ap = argparse.ArgumentParser(description="Kairos proactive-brief quality eval")
     ap.add_argument("--report-only", action="store_true",
                     help="always exit 0 — use for first-run calibration")
     args = ap.parse_args()

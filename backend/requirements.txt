@@ -1,4 +1,4 @@
-# KAIROS — Python dependencies
+# Kairos — Python dependencies
 # Single file: API + ML perception engine + workers
 
 # --- Web Framework ---

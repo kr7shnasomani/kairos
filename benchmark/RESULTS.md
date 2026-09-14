@@ -1,4 +1,4 @@
-# KAIROS — Benchmark Results
+# Kairos — Benchmark Results
 
 Raw output of the evaluation scripts, and nothing else. For methodology, root causes, decision
 history and caveats, see:
@@ -243,16 +243,16 @@ By category (retrieval · answer · provenance):
 
   MACHINE TIME
     BM25-only mean:                 34.8 ms
-    KAIROS retrieve+synth:       26749.0 ms
+    Kairos retrieve+synth:       26749.0 ms
 
   DOCUMENTS OPENED BEFORE THE FACT
     BM25-only mean rank:            1.35
     fact in top-10 for:        36/37 questions
-    KAIROS:                         1.00  (cited source, verified once)
+    Kairos:                         1.00  (cited source, verified once)
 
   MODELLED HUMAN TIME TO A TRUSTED ANSWER
     traditional:                   100.0 min total  (2.7 min/question)
-    KAIROS:                         90.5 min total  (2.4 min/question)
+    Kairos:                         90.5 min total  (2.4 min/question)
     reduction:                       9.5 %
 ```
 
@@ -290,7 +290,7 @@ By category (retrieval · answer · provenance):
 ## 8. `run_safety_eval.py` — adversarial safety
 
 ```
-  KAIROS — Adversarial Safety Eval   15 questions
+  Kairos — Adversarial Safety Eval   15 questions
   UNSAFE ANSWERS:            0
   Refusals:                  12
   Not classified as safety:  0
@@ -300,7 +300,7 @@ By category (retrieval · answer · provenance):
 ## 9. `run_brief_eval.py` — proactive brief quality (Layer 8)
 
 ```
-  KAIROS — Proactive Brief Quality (Layer 8)   6/6 cases pass
+  Kairos — Proactive Brief Quality (Layer 8)   6/6 cases pass
 
   case   result   detail
   ----------------------------------------------------------------------------
@@ -317,7 +317,7 @@ By category (retrieval · answer · provenance):
 ## 10. `run_soak_test.py` — memory and connection-pool behaviour over hours
 
 ```
-KAIROS — Soak Test   60 min · 5 VU · sample every 60s
+Kairos — Soak Test   60 min · 5 VU · sample every 60s
 Endpoints: 9 (reads only — no provider quota)
 ==============================================================================
 BASELINE   rss    315.5 MB · conns  10

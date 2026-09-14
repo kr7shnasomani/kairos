@@ -1,4 +1,4 @@
-# KAIROS — System design diagrams
+# Kairos — System design diagrams
 
 Mermaid sources for the landing page **System design** section (`frontend/src/app/page.tsx`,
 `systemDesign[]`). One overview plus one drill-down per tab; each heading here is the tab `id`.
@@ -42,7 +42,7 @@ Colour carries meaning rather than decoration, and it is the same meaning on eve
 | `work` | Async and background | `#f0ede8` / `#6b6259` |
 | `think` | Model-backed reasoning | `#fdf4e6` / `#a66a00` |
 | `store` | Persistent state | `#edf1f4` / `#3e5c6b` — the one cool hue, so storage separates at a glance |
-| `ext` | Outside KAIROS | `#f7f5f2` / `#9a9086`, dashed |
+| `ext` | Outside Kairos | `#f7f5f2` / `#9a9086`, dashed |
 | `human` | Human authority gate | `#e9f2ec` / `#2f6b3e` |
 | `stop` | Refusal / hard gate | `#f5e1dc` / `#9a3324` |
 

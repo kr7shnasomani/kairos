@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KAIROS — compliance gap-detection accuracy.
+Kairos — compliance gap-detection accuracy.
 
 Measures the "compliance gap detection accuracy" evaluation criterion, which previously
 had no number attached to it.
@@ -153,7 +153,7 @@ async def main(max_false_negatives: int = 0) -> int:
     status_checked = [k for k in truth if k in reported or truth[k] != "covered"]
     agree = sum(1 for k in status_checked if reported.get(k, "covered") == truth[k])
 
-    print("  KAIROS — Compliance Gap Detection Accuracy")
+    print("  Kairos — Compliance Gap Detection Accuracy")
     print("  " + "=" * 72)
     print(f"  Applicable (clause × asset) pairs in ground truth: {len(truth)}")
     print(f"  Findings returned by /compliance/gaps:             {len(reported)}")

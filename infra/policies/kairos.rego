@@ -3,7 +3,7 @@ package kairos.authz
 import rego.v1
 
 # =============================================================================
-# KAIROS — Open Policy Agent Governance Rules
+# Kairos — Open Policy Agent Governance Rules
 # Enforces: RBAC, authority hierarchy, asset-level access control
 # =============================================================================
 

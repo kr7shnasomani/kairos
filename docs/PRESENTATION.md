@@ -1,4 +1,4 @@
-# KAIROS — Presentation Script (FINAL)
+# Kairos — Presentation Script (FINAL)
 
 One presenter · one screen · the live app · no slides.
 

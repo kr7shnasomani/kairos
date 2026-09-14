@@ -1,5 +1,5 @@
 """
-KAIROS — Domain-expert benchmark (PS "Evaluation Focus").
+Kairos — Domain-expert benchmark (PS "Evaluation Focus").
 
 Methodology (fully deterministic — no LLM judge, so every number is reproducible):
   • Per-question routing  — each question pulls context from the right source(s):
@@ -8,7 +8,7 @@ Methodology (fully deterministic — no LLM judge, so every number is reproducib
   • Answer quality         — the synthesized answer must *state* the required fact(s) and not negate
     them: `must_all` = every token (exact/multi-part facts), `answer_any` = any correct-answer token
     (comparative questions), else `expect_any`. A fact wrapped in a negator ("not 16.2") fails.
-  • Provenance             — every non-refused answer must cite sources[] (KAIROS: no claim w/o provenance).
+  • Provenance             — every non-refused answer must cite sources[] (Kairos: no claim w/o provenance).
   • KG linkage             — deterministic Cypher (assets linked, edges, verification).
   • Time-to-answer         — latency per question.
 Entity-extraction F1 is the Layer-0 model gate: backend/scripts/run_model_validation.py.
@@ -266,7 +266,7 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
     if done:
         print(f"\n  Resuming: {len(done)} question(s) already graded in {checkpoint}", flush=True)
 
-    print(f"\n  KAIROS — Domain Benchmark  ({n} questions)")
+    print(f"\n  Kairos — Domain Benchmark  ({n} questions)")
     print("  " + "=" * 84)
     hdr = f"  {'ID':<5}{'QUESTION':<46}{'RETR':<6}"
     if not retrieval_only:
@@ -465,7 +465,7 @@ async def _kg_completeness() -> str:
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="KAIROS domain-expert benchmark")
+    ap = argparse.ArgumentParser(description="Kairos domain-expert benchmark")
     ap.add_argument("--retrieval-only", action="store_true", help="skip synthesis + grading (retrieval + KG only, fast)")
     ap.add_argument("--selftest", action="store_true", help="assert the grader logic and exit (no stack needed)")
     ap.add_argument("--delay", type=float, default=15.0,

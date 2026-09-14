@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KAIROS — soak test (backlog #4).
+Kairos — soak test (backlog #4).
 
 WHAT THIS IS FOR, AND WHY IT IS NOT THE LOAD TEST
   `run_load_test.py` sweeps *concurrency* — 1→50 VU over a few minutes — and answers "how many
@@ -159,7 +159,7 @@ async def main(minutes: float, vu: int, interval: float, idle: float) -> int:
     errs: list[int] = []
     total_reqs = 0
 
-    print(f"\n  KAIROS — Soak Test   {minutes:g} min · {vu} VU · sample every {interval:g}s")
+    print(f"\n  Kairos — Soak Test   {minutes:g} min · {vu} VU · sample every {interval:g}s")
     print(f"  Endpoints: {len(READ_ENDPOINTS)} (reads only — no provider quota)")
     print("  " + "=" * 78)
 
@@ -268,7 +268,7 @@ def _selftest() -> None:
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="KAIROS soak test — steady load, leak detection")
+    ap = argparse.ArgumentParser(description="Kairos soak test — steady load, leak detection")
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--vu", type=int, default=5)
     ap.add_argument("--interval", type=float, default=60)

@@ -1,4 +1,4 @@
-# KAIROS — Docker & Deployment Reference
+# Kairos — Docker & Deployment Reference
 
 > **Single source of truth for the container build system, local vs production
 > run modes, and AWS deployment.** Read alongside [`INFRA.md`](./INFRA.md)
@@ -8,7 +8,7 @@
 
 ## 1. Design in one picture
 
-KAIROS runs one container per service (frontend, API, workers, each datastore,
+Kairos runs one container per service (frontend, API, workers, each datastore,
 each observability component). Everything is **local containers except the
 managed cloud services**:
 

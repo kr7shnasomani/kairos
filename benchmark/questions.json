@@ -1,5 +1,5 @@
 {
-  "_comment": "KAIROS domain-expert benchmark. Facts grounded in dataset/00_Reference/00_KAIROS_CANON.md. Grading is fully deterministic (no LLM judge). Fields: 'category' groups questions for per-category scoring; 'expect_any' = retrieval signal (did the fact reach the synthesis context?); answer correctness uses, in order, 'must_all' (every token, non-negated — exact/multi-part facts), else 'answer_any' (any token — comparative answers), else 'expect_any'. A required fact wrapped in a negator ('not 16.2') does not count. Every non-refused answer must also cite sources[]. Run with run_benchmark.py.",
+  "_comment": "Kairos domain-expert benchmark. Facts grounded in dataset/00_Reference/00_KAIROS_CANON.md. Grading is fully deterministic (no LLM judge). Fields: 'category' groups questions for per-category scoring; 'expect_any' = retrieval signal (did the fact reach the synthesis context?); answer correctness uses, in order, 'must_all' (every token, non-negated — exact/multi-part facts), else 'answer_any' (any token — comparative answers), else 'expect_any'. A required fact wrapped in a negator ('not 16.2') does not count. Every non-refused answer must also cite sources[]. Run with run_benchmark.py.",
   "questions": [
     {
       "id": "Q01",

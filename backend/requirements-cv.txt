@@ -1,5 +1,5 @@
 # =============================================================================
-# KAIROS — Path A computer-vision stack (FUTURE / not installed by default)
+# Kairos — Path A computer-vision stack (FUTURE / not installed by default)
 # =============================================================================
 # The Layer 3 P&ID drawing parser currently uses Path B — a cloud vision-language
 # model (NIM meta/llama-3.2-11b-vision-instruct, see api/services/pid.py). That

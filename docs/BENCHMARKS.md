@@ -1,4 +1,4 @@
-# KAIROS — Benchmarks & Evaluation
+# Kairos — Benchmarks & Evaluation
 
 > Maps directly to the Problem Statement's **Evaluation Focus**. Every number here is
 > **reproducible** against the loaded golden dataset — no hand-picked figures.
@@ -68,7 +68,7 @@ and slower — a poor fit for a platform whose pitch is reproducibility and prov
   else `expect_any`. A required fact wrapped in a negator (*"not 16.2 bar"*) does **not** count. This kills the
   two failure modes of naive keyword scoring — false positives from negation and false negatives from strict
   wording — while staying deterministic.
-- **Provenance** — every non-refused answer must cite `sources[]` (KAIROS rule: no claim without provenance).
+- **Provenance** — every non-refused answer must cite `sources[]` (Kairos rule: no claim without provenance).
   A refusal is a valid, correct outcome (the safety gate) and carries its own sources.
 - **Per-category scoring** — every question carries a `category` (current-fact, temporal-supersession,
   safety-isolation, counterfactual, alias-resolution, regulatory, traceability, …); results break down by
@@ -111,7 +111,7 @@ docker exec -d kairos-backend-api python benchmark/run_soak_test.py --minutes 60
 Measured **2026-08-16** — the first full sweep on the shipping configuration (37 questions, 40 NER
 labels, `NVIDIA_NIM_TIMEOUT=60`). Raw output → [`../benchmark/RESULTS.md`](../benchmark/RESULTS.md).
 
-| PS "Evaluation Focus" criterion | KAIROS metric | Result |
+| PS "Evaluation Focus" criterion | Kairos metric | Result |
 |---|---|---|
 | **Time-to-answer** | Per-layer latency + synthesis percentiles | **13/13 layers PASS**; synthesis **p50 1.5 s · p95 9.8 s** (Nemotron 3 Super on NIM at the 60 s cap, 46 questions, 2026-09-13) |
 | **OCR accuracy (Layer 0 extension)** | Recall of salient tokens (asset tags, measurements, references, dates) vs the clean sibling declared in `dataset_manifest.csv`. **The harness makes no model calls** — it reads text already indexed in Elasticsearch, so it is free and safe to run alongside anything | **Unscoreable 4/4, re-confirmed 2026-08-23** — reported as UNSCOREABLE rather than recall 0.0, because nothing was produced and that is an indexing finding, not an accuracy one. **The two OCR defects behind it are now fixed** (a response key the parser never read, and a size ceiling that silently dropped oversized images); all four images transcribe correctly when probed directly. The gate still scores nothing because these documents were ingested *before* the fix and no reprocess endpoint exists, so their text was never indexed. It moves only after a re-extraction — a cloud-store write, out of scope under the no-cloud-writes rule. See `RESULTS.md` §11 |
@@ -134,19 +134,19 @@ Per-category breakdown (15 categories) and per-question output: [`../benchmark/R
 ### Time-to-answer vs "traditional search"
 
 > **This was previously an argument, not a measurement.** The paragraph below cited the problem
-> statement's own industry figures against KAIROS's retrieval latency — which compares a measured
+> statement's own industry figures against Kairos's retrieval latency — which compares a measured
 > number to a survey statistic, not a baseline on the same corpus. `run_time_to_answer.py` now
 > measures both halves on the same question set. Run it before quoting any reduction figure.
 
 Why a naive latency comparison would be dishonest: BM25 returns a document list in ~50 ms while
-KAIROS returns a cited answer in ~8 s. On machine time alone, keyword search wins — the real cost
+Kairos returns a cited answer in ~8 s. On machine time alone, keyword search wins — the real cost
 of keyword search is the human reading the list it hands back. So the harness reports three things
-separately and never hides the one KAIROS loses:
+separately and never hides the one Kairos loses:
 
 | Measure | What it captures |
 |---|---|
-| **Machine time** | BM25-only ES latency vs KAIROS retrieval + synthesis. KAIROS is slower. |
-| **Documents opened** | Rank of the first answer-bearing document in a BM25-only ranking — how many documents an engineer opens before finding the fact. KAIROS cites the source, so this is 1. |
+| **Machine time** | BM25-only ES latency vs Kairos retrieval + synthesis. Kairos is slower. |
+| **Documents opened** | Rank of the first answer-bearing document in a BM25-only ranking — how many documents an engineer opens before finding the fact. Kairos cites the source, so this is 1. |
 | **Modelled human time** | `documents_opened × SECONDS_PER_DOCUMENT + machine time` |
 
 `SECONDS_PER_DOCUMENT` (default 120 s, overridable) is an **explicit assumption, not a

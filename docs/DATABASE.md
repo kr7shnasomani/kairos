@@ -1,4 +1,4 @@
-# KAIROS — Database Reference
+# Kairos — Database Reference
 
 Four persistence systems, each with a distinct responsibility. No system is interchangeable with another.
 
@@ -767,7 +767,7 @@ human promoted          → KNOWLEDGE_EDGE verification_status=verified
 ### Never Do
 
 - `DELETE` in Neo4j or Supabase — supersede/close instead
-- Store time-series historian data in any KAIROS store — ephemeral only
+- Store time-series historian data in any Kairos store — ephemeral only
 - Set `valid_to=null` on a KNOWLEDGE_EDGE — use the sentinel `9999-12-31T23:59:59Z`
 - Use `asset_id=""` in `quarantine_items` — use `None` / SQL NULL
 - Call Supabase client directly in an async handler — always `asyncio.to_thread(lambda: ...)`
