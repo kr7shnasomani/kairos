@@ -93,7 +93,7 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 	if err != nil {
 		return nil, fmt.Errorf("PI search request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var searchResp piSearchResult
 	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
@@ -122,7 +122,7 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 	if err != nil {
 		return nil, fmt.Errorf("PI stream request: %w", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	var streamResp piStreamRecorded
 	if err := json.NewDecoder(resp2.Body).Decode(&streamResp); err != nil {
@@ -161,7 +161,7 @@ func (c *PIWebAPIClient) Health(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("PI Web API health check failed: %d", resp.StatusCode)
 	}

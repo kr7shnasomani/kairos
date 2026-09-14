@@ -41,7 +41,7 @@ type SAPPMConnector struct {
 
 func (c *SAPPMConnector) FetchAssets() ([]AssetRecord, error) {
 	if c.ODSEndpoint == "" {
-		return nil, fmt.Errorf("SAP ODS endpoint not configured. Set EAM_ODS_ENDPOINT in .env. NEVER point to production ERP.")
+		return nil, fmt.Errorf("SAP ODS endpoint not configured: set EAM_ODS_ENDPOINT in .env (never point it at the production ERP)")
 	}
 	// TODO: implement SAP ODS REST query for EQUI / IFLOT records
 	return []AssetRecord{}, nil

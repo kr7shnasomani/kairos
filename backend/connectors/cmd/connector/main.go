@@ -309,7 +309,7 @@ func postAssetToFastAPI(ctx context.Context, asset eamAssetRecord) gin.H {
 	if err != nil {
 		return gin.H{"asset_id": asset.AssetID, "status": "error", "error": err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
@@ -345,7 +345,7 @@ func receiveWorkOrder(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("FastAPI unreachable: %v", err)})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 
 	var result interface{}

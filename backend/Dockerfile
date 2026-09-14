@@ -64,7 +64,9 @@ RUN groupadd --system --gid 1001 kairos \
 # Application code (build context is ./backend; .dockerignore trims caches).
 COPY --chown=kairos:kairos . .
 
-USER kairos
+# Numeric uid:gid (the `kairos` user above, 1001:1001) so the runtime user resolves on any host
+# and orchestrators can verify it is non-root without reading /etc/passwd (hadolint DL3066).
+USER 1001:1001
 
 EXPOSE 8000
 
