@@ -81,6 +81,7 @@ class VaultDocument(BaseModel):
     vault_url: str | None = Field(None, description="Authenticated Supabase Storage URL for direct retrieval")
     ingested_at: datetime
     ingested_by: str
+    ingested_by_name: str | None = Field(None, description="Display name (or email) of the uploader, when resolvable")
     status: str = Field(..., description="active, superseded, archived, disputed")
     version_chain: str | None = Field(None, description="document_id this supersedes (new version → old version pointer)")
     asset_links: list[str] = Field(default_factory=list, description="Linked canonical asset IDs")
@@ -209,7 +210,9 @@ class QuarantineItem(BaseModel):
 class PromoteQuarantineRequest(BaseModel):
     authority_level: int = Field(..., ge=1, le=5, description="1=Regulatory 2=Engineering 3=OEM 4=Procedure 5=Field")
     relationship_type: str = Field(..., description="Neo4j relationship type for the promoted edge, e.g. DOCUMENTED_BY")
-    document_type: str = Field("procedure", description="Type of document for the promoted edge: procedure, inspection_report, oem_manual, etc.")
+    # Defaults to `field_observation`, not `procedure`: quarantine holds field inputs, and a promoted
+    # one typed as a procedure satisfied every clause requiring a documented procedure.
+    document_type: str = Field("field_observation", description="Type of document for the promoted edge: field_observation, inspection_report, procedure, …")
     notes: str | None = None
 
 

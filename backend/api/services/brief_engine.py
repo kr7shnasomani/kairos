@@ -178,7 +178,7 @@ class BriefEngine:
 
     async def assemble_ptw_brief(self, event: PTWEvent) -> Brief:
         topology_task = self._isolation_topology(event.asset_ids)
-        reqs_task = self._ptw_regulatory_requirements(event.ptw_type)
+        reqs_task = self._ptw_regulatory_requirements(event.asset_ids)
         quarantine_task = asyncio.gather(
             *[self._get_quarantine(aid) for aid in event.asset_ids],
             return_exceptions=True,
@@ -207,10 +207,12 @@ class BriefEngine:
             f"Isolation boundary: {', '.join(event.asset_ids)}",
         ]
         if topology:
-            body_lines.append(f"\nGraph knowledge for boundary assets ({len(topology)} edges):")
+            body_lines.append(f"\nGraph knowledge for boundary assets ({len(topology)} records):")
             for e in topology[:5]:
                 edge = e.get("edge", {})
-                body_lines.append(f"  • {edge.get('relationship_type', '?')} | confidence={edge.get('confidence', '?')}")
+                body_lines.append(
+                    f"  • {_humanize_rel(edge.get('relationship_type'))} · confidence {edge.get('confidence', '?')}"
+                )
         if regulations:
             body_lines.append(f"\nRegulatory requirements ({len(regulations)}):")
             for r in regulations[:3]:
@@ -675,7 +677,7 @@ class BriefEngine:
         return result.data or []
 
     async def _get_open_conflicts(self, asset_id: str | None) -> list[dict[str, Any]]:
-        query = self.supabase.table("knowledge_conflicts").select("conflict_id, parameter, track, severity").eq("status", "open")
+        query = self.supabase.table("knowledge_conflicts").select("conflict_id, parameter, track, severity").in_("status", ["open", "pending_moc"])
         if asset_id:
             query = query.eq("asset_id", asset_id)
         result = await asyncio.to_thread(lambda: query.execute())
@@ -714,15 +716,22 @@ class BriefEngine:
                 edges.extend(r)
         return edges
 
-    async def _ptw_regulatory_requirements(self, ptw_type: str) -> list[dict[str, Any]]:
-        """Fetch relevant OISD_117 regulations for this PTW type from the graph."""
-        cypher = """
-        MATCH (reg:Concept {type: 'Regulation', framework: 'OISD_117'})
-        RETURN reg.clause_id AS clause_id, reg.requirement_text AS requirement_text
+    async def _ptw_regulatory_requirements(self, asset_ids: list[str]) -> list[dict[str, Any]]:
+        """Regulations that apply to the equipment inside the isolation boundary.
+
+        This returned the first 5 OISD clauses regardless of what was being isolated, so a valve
+        permit listed pump-overhaul and pressure-vessel rules as its regulatory warnings.
+        """
+        cypher = f"""
+        MATCH (a:Asset) WHERE a.asset_id IN $asset_ids
+        MATCH (reg:Concept {{type: 'Regulation'}})
+        WHERE {_CLAUSE_APPLIES_TO_ASSET}
+        RETURN DISTINCT reg.clause_id AS clause_id, reg.requirement_text AS requirement_text
+        ORDER BY clause_id
         LIMIT 5
         """
         async with self.graph.driver.session(database=self.graph.database) as session:
-            result = await session.run(cypher)
+            result = await session.run(cypher, asset_ids=asset_ids)
             return [dict(r) async for r in result]
 
     async def _get_open_work_orders(self, site_id: str) -> list[dict[str, Any]]:
@@ -796,11 +805,10 @@ class BriefEngine:
 
     async def _get_asset_compliance_obligations(self, asset_id: str) -> list[dict[str, Any]]:
         """Neo4j query for regulations applicable to this asset's equipment class."""
-        cypher = """
-        MATCH (a:Asset {asset_id: $asset_id})
-        MATCH (reg:Concept {type: 'Regulation'})
-        WHERE reg.applies_to_equipment_class IS NULL
-           OR reg.applies_to_equipment_class = a.equipment_class
+        cypher = f"""
+        MATCH (a:Asset {{asset_id: $asset_id}})
+        MATCH (reg:Concept {{type: 'Regulation'}})
+        WHERE {_CLAUSE_APPLIES_TO_ASSET}
         RETURN reg.clause_id AS clause_id, reg.requirement_text AS requirement_text
         LIMIT 5
         """
@@ -857,6 +865,15 @@ _REL_FRIENDLY = {
     "GOVERNED_BY": "governing procedure",
     "HAS_PARAMETER": "process parameter",
 }
+
+
+# Same applicability rule the compliance cockpit uses (routers/compliance.py): clauses name a coarse
+# class ("valve") while assets carry a specific one ("valve_isolation"), so equality matched nothing
+# and a tag-out brief listed no obligations. NULL = applies to every class.
+_CLAUSE_APPLIES_TO_ASSET = """(reg.applies_to_equipment_class IS NULL
+            OR a.equipment_class = reg.applies_to_equipment_class
+            OR a.equipment_class CONTAINS reg.applies_to_equipment_class
+            OR reg.applies_to_equipment_class CONTAINS a.equipment_class)"""
 
 
 def _humanize_rel(rel: str | None) -> str:

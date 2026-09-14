@@ -2,9 +2,8 @@
 import { getAssets } from "@/lib/api";
 import { label } from "@/lib/labels";
 import { EmptyState, KpiGroup, PageHeader } from "@/components/ui";
-import Link from "next/link";
 import { AssetRegistry } from "./asset-registry";
-import { IdentityConfirmAction } from "./identity-action";
+import { IdentityConfirmAction, RegisterAssetAction } from "./identity-action";
 
 export default async function AssetsPage() {
   const { data } = await getAssets();
@@ -28,9 +27,7 @@ export default async function AssetsPage() {
         lede="Every piece of knowledge orbits a canonical asset."
         actions={
           <>
-            <Link href="/assets/bootstrap" className="inline-flex h-9 items-center rounded-lg border border-line px-3.5 text-body font-semibold text-ink transition-colors hover:bg-surface-2">
-              Register asset
-            </Link>
+            <RegisterAssetAction />
             <IdentityConfirmAction />
           </>
         }
@@ -46,7 +43,7 @@ export default async function AssetsPage() {
 
       {items.length === 0 ? (
         <div className="mt-4">
-          <EmptyState message="No assets bootstrapped" action={{ label: "Bootstrap assets", href: "/assets/bootstrap" }} />
+          <EmptyState message="No assets registered yet" action={{ label: "Register assets", href: "/assets/register" }} />
         </div>
       ) : (
         <AssetRegistry assets={items} />

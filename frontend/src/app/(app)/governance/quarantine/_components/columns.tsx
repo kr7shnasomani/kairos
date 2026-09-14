@@ -81,7 +81,7 @@ export function buildColumns(nowMs: number): TableColumn<QuarantineRow>[] {
     {
       key: "submitted_by",
       label: "Submitted by",
-      render: (r) => <span className="text-muted">{r.submitted_by}</span>,
+      render: (r) => <span className="text-muted">{r.submitted_by_name ?? r.submitted_by}</span>,
     },
     {
       key: "age",

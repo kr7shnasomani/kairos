@@ -25,7 +25,10 @@ Self-contained evaluation harness + evidence, in `benchmark/` (mounted into the 
 | `RESULTS.md` | Raw output of the scripts (results only — this file holds the interpretation) |
 | `scripts/seed_validation_corpus.py` | Seeds the Layer-0 NER ground-truth set (`validation_corpus`) that `scripts/run_model_validation.py` scores. **40 labels** (was 13) as of 2026-08-15 — every one verified present in that document's *indexed* text before being added |
 
-> **Sizes, and what limits them.** The question set was widened **25 → 37** on 2026-08-15 so no
+> **Sizes, and what limits them.** The question set was widened **25 → 37** on 2026-08-15, then
+> **37 → 46** on 2026-09-13 (personnel, dates, aliases, hydrotest ratio, PG-18 and PESO facts from the
+> canon; each kept only after a retrieval-only run showed its fact reaching context — one that did not
+> was dropped rather than tuned). The first widening was made so no
 > category sits at n=1 (eight did, where a single flip moved a category from 100% to 0%); retrieval
 > holds at 37/37 and the interval tightened from [87–100%] to [91–100%]. The NER corpus went
 > **13 → 40** labels, but `ORGANIZATION` only reaches n=3: the golden corpus contains exactly two
@@ -110,14 +113,14 @@ labels, `NVIDIA_NIM_TIMEOUT=60`). Raw output → [`../benchmark/RESULTS.md`](../
 
 | PS "Evaluation Focus" criterion | KAIROS metric | Result |
 |---|---|---|
-| **Time-to-answer** | Per-layer latency + synthesis percentiles | **13/13 layers PASS**; synthesis **p50 32.1 s · p95 66.0 s** (NIM 70B at the 60 s cap) |
+| **Time-to-answer** | Per-layer latency + synthesis percentiles | **13/13 layers PASS**; synthesis **p50 1.5 s · p95 9.8 s** (Nemotron 3 Super on NIM at the 60 s cap, 46 questions, 2026-09-13) |
 | **OCR accuracy (Layer 0 extension)** | Recall of salient tokens (asset tags, measurements, references, dates) vs the clean sibling declared in `dataset_manifest.csv`. **The harness makes no model calls** — it reads text already indexed in Elasticsearch, so it is free and safe to run alongside anything | **Unscoreable 4/4, re-confirmed 2026-08-23** — reported as UNSCOREABLE rather than recall 0.0, because nothing was produced and that is an indexing finding, not an accuracy one. **The two OCR defects behind it are now fixed** (a response key the parser never read, and a size ceiling that silently dropped oversized images); all four images transcribe correctly when probed directly. The gate still scores nothing because these documents were ingested *before* the fix and no reprocess endpoint exists, so their text was never indexed. It moves only after a re-extraction — a cloud-store write, out of scope under the no-cloud-writes rule. See `RESULTS.md` §11 |
 | **Cross-functional knowledge discovery** | Counterfactual (`run_cross_functional.py`): questions the full corpus reaches that **no single function's documents** reach alone | **0 of 37** required crossing functions (31/37 reached overall; 21 answerable by one function alone, 7 by two, 3 by three). **A null result, reported as such** — at ~4 documents per function a silo search is near-exhaustive, so there is no gap to close on this corpus (2026-08-23) |
 | **KG linkage completeness** | **Document-centric** (`run_kg_completeness.py`): active vault documents with ≥1 `KNOWLEDGE_EDGE` carrying their `document_id`, test artifacts excluded from the denominator, remainder classified | **18/21 (85%) linked · 1 quarantined by design (Layer 6) · 2 unexplained · 0 dangling** · 87 test documents excluded (re-run 2026-08-24 after **D2**'s backfill; see `RESULTS.md` §12). Two of the original four handwritten/degraded documents were re-extracted and now have real graph edges. The 2 remaining unexplained are the degraded scans (`scanned_inspection_degraded`, `scanned_oem_bulletin_degraded`) — both correctly triggered the 2026-08-24 span-confidence gate and stopped at `review_required`, an earlier staging state than formal Layer 6 quarantine, which is why they read as "unexplained" rather than "quarantined" here. The 1 quarantined-by-design item is `regulatory_clause_excerpts.pdf`, unrelated to this fix |
 | KG linkage — asset cut | Assets linked into the graph + edge verification (Cypher) | **Not currently trustworthy as published** — the underlying query (`MATCH (a:Asset) RETURN count(a)`) has no test-artifact filter, unlike the document cut above. On 2026-08-24 it reads 16/55 (29%), not because linkage regressed but because the graph now holds far more test-sweep assets than it did when 10/10 was last measured. **Quote the document cut above for the PS criterion** until this query is filtered to match |
-| **Query answer quality** | Golden Q&A (37): answer states the correct fact, not negated, with sources | **34/37 (91%)**, 95% CI [79–97%]; run validity **VALID** (3 honest misses — see notes) |
-| **Provenance** | Does every non-refused answer cite `sources[]`? | **37/37 (100%)**, 95% CI [91–100%] |
-| **Retrieval quality** | Does the correct source surface for each question? | **37/37 (100%)**, 95% CI [91–100%] |
+| **Query answer quality** | Golden Q&A (46): answer states the correct fact, not negated, with sources | **41/46 (89.1%)**, 95% CI [77–95%]; run validity **VALID**, 40/46 answered by the pinned NIM model, 6 correct refusals (5 honest misses — Q02, Q09, Q24, Q41, Q46, all of which retrieved the fact; 2026-09-13) |
+| **Provenance** | Does every non-refused answer cite `sources[]`? | **46/46 (100%)**, 95% CI [92–100%] |
+| **Retrieval quality** | Does the correct source surface for each question? | **46/46 (100%)**, 95% CI [92–100%] |
 | **Entity-extraction accuracy** | Layer-0 model gate: precision / recall / F1 per entity type | **F1 0.805** on 40 labels; PERSON 1.0 (n=7), ASSET_TAG 0.889 (n=30), ORGANIZATION 0.8 (n=3). **`VALID`** — 0 of 15 extractions fell back |
 | **Compliance gap detection** | Precision / recall / F1 vs an independently-derived truth table | **P 1.000 · R 0.838 · F1 0.912**, zero false positives |
 | **Cross-functional discovery** | Cross-site advisories | 🟦 fixture (single-site MVP, by design) |
@@ -220,10 +223,10 @@ followed by quiet) — say so when reporting it.
   for the safety-critical parameter asked. Q25 is the instructive case — the bulletin revising the HE-3xx
   limit to 16.2 bar is linked to **HE-301**, while Q25 asks about **HE-302/303**, so answering would mean
   extrapolating a pressure limit onto assets no source covers. Raw and adjusted scores are identical.
-- **The `VIA` column records the answering provider per question.** NIM answers most; **OpenRouter** is
-  tier 2 and serves the *same* `llama-3.1-70b`, so a fallthrough does not change which model answered —
-  11 of 34 answers came from it and the run is still `VALID`. Only Gemini (tier 3, a different model
-  family) triggers `SUSPECT`.
+- **The `VIA` column records the answering provider per question.** In that run NIM and OpenRouter both
+  served `llama-3.1-70b`, so 11 of 34 OpenRouter answers still counted as the same model. NVIDIA retired
+  that model on 2026-09-13 and tier 1 is now Nemotron 3 Super 120B, so from then on **only `nim` counts as
+  the pinned model** — an OpenRouter or Gemini answer marks the run `SUSPECT`.
 - **Entity-F1 uses partial-match on a canon-grounded set.** `ORGANIZATION` is canon-limited to 3 samples,
   so a single stochastic miss swings its per-type rate — quote it with the n. The benchmark also surfaced a
   real code smell — `NERService` can drop a regex-added `ASSET_TAG` when the model labels the same token

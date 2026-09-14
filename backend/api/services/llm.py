@@ -4,6 +4,7 @@ Implements the synthesis layer with mandatory source citation enforcement
 and explicit refusal for safety-critical parameter queries.
 """
 
+import asyncio
 import json
 import re
 from collections import OrderedDict
@@ -16,6 +17,10 @@ import structlog
 from api.config import Settings
 from api.services.http import shared_client
 from api.services.supply_chain import verify_served_model
+
+# Transient NIM gateway errors worth one retry before the cascade hands the answer to another model.
+_NIM_RETRYABLE_STATUS = frozenset({502, 503, 504})
+_NIM_RETRY_DELAY_S = 1.5
 
 log = structlog.get_logger(__name__)
 
@@ -418,7 +423,10 @@ class LLMService:
         result = {
             "answer": streamed,
             "sources": retrieved_context,
-            "model": self.settings.NVIDIA_NIM_MODEL,
+            # Provider key, like every cascade tier returns ("nim", "openrouter", …) — the UI renders it
+            # as the "answered by" badge, and the raw model id here printed a 34-character string there.
+            "model": "nim",
+            "served_model": self.settings.NVIDIA_NIM_MODEL,
         }
         # Runs even for non-safety categories: `result_gate` no-ops unless the category is
         # safety-critical, and calling it unconditionally means a category added to
@@ -436,13 +444,7 @@ class LLMService:
                 "Authorization": f"Bearer {self.settings.NVIDIA_NIM_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": self.settings.NVIDIA_NIM_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": self.settings.NVIDIA_NIM_MAX_TOKENS,
-                "temperature": self.settings.NVIDIA_NIM_TEMPERATURE,
-                "stream": True,
-            },
+            json={**self._nim_payload(prompt), "stream": True},
             timeout=self.settings.NVIDIA_NIM_TIMEOUT,
         ) as response:
             response.raise_for_status()
@@ -602,24 +604,44 @@ CONFIDENCE: [0.0-1.0]
 UNCERTAINTY: [anything you are not certain about]
 SOURCES_USED: [comma-separated source numbers]"""
 
+    def _nim_payload(self, prompt: str) -> dict[str, Any]:
+        """Chat-completions body shared by the blocking and streaming NIM calls."""
+        body: dict[str, Any] = {
+            "model": self.settings.NVIDIA_NIM_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": self.settings.NVIDIA_NIM_MAX_TOKENS,
+            "temperature": self.settings.NVIDIA_NIM_TEMPERATURE,
+        }
+        if self.settings.NVIDIA_NIM_DISABLE_THINKING:
+            body["chat_template_kwargs"] = {"enable_thinking": False}
+        return body
+
     async def _synthesize_nim(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
-        """Calls NVIDIA NIM (OpenAI-compatible API)."""
+        """Calls NVIDIA NIM (OpenAI-compatible API).
+
+        A 502/503/504 is retried once. The hosted endpoint returns short bursts of 503 under load
+        (five in 13 minutes on 2026-09-13), and falling straight through hands the answer to a
+        *different model* — the user sees a Llama answer, and a benchmark run turns SUSPECT. A
+        timeout is not retried: a second full `NVIDIA_NIM_TIMEOUT` would overrun the frontend's
+        90 s synthesis budget.
+        """
         try:
             client = shared_client(self.settings.NVIDIA_NIM_TIMEOUT)
-            response = await client.post(
-                f"{self.settings.NVIDIA_NIM_BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.settings.NVIDIA_NIM_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.settings.NVIDIA_NIM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": self.settings.NVIDIA_NIM_MAX_TOKENS,
-                    "temperature": self.settings.NVIDIA_NIM_TEMPERATURE,
-                },
-                timeout=self.settings.NVIDIA_NIM_TIMEOUT,
-            )
+            for attempt in (1, 2):
+                response = await client.post(
+                    f"{self.settings.NVIDIA_NIM_BASE_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.settings.NVIDIA_NIM_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json=self._nim_payload(prompt),
+                    timeout=self.settings.NVIDIA_NIM_TIMEOUT,
+                )
+                if attempt == 1 and response.status_code in _NIM_RETRYABLE_STATUS:
+                    log.warning("nim.synthesis_retry", status=response.status_code)
+                    await asyncio.sleep(_NIM_RETRY_DELAY_S)
+                    continue
+                break
             response.raise_for_status()
             data = response.json()
             answer_text = data["choices"][0]["message"]["content"]
@@ -663,9 +685,9 @@ SOURCES_USED: [comma-separated source numbers]"""
         configured; on failure (answer is None) it falls through to the next. With
         only NVIDIA_NIM_API_KEY set, this is NIM-only — same behaviour as before.
 
-        OpenRouter sits ahead of Gemini deliberately: it serves the same llama-3.1-70b as tier 1,
-        so falling through to it preserves *which model answered*, while Gemini is a different
-        model family and makes a run's answer-quality figure a blend of two models."""
+        Every tier below NIM serves a different model from the pinned NIM one (tier 1 moved to
+        Nemotron when NVIDIA retired llama-3.1-70b), so any fallthrough makes a run's
+        answer-quality figure a blend of models — the benchmark flags that as SUSPECT."""
         result: dict[str, Any] | None = None
         attempts: dict[str, dict[str, Any]] = {}
         if self.nim_available:
@@ -707,9 +729,8 @@ SOURCES_USED: [comma-separated source numbers]"""
 
     async def _synthesize_openrouter(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
         """
-        Calls OpenRouter — tier 2, tried before Gemini because it serves the same
-        meta-llama/llama-3.1-70b-instruct as tier 1, so falling back here does not change which
-        model the answer came from.
+        Calls OpenRouter — tier 2, tried before Gemini. Serves meta-llama/llama-3.1-70b-instruct,
+        which is not the tier-1 model, so an answer from here counts as a fallback.
         """
         try:
             client = shared_client(self.settings.OPENROUTER_TIMEOUT)

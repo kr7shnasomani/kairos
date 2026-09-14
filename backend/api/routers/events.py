@@ -36,12 +36,31 @@ from api.models.event import (
 )
 from api.services.brief_engine import BriefEngine
 from api.services.event_bus import EventBusService
+from api.services.identity import display_name
 from api.utils.failure_families import FAILURE_FAMILIES
 from workers.attribution import evaluate_outcome
 from workers.brief_assembly import assemble_brief
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
+
+
+async def _canonical_asset(asset_id: str | None, driver, supabase) -> str | None:
+    """The canonical id for an event's asset, accepting confirmed aliases ("P-101" → "EQ-101").
+
+    Operational systems report the tag they know. Events used to be inserted with it verbatim, so an
+    alias failed the `assets` foreign key and surfaced as an unhandled 500; an unknown tag is now a
+    404 that names the tag instead.
+    """
+    if not asset_id:
+        return asset_id
+    from api.routers.assets import resolve_canonical_asset_id
+    from api.services.graph import GraphService
+
+    canonical = await resolve_canonical_asset_id(asset_id, GraphService(driver), supabase)
+    if not canonical:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' is not registered.")
+    return canonical
 
 
 async def _materialise_event_node(
@@ -87,6 +106,7 @@ async def ingest_work_order(
     Canonical deduplication: same asset + event_type within 10-min window → deduplicated.
     Persists to operational_events, publishes to Redis Stream for brief assembly.
     """
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
     bus = EventBusService(redis, settings)
 
     # Scoped by work_order_id: two *different* work orders on one asset inside the window are
@@ -237,6 +257,7 @@ async def ingest_ptw(
     Never deduplicated. Publishes to PTW stream AND directly to BRIEFS stream
     with priority=critical to bypass the EEMUA 191 governor.
     """
+    payload.asset_ids = [await _canonical_asset(a, driver, supabase) for a in payload.asset_ids]
     bus = EventBusService(redis, settings)
     event_dict = payload.model_dump(mode="json")
     primary_asset_id = payload.asset_ids[0] if payload.asset_ids else None
@@ -383,6 +404,7 @@ async def ingest_alarm(
     driver: Neo4jDep,
 ) -> dict:
     """Received when an operator acknowledges a DCS process alarm."""
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
     bus = EventBusService(redis, settings)
 
     # Keyed on alarm_id: a chattering instrument raising two *distinct* alarms on one asset is
@@ -439,12 +461,16 @@ async def flag_deviation(
     supabase: SupabaseDep,
     redis: RedisDep,
     settings: SettingsDep,
+    driver: Neo4jDep,
 ) -> dict:
     """
     Field technicians flag a physical state that does not match engineering drawings.
     Freezes all unacknowledged briefs for the affected asset until an engineer resolves it.
     Publishes to REDIS_STREAM_ALARMS with severity=critical.
     """
+    # A technician types the tag painted on the equipment, which may be an alias. Unresolved, the
+    # flag froze no briefs (they are keyed by canonical id) and the insert could fail its FK.
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
     reported_by = payload.reported_by or current_user.get("user_id", "unknown")
 
     deviation_sla = (datetime.utcnow() + timedelta(hours=24)).isoformat()
@@ -636,7 +662,16 @@ async def set_plant_state(
         }).execute()
     )
     log.info("events.plant_state_set", site_id=payload.site_id, state=payload.state, set_by=set_by)
-    return {"status": "set", "site_id": payload.site_id, "state": payload.state}
+    # The page renders "Set by … · when" straight from this response; returning neither left it
+    # reading "Set by · —" after every change.
+    return {
+        "status": "set",
+        "site_id": payload.site_id,
+        "state": payload.state,
+        "set_by": await display_name(supabase, set_by) or set_by,
+        "set_at": now_iso,
+        "expires_at": payload.expires_at.isoformat() if payload.expires_at else None,
+    }
 
 
 @router.post("/tag-out", summary="Ingest equipment tag-out event", status_code=status.HTTP_202_ACCEPTED)
@@ -652,6 +687,7 @@ async def ingest_tag_out(
     Receives an equipment tag-out event. Deduplicates, publishes to TAG_OUT stream,
     inserts into operational_events, triggers delayed brief assembly.
     """
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
     bus = EventBusService(redis, settings)
 
     if await bus.is_duplicate(payload.asset_id, payload.event_type):
@@ -738,6 +774,8 @@ async def ingest_inspection_complete(
     or non-empty findings. Correlates with other events for the same asset.
     """
     from api.services.graph import GraphService
+
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
 
     # Scoped by inspection_type so a statutory and a routine inspection closing on the same
     # asset within the window are both recorded; only the same inspection re-reported collapses.
@@ -859,7 +897,26 @@ async def get_plant_state_endpoint(
     """Returns the active plant operating state for the operator dashboard banner."""
     bus = EventBusService(redis, settings)
     state = await bus.get_plant_state(site_id, supabase)
-    return {"site_id": site_id, "state": state}
+    # Who set it and when, for the "Set by … · when" line. No row (or an expired one) means the site
+    # is on its configured default, which nobody set.
+    latest = await asyncio.to_thread(
+        lambda: supabase.table("plant_operating_states")
+        .select("state, set_by, set_at, expires_at")
+        .eq("site_id", site_id)
+        .order("set_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    row = (latest.data or [None])[0]
+    if not row or row.get("state") != state:
+        return {"site_id": site_id, "state": state, "set_by": None, "set_at": None, "expires_at": None}
+    return {
+        "site_id": site_id,
+        "state": state,
+        "set_by": await display_name(supabase, row.get("set_by")) or row.get("set_by"),
+        "set_at": row.get("set_at"),
+        "expires_at": row.get("expires_at"),
+    }
 
 
 @router.get("/", summary="List operational events")

@@ -58,7 +58,7 @@ function SlaChip({ c, nowMs }: { c: ConflictRow; nowMs: number }) {
 
 export function buildColumns(nowMs: number, busy: string | null, onResolve: (c: ConflictRow) => void): TableColumn<ConflictRow>[] {
   return [
-    { key: "conflict_id", label: "Conflict", sortable: true, render: (r) => <span className="tabular whitespace-nowrap font-semibold text-accent">{r.conflict_id}</span> },
+    { key: "conflict_id", label: "Conflict", sortable: true, render: (r) => <Link href={`/governance/conflicts/${r.conflict_id}`} className="tabular whitespace-nowrap font-semibold text-accent hover:underline">{r.conflict_id}</Link> },
     { key: "track", label: "Track", sortable: true, render: (r) => <StatusBadge tone={r.track === "engineering" ? "danger" : "info"} dot={false}>{r.track}</StatusBadge> },
     { key: "severity", label: "Severity", sortable: true, render: (r) => <StatusBadge tone={SEV_TONE[r.severity] ?? "neutral"}>{r.severity}</StatusBadge> },
     {

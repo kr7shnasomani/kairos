@@ -53,6 +53,8 @@ export interface Brief {
   acknowledged_by?: string | null;
   countersigned_by?: string | null;
   countersigned_at?: string | null;
+  acknowledged_by_name?: string | null;
+  countersigned_by_name?: string | null;
 }
 
 export interface GovernorState {
@@ -258,8 +260,11 @@ export interface QuarantineItem {
   content: string;
   input_type: string;
   submitted_by: string;
+  /** Readable name when `submitted_by` is a signed-in user; absent for services and source-system names. */
+  submitted_by_name?: string | null;
   submitted_at: string;
   reviewer_id: string | null;
+  reviewer_name?: string | null;
   review_status: QuarantineStatus;
   work_order_id: string | null;
   session_context: Record<string, unknown> | null;
@@ -302,6 +307,8 @@ export interface VaultDocument {
   status: DocumentState;
   ingested_at: string;
   ingested_by: string;
+  /** Readable uploader name when the id is a known user; absent for loader/connector ids. */
+  ingested_by_name?: string | null;
   file_size_bytes?: number;
   mime_type?: string;
   sha256_hash?: string;
@@ -597,8 +604,9 @@ export type PlantOperatingState = "normal" | "turnaround" | "shutdown" | "emerge
 export interface PlantState {
   site_id: string;
   state: PlantOperatingState;
-  set_by: string;
-  set_at: string;
+  /** Null when the site is on its configured default — nobody set it. */
+  set_by?: string | null;
+  set_at?: string | null;
   expires_at?: string | null;
 }
 
@@ -668,6 +676,8 @@ export interface AuditLogEntry {
   entity_id: string;
   action: string;
   performed_by: string;
+  /** Readable name when `performed_by` is a signed-in user. */
+  performed_by_name?: string | null;
   timestamp: string;
   metadata?: Record<string, unknown> | null;
 }
@@ -698,6 +708,8 @@ export interface HealthDetailed {
 // --- Audit pack (GET /compliance/audit-pack) — mirrors backend routers/compliance.py ---
 export interface AuditPackEvidence {
   document_id: string;
+  /** Vault file name, or "Promoted field input" for a promoted quarantine item. */
+  title?: string | null;
   document_type: string | null;
   confidence: number | null;
   verification_status: string | null;

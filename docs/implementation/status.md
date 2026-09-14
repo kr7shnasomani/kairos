@@ -78,7 +78,7 @@ so unlike the integration suite it cannot touch the demo dataset.
 | 8 | Operational Event & Proactive Delivery | ✅ | 8 event sources, Redis Streams, EEMUA governor, `services/brief_engine.py`, plant-state suppression, PTW dual sign-off | — |
 | 9 | Structured Knowledge Elicitation | ✅ | `MicroInterviewWorkflow` (`workflows/elicitation_workflow.py`), off-boarding programmes | — |
 | 10 | Telemetry-Grounded Outcome Attribution | ✅ | `workers/attribution.py` — `_attribute`, `_classify_attestation`, `_check_closeout_attestation` (pure), triggered from `POST /events/work-order` | Brownfield branch fixed 2026-08-17: `evidence_role` now branches the decision; uninstrumented assets use closeout attestation as primary; 12 service-free tests |
-| 11 | Reasoning & Synthesis | ✅ | Hybrid search, `/search/synthesize`, `/search/rca-pack`, safety refusal (NIM `llama-3.1-70b` + Jina embed) | — |
+| 11 | Reasoning & Synthesis | ✅ | Hybrid search, `/search/synthesize`, `/search/rca-pack`, safety refusal (NIM Nemotron 3 Super 120B + Jina embed; `llama-3.1-70b` retired 2026-09-13) | — |
 | 12 | Phased Deployment, Trust & Point-of-Action Interface | ✅ | Next.js frontend, `PhaseBadge`, field mode, all routes | Cross-site advisories render an honest "unavailable" panel (single-site MVP, by design) |
 
 **Score: 12 ✅ live + 1 🟨 live-on-mock + Layer 5 🟦 mock-by-design.** The only non-real data paths
@@ -216,11 +216,11 @@ Methodology: [`docs/BENCHMARKS.md`](../BENCHMARKS.md).
 | Metric | Result | Harness |
 |---|---|---|
 | Layer smoke checks | **13/13 pass** | `verify_layers.py` |
-| Retrieval (fact reaches context) | **37/37 (100%)** CI [91–100%] | `run_benchmark.py` |
-| Query answer quality | **36/37 (97.3%)**, `VALID` — **current, re-measured 2026-08-24** after the `/search` test-artifact fix (see [Pending](#search-was-also-serving-test-pollution-ahead-of-real-evidence--fixed-2026-08-24)). Retrieval went 32/37 → 37/37 alongside it; `personnel` 0/3 → 3/3. One remaining miss (Q02, causal) retrieved correctly — synthesis variance, not a retrieval gap | `run_benchmark.py` |
-| Provenance — all responses, incl. refusals | **37/37 (100%)** CI [91–100%] | `run_benchmark.py` |
-| Provenance — correct answers only | **33/33 (100%)** CI [91–100%] | `run_benchmark.py` (`sourced/correct`) |
-| Synthesis latency | p50 **8.2 s** · mean **16.9 s** — current, 2026-08-24 re-run (was p50 32.1 s · p95 66.0 s · mean 34.1 s on 2026-08-17; not a regression, opposite direction) | `run_benchmark.py` |
+| Retrieval (fact reaches context) | **46/46 (100%)** CI [92–100%] | `run_benchmark.py` |
+| Query answer quality | **41/46 (89.1%)**, `VALID` — **current, re-measured 2026-09-13** on Nemotron 3 Super over 46 questions (widened from 37 that day), on a clean reload with chunked NER, the linked-document search scope, provenance stubs kept out of result slots and the NIM 503 retry. 40/46 answered by NIM, 6 correct refusals, 0 fallbacks. Misses: Q02, Q09, Q24, Q41, Q46 — all retrieved the fact | `run_benchmark.py` |
+| Provenance — all responses, incl. refusals | **46/46 (100%)** CI [92–100%] | `run_benchmark.py` |
+| Provenance — correct answers only | **41/41 (100%)** | `run_benchmark.py` (`sourced/correct`) |
+| Synthesis latency | p50 **1.5 s** · p95 **9.8 s** · mean **3.1 s** — current, 2026-09-13 on Nemotron 3 Super, 46 questions (was p50 8.2 s · mean 16.9 s on 2026-08-24, and p50 32.1 s · p95 66.0 s on 2026-08-17, both on Llama 3.1 70B) | `run_benchmark.py` |
 | Entity-extraction F1 (Layer 0) | **0.805** on 40 labels — `VALID`, 0 of 15 fell back | `run_model_validation.py` |
 | Model gate, in-app (Layer 0) | **0.7816** (P 0.723 · R 0.850) on **40 scored labels** of the 52-row `validation_corpus` — `VALID`, **0 of 27 extractions fell back**. 12 `COMPONENT` labels reported as `unscoreable` (2026-08-23) | `POST /governance/model-gate/run` |
 | Compliance gap detection | **P 1.000 · R 0.838 · F1 0.912**, zero false positives | `run_compliance_eval.py` |
@@ -361,7 +361,7 @@ invisible in the graph. The denylist stays, and widening it needs the same evide
 | Order | Action | Class | Blocked by | Est. |
 |---|---|---|---|---|
 | 1 | **Decide D1**, then add the predicate to `services/ocr.py` | 🟢 | a human decision | ~1 h |
-| 2 | **Re-run `run_benchmark.py`** — the 33/37 in `RESULTS.md` §2 is stale and understates quality; four "misses" now answer correctly. Blocks Backlog #13 | 🟡 ~30 min of NIM quota | nothing | ~40 min |
+| 2 | ~~Re-run `run_benchmark.py`~~ **Done 2026-09-13** — 41/46 (89.1%), `VALID`, on Nemotron 3 Super (46 questions); see `RESULTS.md` §2. Unblocks Backlog #13 | ✅ | — | — |
 | 3 | **Record a synthesis verdict** when 2 runs (Backlog #8) | 🟢 | step 2 | ~1 h |
 | 4 | **Consolidate the two downscale helpers** (Backlog #16) | 🟡 one P&ID vision call to re-validate | nothing | ~1 h |
 | 5 | **Decide D8**, then widen the corpus predicate + re-run `run_kg_completeness.py` + update the quoted figure — one commit | 🟢 | a human decision | ~30 min |
@@ -371,7 +371,7 @@ invisible in the graph. The denylist stays, and widening it needs the same evide
 
 **Caution on the FastAPI upgrade specifically.** It is code-only, but it carries real breakage risk
 across every router *and* there is **no current full-suite pass count** to catch a regression (D4) —
-the 415-test service-free tier is the only backstop, and it cannot exercise queries or routing. Do
+the 476-test service-free tier is the only backstop, and it cannot exercise queries or routing. Do
 not start it casually. `ecdsa` has no released fix regardless, so it closes 7 of 8 advisories, not 8.
 
 **What is already done and must not be re-opened:** the OCR parse and size-ceiling defects (fixed and
@@ -948,7 +948,7 @@ recorded above.
   `equipment_class`, and the `PESO` / `Factory Act` frameworks are not seeded, so they are
   intentionally not shown.
 
-- **`/rca` takes ~90 s** (NIM 70B) and returns `synthesis_available: false` when the graph lacks
+- **`/rca` takes ~90 s** (measured on NIM Llama 3.1 70B; not re-timed on Nemotron) and returns `synthesis_available: false` when the graph lacks
   history. Not a bug.
 
 ---
@@ -961,10 +961,10 @@ recorded above.
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **415 passed** across **33 files** (2026-08-23) — no stack / secrets / network.
+- **Service-free tier:** **476 passed** across **41 files** (2026-09-14) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md` and
   `.github/workflows/tests.yml` and **all three must be updated together** (they have drifted twice).
-- **Frontend:** **228 passed across 67 files — fully green** (2026-08-23), `tsc` clean, `eslint`
+- **Frontend:** **256 passed across 75 files — fully green** (2026-09-14), `tsc` clean, `eslint`
   0 errors / 3 pre-existing unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
   container, so the file could not collect. `docker compose up -d --force-recreate --no-deps
@@ -1083,7 +1083,7 @@ recorded above.
 |---|---|
 | Asset knowledge shows duplicate facts | The graph can hold multiple physical `KNOWLEDGE_EDGE` relationships sharing one logical `edge_id` (Cypher `DISTINCT` can't collapse them — separate graph elements). `GraphService.get_asset_knowledge_at` dedupes by the `edge_id` property; the frontend graph fetcher also dedupes. |
 | Model-gate run "does nothing" | `POST /governance/model-gate/run` only **enqueues** a Celery task that evaluates the NER model over the whole validation corpus (a NIM call per item) — it runs **~12 min**. `model_name` is optional (defaults to `NVIDIA_NIM_NER_MODEL`). The page shows a "queued" banner, disables the button, polls history every 20s, and auto-refreshes when the run lands. History endpoint returns raw audit rows `{items}` (contract-locked) → `api.ts` `getModelGateHistory` flattens to `{history:[ModelGateResult]}`. |
-| `POST /search/rca-pack` slow (~90s) | NIM 70B; returns empty + `synthesis_available:false` when the graph lacks history → RCA page shows honest "Synthesis unavailable". Not a bug. |
+| `POST /search/rca-pack` slow (~90s) | Long NIM synthesis over the timeline (timed on Llama 3.1 70B); returns empty + `synthesis_available:false` when the graph lacks history → RCA page shows honest "Synthesis unavailable". Not a bug. |
 | Off-boarding shapes | List `{items,total}` (item `id`/`total_sessions`); detail adds `session_items[]`. Route `[sessionId]` = **programme id** (select items in-page). Questions are `string[]`; responses `{item_id, responses:[{question_index,answer}]}`. Detail fetch uses a 6 s timeout (slow Supabase). Loader seeds a demo programme. |
 | Field routes | **There is no mobile bottom tab bar** — no `BottomTabs`, no `FieldBottomTabs` (both names appear in older revisions). Mobile navigates via the hamburger sidebar; recover the component from git history if it is ever revived. Field gating is live: `role === "field_worker"` (`use-role.ts` `FIELD_ROLES`, `roleHome` → `/briefs`). Routes under `/field`: `deviation`, `elicitation`, `voice`. SW offline is prod-only; the IndexedDB write queue (`idb.ts`) is app-level and works in dev. |
 | Role-based route access | Enforced centrally in `AppShell` via `routeAllowed(path, role)` + `roleHome(role)` in `use-role.ts` (one guard, not per-page). Staff surfaces need engineer/reliability/admin; `/system-health` is admin-only; a field worker hitting a gated URL is redirected to `/briefs`. Unlisted paths are open to all authed. |

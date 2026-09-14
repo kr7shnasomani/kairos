@@ -198,9 +198,10 @@ def _selftest() -> None:
     # validity verdict — the gate that stops a quota-starved run being quoted as a model result
     assert _validity(Counter(nim=25), 25, 25, False).startswith("VALID")
     assert _validity(Counter(nim=20, refused=5), 25, 25, False).startswith("VALID")
-    # openrouter is the same model as nim, so a run served entirely by it is still VALID
-    assert _validity(Counter(openrouter=25), 25, 25, False).startswith("VALID")
-    assert _validity(Counter(nim=13, openrouter=12), 25, 25, False).startswith("VALID")
+    # openrouter serves a different model from nim since the 2026-09 switch, so it is a fallback
+    assert _validity(Counter(openrouter=25), 25, 25, False).startswith("SUSPECT")
+    assert _validity(Counter(nim=13, openrouter=12), 25, 25, False).startswith("SUSPECT")
+    assert _validity(Counter(nim=23, openrouter=2), 25, 25, False).startswith("VALID")
     assert _validity(Counter(nim=20, gemini=5), 25, 25, False).startswith("SUSPECT")   # 5 > 25//10
     assert _validity(Counter(nim=23, gemini=2), 25, 25, False).startswith("VALID")     # 2 tolerated as noise
     assert _validity(Counter(nim=22, gemini=3), 25, 25, False).startswith("SUSPECT")   # 3 starts moving the score
@@ -425,20 +426,19 @@ def _validity(via: "Counter[str]", graded: int, total: int, aborted: bool) -> st
     if via.get("-"):
         return (f"INVALID — {via['-']} question(s) returned no answer from any provider "
                 "(infrastructure, not model quality). Do not quote.")
-    # `openrouter` serves the SAME llama-3.1-70b as `nim`, so it does not change which model
-    # produced the answer and does not confound the score — it counts as production, not fallback.
-    # Only `gemini` (a different model family) does.
-    same_model = via.get("nim", 0) + via.get("openrouter", 0)
+    # Only `nim` serves the pinned model. `openrouter` (llama-3.1-70b) and `gemini` are both a
+    # different model since NVIDIA retired llama-3.1-70b and tier 1 moved to Nemotron (2026-09-13),
+    # so either one confounds the score.
+    same_model = via.get("nim", 0)
     # A stray fallback or two is noise; beyond ~10% the headline number is partly measuring
     # a different model, which is exactly the confound RESULTS.md warns about.
-    fallback = via.get("gemini", 0)
+    fallback = via.get("gemini", 0) + via.get("openrouter", 0)
     if graded and fallback > max(1, graded // 10):
-        return (f"SUSPECT — {fallback}/{graded} answers came from the Gemini fallback, which is a "
-                "different model. Re-run paced (--delay) before quoting.")
+        return (f"SUSPECT — {fallback}/{graded} answers came from a fallback provider (openrouter/gemini), "
+                "which is a different model. Re-run paced (--delay) before quoting.")
     if via.get("timeout"):
         return f"SUSPECT — {via['timeout']} question(s) timed out client-side. Re-run before quoting."
-    return (f"VALID — {same_model}/{graded} answered by llama-3.1-70b "
-            f"(nim {via.get('nim', 0)} + openrouter {via.get('openrouter', 0)}).")
+    return f"VALID — {same_model}/{graded} answered by the pinned NIM model."
 
 
 async def _kg_completeness() -> str:

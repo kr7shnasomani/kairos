@@ -4,6 +4,7 @@ import { useState } from "react";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { submitVoiceNote } from "@/lib/api";
 import { PageHeader } from "@/components/ui";
+import { useMe } from "@/components/use-role";
 
 type Stage = "record" | "submitting" | "done" | "error";
 
@@ -15,13 +16,17 @@ export default function VoiceCapturePage() {
   const [stage, setStage] = useState<Stage>("record");
   const [taskId, setTaskId] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
+  const [duplicate, setDuplicate] = useState(false);
+  const me = useMe();
 
   async function submit() {
     if (!blob || !tag.trim()) return;
     setStage("submitting");
     try {
-      const res = await submitVoiceNote(tag.trim(), blob, "field_user");
-      setTaskId(res.task_id);
+      // The reviewer sees "Submitted by" in quarantine; a hardcoded "field_user" made every note anonymous.
+      const res = await submitVoiceNote(tag.trim(), blob, me?.email || me?.user_id || "field_user");
+      setDuplicate(res.status === "duplicate");
+      setTaskId(res.task_id ?? null);
       setStage("done");
     } catch {
       setStage("error");
@@ -101,13 +106,20 @@ export default function VoiceCapturePage() {
               <path d="M20 6 9 17l-5-5" />
             </svg>
           </div>
-          <h2 className="mt-4 text-title font-semibold">Submitted</h2>
+          {/* A duplicate used to read "Transcription is processing" — for a note that would never appear. */}
+          <h2 className="mt-4 text-title font-semibold">{duplicate ? "Already submitted" : "Submitted"}</h2>
           <p className="mt-2 text-body text-muted">
-            Transcription is processing.
-            {taskId && (
-              <> Task <span className="tabular font-medium text-ink">{taskId}</span>.</>
-            )}{" "}
-            The result will appear in the knowledge quarantine once complete.
+            {duplicate ? (
+              "This exact recording is already in the knowledge quarantine, so it was not transcribed again."
+            ) : (
+              <>
+                Transcription is processing.
+                {taskId && (
+                  <> Task <span className="tabular font-medium text-ink">{taskId}</span>.</>
+                )}{" "}
+                The result will appear in the knowledge quarantine once complete.
+              </>
+            )}
           </p>
           <button
             onClick={() => { setStage("record"); setBlob(null); setTag(""); }}

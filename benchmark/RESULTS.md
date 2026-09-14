@@ -13,10 +13,10 @@ history and caveats, see:
 | Metric | Result | Harness |
 |---|---|---|
 | Layer smoke checks | 13/13 pass | `verify_layers.py` |
-| Retrieval (fact reaches context) | 37/37 (100%) | `run_benchmark.py` |
-| Query answer quality | 36/37 (97.3%), VALID | `run_benchmark.py` |
-| Provenance — all responses, incl. refusals | 37/37 (100%) | `run_benchmark.py` |
-| Provenance — correct answers only | 36/36 (100%) | `run_benchmark.py` |
+| Retrieval (fact reaches context) | 46/46 (100%) | `run_benchmark.py` |
+| Query answer quality | 41/46 (89.1%), VALID | `run_benchmark.py` |
+| Provenance — all responses, incl. refusals | 46/46 (100%) | `run_benchmark.py` |
+| Provenance — correct answers only | 41/41 (100%) | `run_benchmark.py` |
 | Entity-extraction F1 (Layer 0) | 0.805 on 40 labels, VALID | `run_model_validation.py` |
 | Compliance gap detection | P 1.000 · R 0.838 · F1 0.912 | `run_compliance_eval.py` |
 | Retrieval reach by arm | exact 33/37 (89.2%) · semantic 35/37 (94.6%) · hybrid 35/37 (94.6%) | `run_retrieval_baseline.py` |
@@ -52,7 +52,81 @@ history and caveats, see:
 
 ## 2. `run_benchmark.py` — domain-expert Q&A
 
-**Current — 2026-08-24, checkpoint `run_20260824_1351_postfix.jsonl`:**
+**Current — 2026-09-13, 46 questions, checkpoint `run_20260913_nemotron_46q.jsonl`** (synthesis on NIM
+`nvidia/nemotron-3-super-120b-a12b`; clean reload with chunked NER, linked-document search scope and the
+NIM 503 retry; question set widened 37 → 46 the same day):
+
+```
+Retrieval (fact reaches context):    46/46 (100%)  95% CI [92–100%]
+Answer quality (correct/total):      41/46 (89.1%) 95% CI [77–95%]
+Answer provenance (sourced/correct): 46/46 (100%) all responses · 41/41 correct answers
+Synthesis latency:                   p50 1530 ms · p95 9805 ms · avg 3077 ms
+Provider mix:                        nim 40 · refused 6
+Run validity:                        VALID — 40/46 answered by the pinned NIM model
+```
+
+By category (retrieval · answer · provenance):
+```
+    aggregation            2/2 · 1/2 · 2/2
+    alias-resolution       3/3 · 3/3 · 3/3
+    blast-radius           2/2 · 2/2 · 2/2
+    causal                 3/3 · 2/3 · 3/3
+    counterfactual         2/2 · 2/2 · 2/2
+    current-fact           6/6 · 6/6 · 6/6
+    mdm                    2/2 · 2/2 · 2/2
+    personnel              5/5 · 4/5 · 5/5
+    regulatory             3/3 · 2/3 · 3/3
+    safety-isolation       3/3 · 3/3 · 3/3
+    supersession           2/2 · 2/2 · 2/2
+    temporal               4/4 · 4/4 · 4/4
+    temporal-history       2/2 · 2/2 · 2/2
+    temporal-supersession  2/2 · 2/2 · 2/2
+    traceability           5/5 · 4/5 · 5/5
+  KG linkage (assets):     10/10 assets linked (100%) · 146 edges (11 verified)
+  KG linkage (documents):  19/21 (90%) · 0 quarantined by design · 2 unexplained · 0 dangling
+```
+
+Misses: Q02 (causal), Q09 (aggregation), Q24 (traceability), Q41 (personnel, new) and Q46 (regulatory,
+new). All five retrieved the fact (`retr=1`) and were answered by the pinned model — synthesis gaps, not
+retrieval gaps. New questions were kept after scoring, including the two that missed.
+
+**Prior — 2026-09-13, 37 questions, checkpoint `run_20260913_nemotron.jsonl`** (before the final
+reload; same model):
+
+```
+Retrieval (fact reaches context):    37/37 (100%)  95% CI [91–100%]
+Answer quality (correct/total):      35/37 (94.6%) 95% CI [82–99%]
+Answer provenance (sourced/correct): 37/37 (100%) all responses · 35/35 correct answers
+Synthesis latency:                   p50 2469 ms · p95 7292 ms · avg 3083 ms
+Provider mix:                        nim 33 · refused 4
+Run validity:                        VALID — 33/37 answered by the pinned NIM model
+```
+
+By category (retrieval · answer · provenance):
+```
+    aggregation            2/2 · 1/2 · 2/2
+    alias-resolution       2/2 · 2/2 · 2/2
+    blast-radius           2/2 · 2/2 · 2/2
+    causal                 2/2 · 1/2 · 2/2
+    counterfactual         2/2 · 2/2 · 2/2
+    current-fact           6/6 · 6/6 · 6/6
+    mdm                    2/2 · 2/2 · 2/2
+    personnel              3/3 · 3/3 · 3/3
+    regulatory             2/2 · 2/2 · 2/2
+    safety-isolation       2/2 · 2/2 · 2/2
+    supersession           2/2 · 2/2 · 2/2
+    temporal               2/2 · 2/2 · 2/2
+    temporal-history       2/2 · 2/2 · 2/2
+    temporal-supersession  2/2 · 2/2 · 2/2
+    traceability           4/4 · 4/4 · 4/4
+  KG linkage (assets):     9/10 assets linked (90%) · 90 edges (4 verified)
+  KG linkage (documents):  19/21 (90%) · 0 quarantined by design · 2 unexplained · 0 dangling
+```
+
+Misses: Q02 (causal) and Q09 (aggregation — a count across work orders, two of which rank below
+the retrieval cut-off). Both retrieved the fact (`retr=1`); neither is a fallback or a refusal.
+
+**Prior — 2026-08-24, checkpoint `run_20260824_1351_postfix.jsonl`** (Llama 3.1 70B, since retired):
 
 ```
 Retrieval (fact reaches context):    37/37 (100%)  95% CI [91–100%]

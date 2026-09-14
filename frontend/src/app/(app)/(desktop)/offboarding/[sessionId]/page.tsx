@@ -41,7 +41,7 @@ function SessionList({
             )}
           >
             <span className="tabular text-label">Session {s.session_number}</span>
-            <span className="min-w-0 flex-1 truncate">{s.equipment_family}</span>
+            <span className="min-w-0 flex-1 truncate capitalize">{familyLabel(s.equipment_family)}</span>
             {s.status === "completed" ? (
               <svg className="size-3.5 shrink-0 text-verified" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-label="Completed">
                 <path d="M20 6 9 17l-5-5" />
@@ -118,7 +118,7 @@ function Interview({
       <div className="rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">{item.equipment_family}</p>
+            <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">{familyLabel(item.equipment_family)}</p>
             <h2 className="mt-0.5 text-title font-semibold">Session {item.session_number} — expert interview</h2>
           </div>
           <span className="tabular text-caption font-medium text-muted">{answeredCount} of {questions.length} answered</span>
@@ -296,7 +296,7 @@ export default function OffboardingSessionPage() {
             />
           ) : (
             <div className="rounded-xl border border-line bg-surface p-6">
-              <p className="text-label font-bold uppercase tracking-[0.1em] text-muted">{active.equipment_family}</p>
+              <p className="text-label font-bold uppercase tracking-[0.1em] text-muted">{familyLabel(active.equipment_family)}</p>
               <h2 className="mt-0.5 text-title font-semibold">Session {active.session_number}</h2>
               <p className="mt-1 text-body text-muted">
                 Scheduled: {new Date(active.scheduled_for).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
@@ -316,6 +316,12 @@ export default function OffboardingSessionPage() {
       </div>
     </div>
   );
+}
+
+/** Families created from asset classes are keys ("ROTATING_CENTRIFUGAL_PUMP"); show those as words and
+ *  leave an already-readable name ("Control valves") untouched. */
+function familyLabel(family: string) {
+  return /^[A-Z0-9_-]+$/.test(family) ? family.replaceAll("_", " ").toLowerCase() : family;
 }
 
 function emailInitials(email: string) {

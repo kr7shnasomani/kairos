@@ -109,7 +109,11 @@ export-search-index:
 	docker compose up -d kairos-elasticsearch
 	@echo "Wrote db/snapshots/kairos-es-data.tar.gz — commit it so every clone stays in sync."
 
-init-all: init-neo4j init-qdrant import-search-index
+# Schema only. It deliberately does not run import-search-index: every documented setup follows
+# init-all with load-dataset, which indexes the corpus itself, and restoring the snapshot first
+# left Elasticsearch holding a second copy under document IDs the other stores do not have.
+# Run import-search-index on its own only when pointing a fresh clone at already-loaded cloud stores.
+init-all: init-neo4j init-qdrant
 	@echo "All datastores initialized."
 
 # =============================================================================

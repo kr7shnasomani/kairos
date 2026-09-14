@@ -15,6 +15,7 @@ from api.config import settings as app_settings
 from api.dependencies import CurrentUserDep, RedisDep, SettingsDep, SupabaseDep, require_role
 from api.models.brief import BriefFeedback
 from api.services.event_bus import EventBusService
+from api.services.identity import display_names
 
 log = structlog.get_logger(__name__)
 
@@ -293,6 +294,10 @@ async def get_brief(
     )
     if not (is_recipient or is_readable_permit):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brief '{brief_id}' not found")
+    # Signers are stored as auth UUIDs; the sign-off panel shows who signed, not an opaque id.
+    names = await display_names(supabase, [brief.get("acknowledged_by"), brief.get("countersigned_by")])
+    brief["acknowledged_by_name"] = names.get(brief.get("acknowledged_by"))
+    brief["countersigned_by_name"] = names.get(brief.get("countersigned_by"))
     return brief
 
 

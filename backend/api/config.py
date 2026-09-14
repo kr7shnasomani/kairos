@@ -99,7 +99,14 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     NVIDIA_NIM_API_KEY: str = ""
     NVIDIA_NIM_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
-    NVIDIA_NIM_MODEL: str = "meta/llama-3.1-70b-instruct"  # 3.3-70b currently 400s/hangs on NIM; 3.1-70b responds in ~0.4s
+    # meta/llama-3.1-70b-instruct was retired by NVIDIA (410 Gone, 2026-09-13). Of the chat models
+    # the account still lists, this one answered in the ANSWER/CONFIDENCE contract at ~2.5 s with
+    # thinking off; several other listed models 404 or hang. Probe before switching again.
+    NVIDIA_NIM_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
+    # Nemotron 3 reasons before answering by default, spending the token budget on hidden
+    # reasoning (an answer came back truncated to 5 words) and never streaming `content` deltas.
+    # Sent as `chat_template_kwargs.enable_thinking=false`; set False for a model that rejects it.
+    NVIDIA_NIM_DISABLE_THINKING: bool = True
     NVIDIA_NIM_MAX_TOKENS: int = 4096
     NVIDIA_NIM_TEMPERATURE: float = 0.1
     # Per-call cap; on timeout the cascade falls through to Gemini. MUST leave headroom under the
@@ -114,11 +121,9 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # OpenRouter — tier 2, ahead of Gemini ON PURPOSE.
     #
-    # It serves the SAME model as tier 1 (meta-llama/llama-3.1-70b-instruct), so a fallback here
-    # does not change what is being measured. Gemini is a different model family, which is why a
-    # Gemini-heavy run has to be flagged as a confound in benchmark/RESULTS.md. Preferring a
-    # same-model provider means NVIDIA's outages cost latency rather than comparability.
-    # Empty key = tier skipped.
+    # It served the same llama-3.1-70b as tier 1 until NVIDIA retired that model (2026-09-13); tier 1
+    # is now Nemotron, so an OpenRouter answer IS a different model and the benchmark counts it as a
+    # fallback, like Gemini. Empty key = tier skipped.
     # -------------------------------------------------------------------------
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
@@ -268,6 +273,9 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     NVIDIA_NIM_OCR_MODEL: str = "nvidia/nemotron-ocr-v2"
     NVIDIA_NIM_NER_MODEL: str = "meta/llama-3.2-11b-vision-instruct"
+    # NER runs in background ingestion, so it is not bound by the 90 s synthesis budget that caps
+    # NVIDIA_NIM_TIMEOUT. The hosted NER model answers a 2,000-character document in 60–180 s under load.
+    NVIDIA_NIM_NER_TIMEOUT: float = 120.0
 
     # -------------------------------------------------------------------------
     # Ingestion pipeline

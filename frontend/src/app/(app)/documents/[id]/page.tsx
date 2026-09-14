@@ -5,7 +5,9 @@ import { getDocument } from "@/lib/api";
 import { authorityLabel, relativeTime, triggerLabel } from "@/lib/utils";
 import { AuthorityBadge, SourceChip, StatusBadge, Timeline, type TimelineEvent, PageHeader } from "@/components/ui";
 import { BlastRadiusPanel, SupersedeAction } from "@/components/lazy";
+import { ExtractionPanel } from "./extraction-panel";
 import { OpenArtifactButton } from "./open-artifact";
+import { RedactedExport } from "./redacted-export";
 import type { VaultDocument } from "@/lib/types";
 
 function fmtSize(bytes?: number): string {
@@ -49,7 +51,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   const meta: { label: string; value: React.ReactNode }[] = [
     { label: "Type", value: triggerLabel(d.document_type) },
     { label: "Source system", value: d.source_system },
-    { label: "Ingested", value: `${relativeTime(d.ingested_at)} · ${d.ingested_by}` },
+    { label: "Ingested", value: `${relativeTime(d.ingested_at)} · ${d.ingested_by_name ?? d.ingested_by}` },
     { label: "File", value: `${d.mime_type ?? "—"} · ${fmtSize(d.file_size_bytes)}` },
   ];
 
@@ -126,6 +128,8 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
         </div>
       </section>
 
+      <ExtractionPanel documentId={d.document_id} />
+
       {/* Version chain */}
       {supersedingDoc && (
         <section>
@@ -173,12 +177,14 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             )}
           </section>
 
+          <RedactedExport documentId={d.document_id} />
+
       {/* Supersede action (engineer/admin, client-side role gate) */}
       <div className="border-t border-line pt-4">
         <p className="text-caption text-muted">
           Superseded documents are retained in the vault. This action is irreversible.
         </p>
-        <div className="mt-3"><SupersedeAction documentId={d.document_id} /></div>
+        <div className="mt-3"><SupersedeAction documentId={d.document_id} assetId={d.asset_links?.[0] ?? null} /></div>
       </div>
         </aside>
       </div>

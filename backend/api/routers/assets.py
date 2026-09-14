@@ -20,7 +20,7 @@ from api.dependencies import (
     site_scope,
 )
 from api.models.asset import AssetBulkImport, AssetCreate
-from api.services.corpus import test_artifact_ids
+from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.coverage import CoverageService
 from api.services.graph import GraphService
 from api.services.ot_coverage import OtCoverageService
@@ -430,6 +430,89 @@ async def asset_coverage(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/provisional", summary="Assets awaiting human identity confirmation (Layer 1)")
+async def list_provisional_assets(current_user: CurrentUserDep, supabase: SupabaseDep) -> dict:
+    """Registered records whose identity no qualified user has confirmed yet.
+
+    Feeds the identity-confirmation queue, which used to render a hardcoded list instead of this.
+    """
+    query = (
+        supabase.table("assets")
+        .select("asset_id, tag_number, name, equipment_class, criticality, site_id, facility_id, eam_source")
+        .eq("identity_confirmed", False)
+    )
+    site = site_scope(current_user, None)
+    if site:
+        query = query.eq("site_id", site)
+    result = await asyncio.to_thread(lambda: query.order("created_at", desc=True).limit(100).execute())
+    items = result.data or []
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/aliases/pending", summary="Unconfirmed tag-alias candidates proposed by extraction (Layer 1)")
+async def list_pending_aliases(current_user: CurrentUserDep, supabase: SupabaseDep) -> dict:
+    """Alias candidates the NER pipeline proposed and no human has confirmed or rejected."""
+    result = await asyncio.to_thread(
+        lambda: supabase.table("asset_alias_map")
+        .select("alias, canonical_asset_id, confidence, alias_source, created_at")
+        .eq("confirmed", False)
+        .order("confidence", desc=True)
+        .limit(100)
+        .execute()
+    )
+    items = result.data or []
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/{asset_id}/aliases/{alias}/reject", summary="Reject a proposed tag alias (Layer 1)")
+async def reject_asset_alias(
+    asset_id: str,
+    alias: str,
+    supabase: SupabaseDep,
+    current_user: dict = Depends(require_role("admin", "engineer")),
+) -> dict:
+    """Human authority rejects an alias candidate.
+
+    Only an unconfirmed candidate can be rejected — a confirmed alias is used for resolution, and
+    withdrawing one is a different decision than turning down a proposal. The row is removed (it is an
+    extraction guess, not vault evidence) and the rejection is audited.
+    """
+    existing = await asyncio.to_thread(
+        lambda: supabase.table("asset_alias_map")
+        .select("alias")
+        .eq("alias", alias)
+        .eq("canonical_asset_id", asset_id)
+        .eq("confirmed", False)
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No unconfirmed alias '{alias}' proposed for asset '{asset_id}'.",
+        )
+    rejected_by = current_user.get("user_id", "unknown")
+    await asyncio.to_thread(
+        lambda: supabase.table("asset_alias_map")
+        .delete()
+        .eq("alias", alias)
+        .eq("canonical_asset_id", asset_id)
+        .eq("confirmed", False)
+        .execute()
+    )
+    await asyncio.to_thread(
+        lambda: supabase.table("audit_log").insert({
+            "action": "asset_alias_rejected",
+            "entity_type": "asset",
+            "entity_id": asset_id,
+            "performed_by": rejected_by,
+            "details": {"alias": alias},
+        }).execute()
+    )
+    log.info("asset.alias_rejected", asset_id=asset_id, alias=alias, rejected_by=rejected_by)
+    return {"status": "rejected", "alias": alias, "canonical_asset_id": asset_id}
+
+
 @router.get("/{asset_id}", summary="Get asset by canonical ID")
 async def get_asset(
     asset_id: str,
@@ -645,13 +728,21 @@ async def get_asset_knowledge(
     facts = await graph.get_asset_knowledge_at(canonical, as_of=as_of_dt)
 
     excluded = 0
+    doc_ids = [(f.get("edge") or {}).get("document_id") for f in facts if (f.get("edge") or {}).get("document_id")]
+    rows = await document_rows(supabase, doc_ids) if doc_ids else []
+    # Document nodes carry no title, so the UI fell back to the raw id ("DOC-KUXNJRUQYXYQ"). The same
+    # lookup that classifies test artifacts supplies the vault file name.
+    file_names = {r["document_id"]: r["file_name"] for r in rows if r.get("file_name")}
+    for f in facts:
+        target = f.get("target")
+        edge_doc = (f.get("edge") or {}).get("document_id") or ""
+        # A promoted quarantine item has no vault document (`PROMOTED-<item_id>`), so it gets a label
+        # saying what it is rather than the raw id.
+        name = file_names.get(edge_doc) or ("Promoted field input" if edge_doc.startswith("PROMOTED-") else None)
+        if name and isinstance(target, dict) and not target.get("title") and target.get("document_id"):
+            target["title"] = name
     if not include_test_data and facts:
-        doc_ids = [
-            (f.get("edge") or {}).get("document_id")
-            for f in facts
-            if (f.get("edge") or {}).get("document_id")
-        ]
-        artifact_ids = await test_artifact_ids(supabase, doc_ids)
+        artifact_ids = partition_test_artifacts(rows)
         if artifact_ids:
             kept = [
                 f for f in facts

@@ -518,7 +518,7 @@ Cross-site pattern detection requires knowledge to flow from local data planes t
 
 | What | Tool | Notes |
 |------|------|-------|
-| Cloud LLM synthesis | **NVIDIA NIM** | Llama 3.1 70B (`meta/llama-3.1-70b-instruct`), OpenAI-compatible API. Cascade: **NIM → OpenRouter → Gemini → Ollama**. OpenRouter serves the *same* `llama-3.1-70b`, so a fallthrough to it does not change which model answered — the tiers are redundancy across different failure modes (NIM: free, largest token budget, slowest; OpenRouter: fast, same model, smaller allowance; Gemini: fast, different model family) |
+| Cloud LLM synthesis | **NVIDIA NIM** | Nemotron 3 Super 120B (`nvidia/nemotron-3-super-120b-a12b`), OpenAI-compatible API. Cascade: **NIM → OpenRouter → Gemini → Ollama**. The tiers are redundancy across different failure modes (NIM: free, largest token budget; OpenRouter: `llama-3.1-70b`, a different model since NVIDIA retired it as tier 1 in 2026-09; Gemini: fast, different model family). Any fallthrough is a different model, so the benchmark verdict flags it |
 | Local LLM fallback | **Ollama** | Qwen2.5 14B — edge/offline synthesis fallback |
 | OCR | **NVIDIA NIM Nemotron-OCR-v2** | Cloud API; PyMuPDF fast path for native digital PDFs |
 | Named entity recognition | **NVIDIA NIM llama-3.2-11b-vision** | JSON-prompted NER; Ollama llama3.1:8b local fallback; regex last resort |
@@ -739,7 +739,7 @@ correctness.
 | Harness | What it establishes |
 |---|---|
 | `verify_layers.py` | Every layer reachable end to end, with per-layer latency |
-| `run_benchmark.py` | Answer quality over a 37-question domain-expert set: does the answer state the correct fact, un-negated, with sources |
+| `run_benchmark.py` | Answer quality over a 46-question domain-expert set: does the answer state the correct fact, un-negated, with sources |
 | `run_retrieval_baseline.py` | Reach per retrieval arm — exact, semantic, hybrid — isolating what each contributes |
 | `run_model_validation.py` | Layer 0 entity-extraction precision/recall/F1 per entity type and per asset class |
 | `run_compliance_eval.py` | Compliance gap detection precision and recall against labelled clause-asset pairs |

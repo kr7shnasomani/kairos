@@ -115,7 +115,15 @@ jobs:
               tests/test_form_extraction.py \
               tests/test_cross_functional.py \
               tests/test_offboarding_session_id.py \
-              tests/test_corpus_filter.py
+              tests/test_corpus_filter.py \
+              tests/test_alias_expansion.py \
+              tests/test_ner_fallback.py \
+              tests/test_asset_tag_filter.py \
+              tests/test_linked_document_scope.py \
+              tests/test_nim_retry.py \
+              tests/test_rca_timeline.py \
+              tests/test_audit_evidence.py \
+              tests/test_document_extraction_view.py
 
       # The benchmark grader is deterministic logic (negation handling, Wilson intervals, the
       # run-validity verdict) and needs no stack, no secrets and no network — so it belongs in

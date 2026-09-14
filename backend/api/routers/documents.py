@@ -27,7 +27,8 @@ from api.dependencies import (
 )
 from api.models.document import DocumentStatus, ExtractionResult, VaultDocument
 from api.services.corpus import is_test_artifact
-from api.services.graph import GraphService
+from api.services.graph import GraphService, entities_from_edges, person_names_from_edges
+from api.services.identity import display_name
 from api.services.metrics import ingestion_duration
 from api.services.ner import NERService
 from api.services.pii import PIIService
@@ -414,10 +415,16 @@ async def get_extraction_results(
     document_id: str,
     current_user: CurrentUserDep,
     supabase: SupabaseDep,
+    driver: Neo4jDep,
 ) -> ExtractionResult:
     """
     Returns structured extraction results: extracted entities, confidence scores,
     graph edges created, and items routed to human review.
+
+    Entities are read back from what the pipeline actually wrote — the graph edges carrying this
+    `document_id` — rather than re-running NER, so the view shows exactly what entered the graph.
+    Low-confidence entities never reach the graph; they are the quarantine rows whose
+    `session_context.document_id` names this document.
     """
     doc_result = await asyncio.to_thread(
         lambda: supabase.table("documents").select("document_id, mime_type").eq("document_id", document_id).execute()
@@ -425,8 +432,30 @@ async def get_extraction_results(
     if not doc_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found")
 
-    # quarantine_items are linked by asset_id, not document_id — populated in Task 5
-    # when link_to_graph routes low-confidence entities to quarantine with session_context
+    try:
+        blast = await GraphService(driver).get_blast_radius(document_id)
+        entities = entities_from_edges(document_id, blast.get("affected", []))
+    except Exception as exc:  # noqa: BLE001 — a graph outage degrades to "no entities", not a 500
+        log.warning("document.extraction_graph_unavailable", document_id=document_id, error=str(exc))
+        entities = []
+
+    review_result = await asyncio.to_thread(
+        lambda: supabase.table("quarantine_items")
+        .select("item_id, content, review_status, submitted_at, session_context")
+        .eq("session_context->>document_id", document_id)
+        .order("submitted_at", desc=True)
+        .limit(100)
+        .execute()
+    )
+    review_items = [
+        {
+            "item_id": r.get("item_id"),
+            "content": r.get("content"),
+            "review_status": r.get("review_status"),
+            "submitted_at": r.get("submitted_at"),
+        }
+        for r in (review_result.data or [])
+    ]
 
     job_result = await asyncio.to_thread(
         lambda: supabase.table("extraction_jobs")
@@ -446,10 +475,10 @@ async def get_extraction_results(
     return ExtractionResult(
         document_id=document_id,
         extraction_model=f"{settings.NVIDIA_NIM_NER_MODEL} + {settings.NVIDIA_NIM_OCR_MODEL}",
-        entities=[],
+        entities=entities,
         graph_edges_created=job.get("graph_edges") or 0,
         vector_chunks_indexed=0,
-        review_items=[],  # populated by link_to_graph activity in Task 5
+        review_items=review_items,
         extraction_path="ocr" if mime.startswith("image/") else "native",
         # Only images can carry handwriting. A digital PDF has a text layer; a scanned one is an
         # image and is caught by the branch above.
@@ -616,6 +645,11 @@ async def get_document(
     )
     asset_links = [r["asset_id"] for r in (links_result.data or [])]
 
+    # `ingested_by` is the uploader's user id, which the detail page printed raw
+    # ("3m ago · ff28c093-…"). Resolve a readable name; loaders and connectors write non-UUID ids
+    # that are not auth users, so a failed lookup keeps the id rather than failing the read.
+    ingested_by_name = await display_name(supabase, doc["ingested_by"])
+
     return VaultDocument(
         document_id=doc["document_id"],
         sha256_hash=doc["sha256_hash"],
@@ -628,6 +662,7 @@ async def get_document(
         vault_url=doc.get("vault_url"),
         ingested_at=datetime.fromisoformat(doc["ingested_at"]),
         ingested_by=doc["ingested_by"],
+        ingested_by_name=ingested_by_name,
         status=doc["status"],
         version_chain=doc.get("version_chain"),
         asset_links=asset_links,
@@ -643,14 +678,17 @@ async def get_redacted_document(
     current_user: CurrentUserDep,
     es: ElasticsearchDep,
     supabase: SupabaseDep,
+    driver: Neo4jDep,
 ) -> dict:
     """
     Returns the document's extracted text with personal identifiers masked — the
     DPDP Act 2023 export boundary for cross-site knowledge sharing.
 
-    Names come from the NER service (PERSON entities); structured identifiers
-    (email, phone, Aadhaar, PAN, employee/shift IDs) are matched by pattern.
-    The vault copy is never modified — redaction applies to this export only.
+    Names come from the Person nodes the pipeline already linked to this document
+    (`MENTIONS_PERSON`), which is the same NER output computed once at ingestion. Re-running
+    NER here took up to two minutes per export; it is kept only as the fallback for a document
+    that never reached the graph. Structured identifiers (email, phone, Aadhaar, PAN,
+    employee/shift IDs) are matched by pattern. The vault copy is never modified.
     """
     result = await es.search(
         index=settings.ELASTICSEARCH_INDEX_DOCUMENTS,
@@ -666,10 +704,19 @@ async def get_redacted_document(
     source = hits[0].get("_source", {})
     text = source.get("content") or ""
 
-    ner_result = await NERService().extract_entities(text) if text else {"entities": []}
-    person_names = [
-        e["text"] for e in ner_result.get("entities", []) if e.get("entity_type") == "PERSON"
-    ]
+    affected: list[dict] | None
+    try:
+        affected = (await GraphService(driver).get_blast_radius(document_id)).get("affected", [])
+    except Exception as exc:  # noqa: BLE001 — fall back to live NER rather than fail the export
+        log.warning("document.redaction_graph_unavailable", document_id=document_id, error=str(exc))
+        affected = None
+    if affected:
+        person_names = person_names_from_edges(affected)
+    else:
+        ner_result = await NERService().extract_entities(text) if text else {"entities": []}
+        person_names = [
+            e["text"] for e in ner_result.get("entities", []) if e.get("entity_type") == "PERSON"
+        ]
 
     redaction = PIIService().redact(text, person_names)
 

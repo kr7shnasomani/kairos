@@ -48,7 +48,7 @@ function buildColumns(framework: string): TableColumn<ClauseRow>[] {
             <span className="block">
               {docs.slice(0, 2).map((e, i) => (
                 <Link key={e.document_id} href={`/documents/${e.document_id}`} className="tabular text-label text-accent hover:underline">
-                  {i > 0 && ", "}{e.document_id}
+                  {i > 0 && ", "}{e.title ?? e.document_id}
                 </Link>
               ))}
               {docs.length > 2 && <span className="tabular text-label text-muted"> +{docs.length - 2}</span>}
@@ -67,9 +67,11 @@ function buildColumns(framework: string): TableColumn<ClauseRow>[] {
     },
     {
       key: "clearance_blocked", label: "Status", sortValue: (r) => (r.clearance_blocked ? 0 : 1),
+      // Never "Cleared": the pack is a draft and clearance is a human attestation (see the note above
+      // the table). It said "Cleared" for clauses whose evidence was 0/7 verified.
       render: (r) => r.clearance_blocked
         ? <StatusBadge tone="caution">Requires human review</StatusBadge>
-        : <StatusBadge tone="verified">Cleared</StatusBadge>,
+        : <StatusBadge tone="info">Ready for sign-off</StatusBadge>,
     },
   ];
 }

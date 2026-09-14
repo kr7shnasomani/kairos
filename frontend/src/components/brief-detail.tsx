@@ -28,6 +28,11 @@ export function BriefDetail({ brief }: { brief: Brief }) {
     !!me &&
     PROMOTE_ROLES.includes(me.role) &&
     me.user_id !== ackedBy;
+  // Only the brief's addressee (the user, or their whole site for site-wide briefs) can give the first
+  // signature — the API scopes /ack to recipients. Staff may still OPEN someone else's PTW brief to
+  // countersign it, and used to be offered a signature box whose submit 404'd as "check your connection".
+  const isRecipient =
+    !!me && (brief.recipient_user_id === me.user_id || brief.recipient_user_id === `site-${me.site_id}`);
   const isFrozen = brief.frozen || brief.delivery_frozen;
   const quarantineCount = brief.sources.filter((s) => s.is_quarantine).length;
   const hasLowConfidence = quarantineCount > 0;
@@ -191,8 +196,9 @@ export function BriefDetail({ brief }: { brief: Brief }) {
       <section>
         <h2 className="text-xs font-bold uppercase tracking-[0.1em] text-muted">Evidence</h2>
         <div className="mt-3 space-y-2.5">
-          {brief.sources.map((s) => (
-            <article key={s.document_id} className="rounded-xl border border-line bg-surface p-4">
+          {/* One document can back several sources (distinct chunks), so the id alone is not a unique key. */}
+          {brief.sources.map((s, i) => (
+            <article key={`${s.document_id}-${i}`} className="rounded-xl border border-line bg-surface p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-body font-semibold">{s.title}</span>
                 <AuthorityBadge level={s.authority_level} />
@@ -229,7 +235,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
                 <path d="M20 6 9 17l-5-5" />
               </svg>
               {isPtw
-                ? `PTW signed off — acknowledged by ${ackedBy ?? "engineer"} · countersigned by ${counterBy ?? "second authority"}`
+                ? `PTW signed off — acknowledged by ${brief.acknowledged_by_name ?? (engineerSig || "engineer")} · countersigned by ${brief.countersigned_by_name ?? me?.email ?? "second authority"}`
                 : `Acknowledged${engineerSig ? ` · signed ${engineerSig}` : ""}`}
             </div>
             <p className="text-caption text-muted">Both identities and timestamps are logged in the audit trail.</p>
@@ -239,7 +245,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
           <div data-testid="brief-countersign">
             <p className="text-body font-semibold">Step 2 of 2 — countersignature</p>
             <p className="mt-1 text-caption text-muted">
-              Acknowledged by <span className="font-medium text-ink">{ackedBy ?? engineerSig}</span>. A
+              Acknowledged by <span className="font-medium text-ink">{brief.acknowledged_by_name ?? (engineerSig || "the issuing engineer")}</span>. A
               second authority must confirm the isolation strategy before this permit is delivered.
             </p>
             {canCountersign ? (
@@ -271,21 +277,29 @@ export function BriefDetail({ brief }: { brief: Brief }) {
                 ? "Step 1 of 2 — Issuing engineer acknowledges brief content and isolation strategy."
                 : "Acknowledge receipt. Your signature is logged with the evidence lineage."}
             </p>
-            <input
-              value={engineerSig}
-              onChange={(e) => setEngineerSig(e.target.value)}
-              placeholder={isPtw ? "Issuing engineer: type your name" : "Type your name to sign"}
-              className="mt-3 min-h-11 w-full rounded-lg border border-line bg-surface-2 px-3 text-body outline-none focus-visible:border-accent"
-              aria-label="Engineer signature"
-            />
+            {isRecipient ? (
+              <input
+                value={engineerSig}
+                onChange={(e) => setEngineerSig(e.target.value)}
+                placeholder={isPtw ? "Issuing engineer: type your name" : "Type your name to sign"}
+                className="mt-3 min-h-11 w-full rounded-lg border border-line bg-surface-2 px-3 text-body outline-none focus-visible:border-accent"
+                aria-label="Engineer signature"
+              />
+            ) : (
+              <p className="mt-3 rounded-lg border border-line bg-surface-2 px-3 py-2 text-caption text-muted">
+                Waiting on the brief&apos;s recipient to acknowledge it. The first signature can only come from the person it was issued to.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <Button
-                variant={isPtw ? "danger" : "primary"}
-                onClick={ackStep1}
-                disabled={engineerSig.trim().length < 2 || ackBusy}
-              >
-                {ackBusy ? "Saving…" : isPtw ? "Acknowledge (step 1 of 2)" : "Acknowledge"}
-              </Button>
+              {isRecipient && (
+                <Button
+                  variant={isPtw ? "danger" : "primary"}
+                  onClick={ackStep1}
+                  disabled={engineerSig.trim().length < 2 || ackBusy}
+                >
+                  {ackBusy ? "Saving…" : isPtw ? "Acknowledge (step 1 of 2)" : "Acknowledge"}
+                </Button>
+              )}
 
               {/* Phase 2 feedback chips */}
               <div className="ml-auto flex items-center gap-1.5">

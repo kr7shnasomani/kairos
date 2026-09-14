@@ -51,7 +51,9 @@ log = structlog.get_logger(__name__)
 # documents once by widening a match pattern, and while this module deletes nothing, a pattern
 # that swallows a real file name makes genuine evidence invisible in the UI, which is its own
 # kind of data loss.
-_TEST_FILENAME = re.compile(r"^(ann_test_|dbtest_|test_|e2e_|kairos_|probe|tmp|# Kairos)", re.I)
+# `linked-doc-` is the integration suite's document-linking fixture (`source_system=integration_test`);
+# it reached the Documents list and EQ-101's knowledge panel before being added here.
+_TEST_FILENAME = re.compile(r"^(ann_test_|dbtest_|test_|e2e_|kairos_|probe|tmp|linked-doc-|# Kairos)", re.I)
 
 # Supabase/PostgREST puts every `.in_()` value in the URL, so a huge list becomes an over-long
 # query string. Asset knowledge graphs are bounded (60 edges on the largest corpus asset), but
@@ -83,11 +85,17 @@ async def test_artifact_ids(supabase, document_ids: Collection[str]) -> set[str]
     silently hiding evidence because Supabase was unreachable. Failing open is the correct
     direction here: the cost is visible noise, where failing closed would blank a real graph.
     """
-    ids = [d for d in dict.fromkeys(document_ids) if d]
-    if not ids:
-        return set()
+    return partition_test_artifacts(await document_rows(supabase, document_ids))
 
-    found: set[str] = set()
+
+async def document_rows(supabase, document_ids: Collection[str]) -> list[dict]:
+    """`documents` rows (`document_id`, `file_name`) for the given ids, chunked.
+
+    Shared by the test-artifact filter and by callers that need a readable source name, so one
+    lookup serves both. Returns `[]` on any failure — callers fail open (see `test_artifact_ids`).
+    """
+    ids = [d for d in dict.fromkeys(document_ids) if d]
+    rows: list[dict] = []
     for start in range(0, len(ids), _LOOKUP_CHUNK):
         chunk = ids[start : start + _LOOKUP_CHUNK]
         try:
@@ -97,9 +105,8 @@ async def test_artifact_ids(supabase, document_ids: Collection[str]) -> set[str]
                 .in_("document_id", c)
                 .execute()
             )
-            found |= partition_test_artifacts(res.data or [])
+            rows.extend(res.data or [])
         except Exception as exc:  # noqa: BLE001 — a hygiene filter must never fail a read
             log.warning("corpus.test_artifact_lookup_failed", error=str(exc), chunk_size=len(chunk))
-            return set()
-
-    return found
+            return []
+    return rows

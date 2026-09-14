@@ -262,12 +262,20 @@ All Cypher queries that filter for currently-active edges use `(r.valid_to IS NU
 
 ### `SearchService` (`services/search_service.py`)
 
-Orchestrates hybrid search across three engines in parallel.
+Orchestrates hybrid search across three engines.
 
 `hybrid_search(query, collection, asset_id, authority_min, include_quarantine, as_of, limit)`:
-1. **ES exact search** — tag numbers, document IDs, clause refs
-2. **Qdrant semantic search** — 1024-dim embedding via `LLMService.embed()`
-3. **Neo4j graph traversal** — only when `asset_id` provided
+1. **Neo4j graph traversal** — only when `asset_id` provided, and run **first**: its edges name every
+   document linked to the asset
+2. **ES exact search** — tag numbers, document IDs, clause refs
+3. **Qdrant semantic search** — 1024-dim embedding via `LLMService.embed()`
+
+ES and Qdrant run in parallel. With `asset_id`, both match a document filed under that asset **or**
+one of the graph-linked documents from step 1. A document is indexed under a single primary
+`asset_id`, but often concerns several assets (the EQ-1xx work-order CSV is filed under EQ-102 and
+records EQ-101's seal failures; SOP-HE-GEN-11 is filed under no asset). Without the widened scope an
+asset-scoped search could never reach them. If the graph lookup fails, search degrades to the
+primary-asset scope rather than failing.
 
 **Fusion — Reciprocal Rank Fusion (`_RRF_K = 60`), then authority ordering.** Each source's
 results are scored `1/(60 + rank)` and summed, so a document more than one source agrees on
@@ -276,9 +284,17 @@ similarity: BM25 is unbounded and cosine is 0–1, so comparing them numerically
 whichever source emitted bigger numbers.
 
 Authority remains the **primary** sort key — level 1 (Regulatory) outranks level 5 (Field) —
-because that is a deliberate safety property, not a relevance artefact. RRF orders results
-*within* an authority level, which is where the scale mismatch actually did damage. The
+because that is a deliberate safety property, not a relevance artefact. Within an authority
+level, an asset-scoped search ranks the asset's **own** documents ahead of documents that are only
+graph-linked to it; otherwise a linked shift log could push the asset's own closeout form out of
+`limit`. RRF orders results after that, which is where the scale mismatch actually did damage. The
 fused score is written back to `relevance_score`.
+
+**Provenance edges never take a slot on their own** (`_rankable_graph_hits`). A `DOCUMENTED_BY` or
+`MENTIONS_*` edge states no fact, so alone it renders a content-free stub ranked by the edge's
+authority. With extraction linking every document an asset appears in, such stubs (a level-1
+regulation, a level-4 PTW) filled the top of an EQ-101 search and pushed out the closeout form holding
+the answer. They still widen the text-search scope and still boost a document text search also found.
 
 **Merging duplicates** (`_better`): when several sources return the same `document_id`, the
 most authoritative record wins but the **longest snippet is kept** — collapsing by
@@ -321,7 +337,7 @@ Qdrant treats a missing key as non-matching, so requiring `active` would silentl
 
 LLM synthesis + embedding. Never originates knowledge — only assembles retrieved context.
 
-- `synthesize(query, context, query_category)` — NIM `meta/llama-3.1-70b-instruct`, falling through
+- `synthesize(query, context, query_category)` — NIM `nvidia/nemotron-3-super-120b-a12b`, falling through
   the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
   result after it (an honest "not specified in the sources" must not render as a hedged answer).
 - `evidence_gate(...)` / `result_gate(...)` — those two gates, as separate methods returning a
@@ -919,8 +935,9 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `NVIDIA_NIM_API_KEY` | `""` | Required for NIM synthesis, NER, and OCR |
-| `NVIDIA_NIM_MODEL` | `meta/llama-3.1-70b-instruct` | LLM synthesis |
+| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
 | `NVIDIA_NIM_NER_MODEL` | `meta/llama-3.2-11b-vision-instruct` | NER extraction. Was `mistralai/ministral-14b-instruct-2512`, **deprecated by NVIDIA** — the endpoint hangs until timeout and `NERService` degrades silently to its regex fallback (ASSET_TAG only). Verify any replacement responds before switching. |
+| `NVIDIA_NIM_NER_TIMEOUT` | `120.0` | NER's own per-attempt cap (3 attempts on a timeout or 5xx). Separate from `NVIDIA_NIM_TIMEOUT`, which must stay under the 90 s synthesis budget; NER runs in background ingestion, and a miss drops the document to the regex fallback. |
 | `NVIDIA_NIM_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | OCR for scanned docs/images |
 | `NVIDIA_NIM_VISION_MODEL` | `meta/llama-3.2-11b-vision-instruct` | P&ID drawing → topology JSON (Layer 3, Path B) |
 | `NVIDIA_NIM_MAX_TOKENS` | `4096` | Set to `512` to avoid ReadTimeout |
@@ -930,7 +947,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `GROQ_WHISPER_MODEL` | `whisper-large-v3` | STT via Groq API |
 | `OPENROUTER_API_KEY` | `""` | **Tier 2 of the cascade.** Empty ⇒ skipped. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
-| `OPENROUTER_MODEL` | `meta-llama/llama-3.1-70b-instruct` | **The same model NIM serves**, which is the whole point: a fallthrough here does not change which model answered, so it cannot confound a benchmark. Gemini (tier 3) is a different family and does. |
+| `OPENROUTER_MODEL` | `meta-llama/llama-3.1-70b-instruct` | A different model from tier 1 since NVIDIA retired `llama-3.1-70b`; an answer from here counts as a fallback in the benchmark verdict. Gemini (tier 3) is a different family and does. |
 | `OPENROUTER_TIMEOUT` | `60.0` | Its own cap rather than reusing `NVIDIA_NIM_TIMEOUT`, so tuning NVIDIA's ceiling cannot silently retime a different vendor. |
 | `GEMINI_API_KEY` | `""` | Optional LLM fallback, **tier 3** (Google OpenAI-compatible). Empty ⇒ disabled. |
 | `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai` | Gemini OpenAI-compatible endpoint |

@@ -10,6 +10,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     MatchValue,
     PointStruct,
     VectorParams,
@@ -34,12 +35,12 @@ class VectorStoreService:
 
     async def ensure_collections(self) -> None:
         """Creates Qdrant collections if they don't exist. Called at startup."""
+        existing = await self.client.get_collections()
+        collection_names = {c.name for c in existing.collections}
         for collection_name in [
             self.settings.QDRANT_COLLECTION_KNOWLEDGE,
             self.settings.QDRANT_COLLECTION_DOCUMENTS,
         ]:
-            existing = await self.client.get_collections()
-            collection_names = [c.name for c in existing.collections]
             if collection_name not in collection_names:
                 await self.client.create_collection(
                     collection_name=collection_name,
@@ -86,10 +87,12 @@ class VectorStoreService:
         include_quarantine: bool = False,
         quarantine_only: bool = False,
         include_superseded: bool = False,
+        document_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Semantic search with optional payload filtering.
-        Filters: asset_id, authority_level <= authority_min, quarantine status, document status.
+        Filters: asset_id (or one of `document_ids`, the documents the graph links to that asset),
+        authority_level <= authority_min, quarantine status, document status.
         quarantine_only=True: return only quarantine items (for explicit quarantine retrieval pass).
 
         `include_superseded=False` (the default) drops chunks whose document has been superseded —
@@ -100,7 +103,13 @@ class VectorStoreService:
         must_conditions = []
 
         if asset_id:
-            must_conditions.append(FieldCondition(key="asset_id", match=MatchValue(value=asset_id)))
+            asset_scope = FieldCondition(key="asset_id", match=MatchValue(value=asset_id))
+            if document_ids:
+                # Both keys carry a KEYWORD payload index (scripts/init_qdrant.py) — required on Cloud.
+                linked = FieldCondition(key="document_id", match=MatchAny(any=document_ids))
+                must_conditions.append(Filter(should=[asset_scope, linked]))
+            else:
+                must_conditions.append(asset_scope)
         if quarantine_only:
             must_conditions.append(FieldCondition(key="is_quarantine", match=MatchValue(value=True)))
         elif not include_quarantine:

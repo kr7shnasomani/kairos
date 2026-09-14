@@ -819,8 +819,8 @@ export function EvidenceLineage({
             <div>
               <p className="mb-1.5 text-label font-bold uppercase tracking-[0.1em] text-muted">Sources</p>
               <ul className="space-y-2">
-                {sources.map((s) => (
-                  <li key={s.document_id} className="flex flex-wrap items-center gap-1.5">
+                {sources.map((s, i) => (
+                  <li key={`${s.document_id}-${i}`} className="flex flex-wrap items-center gap-1.5">
                     <SourceChip quarantine={s.is_quarantine}>{s.title || s.document_id}</SourceChip>
                     <AuthorityBadge level={s.authority_level} />
                     {s.is_quarantine && (
@@ -947,8 +947,8 @@ export function RefusalCard({
         <div>
           <p className="mb-1.5 text-label font-bold uppercase tracking-[0.1em] text-muted">Relevant sources</p>
           <ul className="space-y-1.5">
-            {sources.map((s) => (
-              <li key={s.document_id} className="flex flex-wrap items-center gap-1.5">
+            {sources.map((s, i) => (
+              <li key={`${s.document_id}-${i}`} className="flex flex-wrap items-center gap-1.5">
                 <SourceChip quarantine={s.is_quarantine}>{s.title || s.document_id}</SourceChip>
                 <AuthorityBadge level={s.authority_level} />
               </li>

@@ -10,9 +10,9 @@ A 2024 McKinsey global survey found that professionals in asset-intensive indust
 
 Build an AI-powered Industrial Knowledge Intelligence platform that ingests heterogeneous documents — engineering drawings, maintenance records, safety procedures, inspection reports, operating instructions, project files — across structured and unstructured formats, and makes their collective intelligence queryable, actionable, and continuously updated at the point of need, across any device or function.
 
-## WHAT YOU MAY BUILD
+## SOLUTION AREAS
 
-Participants may explore areas such as:
+A platform addressing this problem spans areas such as:
 
 * **Universal Document Ingestion & Knowledge Graph Agent**
 AI pipeline that processes PDFs, P&IDs, scanned forms, spreadsheets, and email archives — extracting entities (equipment tags, process parameters, regulatory references, personnel, dates) and building a unified knowledge graph that maintains relationships across document types and updates automatically as new records arrive.
@@ -29,9 +29,9 @@ Agentic system that maps regulatory requirements (Factory Act, OISD, PESO, envir
 * **Lessons Learned & Failure Intelligence Engine**
 AI agent that analyses incident reports, near-miss records, audit findings, and quality non-conformances across the organisation’s history and external industry databases — identifying systemic patterns invisible to any individual review, and proactively pushing relevant warnings to operational teams before similar conditions recur.
 
-These examples are illustrative only.
+These areas are illustrative, not exhaustive.
 
-## SUGGESTED TECHNOLOGIES
+## RELEVANT TECHNOLOGIES
 
 * RAG (Retrieval-Augmented Generation) over heterogeneous industrial document corpora
 * Knowledge Graphs & Industrial Ontology Engineering
@@ -40,23 +40,12 @@ These examples are illustrative only.
 * Quality Management System (QMS) Integration
 * Agentic AI for maintenance and compliance workflows
 
-## EXPECTED DELIVERABLES
+## DELIVERABLES
 
-* Working Prototype
-* Architecture Diagram
-* Presentation Deck
-* Demo Video
+* Working platform
+* Architecture documentation
+* Reproducible benchmark and evaluation harnesses
 
-## Evaluation Focus
+## Success Measures
 
 Entity extraction accuracy across document types, query answer quality on domain-expert benchmark questions, knowledge graph linkage completeness, time-to-answer versus traditional search, compliance gap detection accuracy, and demonstrated improvement in cross-functional knowledge discovery — ideally validated with real industrial document samples.
-
-## Judging Criteria
-
-| Criteria               | Weight |
-|------------------------|--------|
-| Innovation             | 25%    |
-| Business Impact        | 25%    |
-| Technical Excellence   | 20%    |
-| Scalability            | 15%    |
-| User Experience        | 15%    |

@@ -330,7 +330,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     subgraph SYNTH["Synthesis cascade · redundancy across different failure modes"]
-        A["NVIDIA NIM<br/>llama-3.1-70b"]
+        A["NVIDIA NIM<br/>nemotron-3-super-120b"]
         B["OpenRouter<br/>same model, faster, smaller allowance"]
         C["Gemini<br/>different model family"]
         D["Ollama<br/>offline fallback"]

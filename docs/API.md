@@ -190,7 +190,7 @@ Opt-in liveness probe for a **rate-limited model provider**. Makes the smallest 
 
 **Response `200`:**
 ```json
-{ "provider": "nim", "ok": true, "status": 200, "model": "meta/llama-3.1-70b-instruct", "latency_ms": 2603, "detail": null }
+{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-super-120b-a12b", "latency_ms": 2603, "detail": null }
 ```
 
 `ok: false` with `detail: "not configured"` when the provider's API key is unset; `detail` carries the
@@ -713,35 +713,42 @@ Pipeline stages (in order): `pending → ocr_pending → ocr_complete → ner_pe
 
 ### `GET /documents/{document_id}/extraction`
 
-Get full NER extraction results.
+What extraction wrote for this document. Nothing is re-extracted: `entities` are read back from the
+graph edges carrying this `document_id` (the endpoint that is not the document — an Asset for
+`DOCUMENTED_BY`, a Person for `MENTIONS_PERSON`, …), one per value at its strongest confidence.
+`review_items` are the `quarantine_items` whose `session_context.document_id` names this document —
+the low-confidence entities that never reached the graph. A graph outage degrades to no entities.
 
 **Auth required:** Yes
 
 **Response `200`:**
 ```json
 {
-  "document_id": "doc-uuid",
-  "extraction_model": "meta/llama-3.2-11b-vision-instruct",
+  "document_id": "DOC-JTJELSCENM6M",
+  "extraction_model": "meta/llama-3.2-11b-vision-instruct + nvidia/nemotron-ocr-v2",
   "entities": [
     {
-      "entity_type": "process_parameter",
-      "value": "12.5 bar",
-      "normalized_value": "12.5",
-      "confidence": 0.94,
-      "linked_asset_id": "P-101",
-      "requires_review": false
-    }
+      "entity_type": "asset_tag",
+      "value": "EQ-101",
+      "normalized_value": null,
+      "confidence": 0.95,
+      "linked_asset_id": "EQ-101",
+      "requires_review": true
+    },
+    {"entity_type": "person", "value": "S. Yadav", "confidence": 0.95, "linked_asset_id": null, "requires_review": true}
   ],
-  "graph_edges_created": 8,
-  "vector_chunks_indexed": 3,
-  "review_items": [],
-  "extracted_at": "2024-01-01T00:00:00Z"
+  "graph_edges_created": 6,
+  "vector_chunks_indexed": 0,
+  "review_items": [
+    {"item_id": "uuid", "content": "Low-confidence entity: 'HE301X' (confidence=0.52)", "review_status": "pending", "submitted_at": "2026-07-14T10:00:00Z"}
+  ],
+  "extraction_path": "native",
+  "handwriting_suspect": false
 }
 ```
 
-Entity types: `asset_tag`, `process_parameter`, `material`, `person`, `date`, `regulation`, `failure_mode`.
-
-Entities with `confidence < 0.7` or unresolved `linked_asset_id` appear in `review_items` and are placed in `quarantine_items`.
+Entity types: `asset_tag`, `person`, `organisation`, `topology_element`, otherwise the lower-cased
+relationship type. `requires_review` is true until the edge is `verified`.
 
 ---
 
@@ -868,7 +875,10 @@ contains personnel names ("which technician signed off the EQ-101 seal repair" i
 maintenance question the vault must answer), so stripping names on the way in would destroy
 retrieval. The vault copy is never modified.
 
-PERSON names come from `NERService`; structured identifiers (email, phone, Aadhaar, PAN,
+PERSON names come from the Person nodes the pipeline already linked to the document
+(`MENTIONS_PERSON`) — the same NER output, computed once at ingestion, so an export takes well
+under a second instead of re-running NER for up to two minutes. A document with no graph edges
+falls back to live `NERService`. Structured identifiers (email, phone, Aadhaar, PAN,
 employee ID, shift ID) are matched by pattern in `services/pii.py`. Masks are **stable
 pseudonyms** within a document — the same name is always `[PERSON_1]` — so cross-references
 in the text survive redaction, which a blanket `[REDACTED]` would destroy.
@@ -954,7 +964,7 @@ Parallel hybrid search: ES exact + Qdrant 1024-dim semantic + Neo4j graph.
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `q` | string | **required** | Search query |
-| `asset_id` | string | — | Scope to a specific asset's knowledge graph |
+| `asset_id` | string | — | Scope to one asset: documents filed under it **or** linked to it in the knowledge graph (a work-order log filed under EQ-102 that records EQ-101 failures matches EQ-101). Within an authority level, the asset's own documents rank first. |
 | `limit` | int | `10` | Max results per engine |
 | `include_quarantine` | bool | `false` | Include unverified quarantine items |
 | `as_of` | ISO8601 datetime | `now` | Time-travel: return only facts valid at this time |
@@ -1078,16 +1088,16 @@ a false refusal is its own safety failure, because it trains operators to route 
   "safety_critical": true,
   "sources_used": [0],
   "uncertainty": "No post-2024 revision of OISD-117 §6.4 was found in the vault.",
-  "model": "meta/llama-3.1-70b-instruct",
+  "model": "nim",
   "rate_limited": false,
   "pending_moc": []
 }
 ```
 
 `uncertainty` carries the model's own statement of what it could not establish; `rate_limited` is
-`true` only when **every** provider tier returned HTTP 429 (see above). `model` names the tier that
-actually answered — `meta/llama-3.1-70b-instruct` from NIM or OpenRouter, which serve the same
-model, or the Gemini model id if the cascade fell through to tier 3.
+`true` only when **every** provider tier returned HTTP 429 (see above). `model` names the provider tier
+that actually answered — `nim` (Nemotron 3 Super 120B), `openrouter` (Llama 3.1 70B) or `gemini` — and
+`served_model`, when present, is the exact model id the provider reported.
 
 **`pending_moc` — the change-under-review warning.** Non-empty when an asset cited in the answer has
 an open engineering-track conflict awaiting MoC sign-off. While a conflict sits in the MoC queue the
@@ -1182,7 +1192,7 @@ trust-building mechanism the phase is built around.
   "rating": "accurate",
   "note": "Matches the bulletin we have on file.",
   "sources_used": [0],
-  "model": "meta/llama-3.1-70b-instruct"
+  "model": "nim"
 }
 ```
 

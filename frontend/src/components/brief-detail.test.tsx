@@ -12,6 +12,12 @@ vi.mock("@/lib/api", () => ({
   getToken: vi.fn(() => null),
 }));
 
+// The signature box is only offered to the brief's recipient, so render as that user.
+vi.mock("./use-role", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./use-role")>()),
+  useMe: () => ({ user_id: "user-1", email: "engineer@kairos.local", role: "engineer", site_id: "SITE_001" }),
+}));
+
 const brief: Brief = {
   brief_id: "BRF-101",
   recipient_user_id: "user-1",
@@ -51,6 +57,7 @@ describe("BriefDetail", () => {
           ...brief,
           requires_countersignature: true,
           acknowledged_by: "eng-1",
+          acknowledged_by_name: "Engineer One",
           acknowledged_at: null,
           countersigned_by: null,
         }}
@@ -59,7 +66,8 @@ describe("BriefDetail", () => {
 
     const panel = screen.getByTestId("brief-countersign");
     expect(panel).toHaveTextContent("Step 2 of 2");
-    expect(panel).toHaveTextContent("eng-1");
+    // The signer is shown by name — the stored id is an opaque auth UUID.
+    expect(panel).toHaveTextContent("Engineer One");
     // Unauthenticated in this test (getToken -> null), so no countersign button is offered.
     expect(panel).toHaveTextContent(/reliability engineer or administrator/i);
   });

@@ -102,8 +102,8 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 
 **Backend:** FastAPI (Python 3.12) · **Neo4j Aura (cloud)** · **Qdrant Cloud** · ES 8.13 · Redis 7.2 · Temporal · Celery · Go 1.25 (Gin) · OPA · **OTEL → Grafana Cloud** · Supabase (Postgres + Storage + Auth + Vault)  
 **Frontend:** Next.js 16 · React 19 · Tailwind CSS **v4** (not v3) · TypeScript strict · `node:20-alpine`  
-**Models (cloud only):** LLM → NIM `meta/llama-3.1-70b-instruct` | NER → NIM `meta/llama-3.2-11b-vision-instruct` | OCR → NIM `nvidia/nemotron-ocr-v2` | Embed → Jina `jina-embeddings-v3` | STT → Groq `whisper-large-v3` — names in `.env`  
-**Synthesis cascade:** NIM → OpenRouter → Gemini → Ollama. OpenRouter serves the *same* `llama-3.1-70b`, so a fallthrough does not change which model answered. `NVIDIA_NIM_TIMEOUT=60` **must stay under** the frontend's 90 s budget for `POST /search/synthesize`.  
+**Models (cloud only):** LLM → NIM `nvidia/nemotron-3-super-120b-a12b` (thinking off) | NER → NIM `meta/llama-3.2-11b-vision-instruct` | OCR → NIM `nvidia/nemotron-ocr-v2` | Embed → Jina `jina-embeddings-v3` | STT → Groq `whisper-large-v3` — names in `.env`  
+**Synthesis cascade:** NIM → OpenRouter → Gemini → Ollama. NVIDIA retired `llama-3.1-70b` (410, 2026-09-13); tier 1 is now Nemotron, so an OpenRouter (`llama-3.1-70b`) or Gemini answer is a fallback model and the benchmark marks such a run SUSPECT. `NVIDIA_NIM_TIMEOUT=60` **must stay under** the frontend's 90 s budget for `POST /search/synthesize`.  
 **Cloud stores:** Neo4j (Aura), Qdrant, Supabase, Grafana — creds in `.env` only; local Neo4j/Qdrant are profile-gated (`--profile local-stores`). ES · Redis · Temporal · OPA · Go stay local. **Ports:** API `8000` · Frontend `3000` · ES `9200` · Redis `6379` · Temporal `7233/8088` · OPA `8181` · Go `8090`
 
 ---
@@ -113,8 +113,8 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed → load-dataset`. Gotcha rebuilds: `--no-deps --build kairos-frontend` (new npm deps) · `--force-recreate kairos-backend-api` (NIM env).
 
 **Tests — Docker only, never the host.** Host package resolution differs from the pinned images and produces false results.
-- Service-free tier (**415 tests**, 33 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
-  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter}.py`
+- Service-free tier (**476 tests**, 41 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
+  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view}.py`
 - Full suite (needs the stack; **local stores only, never cloud**): `docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120`
 
 ---

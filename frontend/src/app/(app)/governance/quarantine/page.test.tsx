@@ -83,7 +83,9 @@ describe("QuarantinePage", () => {
     expect(screen.queryByTestId("quarantine-panel")).not.toBeInTheDocument();
   });
 
-  it("promotes through the panel with the frozen payload and refetches", async () => {
+  // `document_type` is `field_observation`: typed as `procedure`, a promoted field input satisfied
+  // compliance clauses that require a documented procedure.
+  it("promotes through the panel as a field observation and refetches", async () => {
     respond([item(0)]);
     mocks.promoteQuarantine.mockResolvedValue({});
 
@@ -98,7 +100,7 @@ describe("QuarantinePage", () => {
       expect(mocks.promoteQuarantine).toHaveBeenCalledWith("q-0", {
         authority_level: 4,
         relationship_type: "DOCUMENTED_BY",
-        document_type: "procedure",
+        document_type: "field_observation",
         notes: undefined,
       }),
     );

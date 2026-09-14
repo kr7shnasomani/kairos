@@ -651,6 +651,165 @@
         "12 to 16"
       ],
       "expected": "12 - 16 bar."
+    },
+    {
+      "id": "Q38",
+      "category": "personnel",
+      "question": "Who co-signed permit PTW-2026-0714 as shift lead?",
+      "asset_id": "V-247",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "Vikram"
+      ],
+      "must_all": [
+        "Vikram"
+      ],
+      "expected": "Vikram Desai, Shift Lead, co-signed PTW-2026-0714."
+    },
+    {
+      "id": "Q39",
+      "category": "temporal",
+      "question": "When is isolation valve XV-203 next due for inspection?",
+      "asset_id": "XV-203",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "2026",
+        "Nov"
+      ],
+      "answer_any": [
+        "12-Nov-2026",
+        "November 2026",
+        "Nov 2026",
+        "2026-11-12",
+        "12 November 2026",
+        "Nov-2026"
+      ],
+      "expected": "12-Nov-2026 (18-month interval after the 12-May-2025 inspection)."
+    },
+    {
+      "id": "Q40",
+      "category": "causal",
+      "question": "What improvement does seal part FSL-2240B have over FSL-2240A?",
+      "asset_id": "EQ-101",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "thermal"
+      ],
+      "must_all": [
+        "thermal"
+      ],
+      "expected": "Improved thermal cycling tolerance."
+    },
+    {
+      "id": "Q41",
+      "category": "personnel",
+      "question": "Who reported unusual vibration on EQ-101 in January 2026?",
+      "asset_id": "EQ-101",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "Suresh"
+      ],
+      "must_all": [
+        "Suresh"
+      ],
+      "expected": "Suresh Yadav, field technician (unverified shift log note, 15-Jan-2026)."
+    },
+    {
+      "id": "Q42",
+      "category": "temporal",
+      "question": "When did Meridian issue the HE-3xx pressure revision bulletin?",
+      "asset_id": "HE-301",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "2026"
+      ],
+      "answer_any": [
+        "1-Jun-2026",
+        "June 2026",
+        "Jun 2026",
+        "2026-06-01",
+        "1 June 2026",
+        "June 1, 2026"
+      ],
+      "expected": "1-Jun-2026 (MHT-PB-2026-11)."
+    },
+    {
+      "id": "Q43",
+      "category": "alias-resolution",
+      "question": "Which asset do technicians call \"the old Fischer\"?",
+      "asset_id": "EQ-101",
+      "context_sources": [
+        "search",
+        "aliases"
+      ],
+      "expect_any": [
+        "EQ-101",
+        "old Fischer"
+      ],
+      "must_all": [
+        "EQ-101"
+      ],
+      "expected": "EQ-101, the Line 1 centrifugal feed pump."
+    },
+    {
+      "id": "Q44",
+      "category": "traceability",
+      "question": "At what percentage of operating pressure is the HE-3xx hydrotest performed?",
+      "asset_id": "HE-301",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "110"
+      ],
+      "must_all": [
+        "110"
+      ],
+      "expected": "110% of the maximum operating pressure (MP-HE-HYDROTEST-03)."
+    },
+    {
+      "id": "Q45",
+      "category": "safety-isolation",
+      "question": "What concern was raised about PG-18 in June 2026?",
+      "asset_id": "PG-18",
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "seat",
+        "moisture"
+      ],
+      "answer_any": [
+        "seat",
+        "moisture"
+      ],
+      "expected": "PG-18 may not be seating fully (unverified field note, 24-Jun-2026)."
+    },
+    {
+      "id": "Q46",
+      "category": "regulatory",
+      "question": "Which Petroleum and Explosives Safety Organisation rules are cited for the facility?",
+      "asset_id": null,
+      "context_sources": [
+        "search"
+      ],
+      "expect_any": [
+        "PESO"
+      ],
+      "must_all": [
+        "PESO"
+      ],
+      "expected": "PESO Rules 2016."
     }
   ]
 }

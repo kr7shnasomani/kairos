@@ -2,77 +2,86 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { confirmAssetIdentity } from "@/lib/api";
+import {
+  confirmAlias,
+  confirmAssetIdentity,
+  getAliasCandidates,
+  getProvisionalAssets,
+  rejectAlias,
+  type AliasCandidate,
+  type ProvisionalAsset,
+} from "@/lib/api";
 import { getMe } from "@/lib/auth";
+import { useFetch } from "@/lib/use-fetch";
 import { ADMIN_ROLES } from "@/components/use-role";
 import { Button, StatusBadge, EmptyState, PageHeader } from "@/components/ui";
 import { PageSkeleton } from "@/components/skeleton";
 
-interface Provisional {
-  asset_id: string;
-  name: string;
-  equipment_class: string;
-  origin: string;
-}
-interface AliasCandidate {
-  alias: string;
-  canonical_asset_id: string;
-  confidence: number;
-}
-
-// Deployment-time seed — provisional holding nodes lacking identity_confirmed_by,
-// plus unresolved tag aliases. In production these come from the graph / asset_alias_map.
-const SEED_PROVISIONAL: Provisional[] = [
-  { asset_id: "P-207", name: "Provisional pump (EAM import)", equipment_class: "centrifugal_pump", origin: "eam_sync" },
-  { asset_id: "HX-14B", name: "Heat exchanger — orphaned tag", equipment_class: "heat_exchanger", origin: "document_extraction" },
-  { asset_id: "V-88", name: "Isolation valve (P&ID)", equipment_class: "gate_valve", origin: "pid_drawing" },
-];
-const SEED_ALIASES: AliasCandidate[] = [
-  { alias: "Pump-207", canonical_asset_id: "P-207", confidence: 0.83 },
-  { alias: "HEX-14B", canonical_asset_id: "HX-14B", confidence: 0.71 },
-];
-
+// Both queues are live: provisional records are `assets` rows with no confirmed identity, and alias
+// candidates are the extraction pipeline's unconfirmed `asset_alias_map` proposals. This page used to
+// render three hardcoded provisional assets and two aliases whose Confirm/Reject changed nothing.
+// Registering new assets lives on its own page, /assets/register.
 export default function BootstrapPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [ready, setReady] = useState(false);
   const [me, setMe] = useState<string>("");
-  const [siteId, setSiteId] = useState<string>("SITE_001");
-  const [provisional, setProvisional] = useState(SEED_PROVISIONAL);
-  const [aliases, setAliases] = useState(SEED_ALIASES);
+  const [reload, setReload] = useState(0);
+  const provisional = useFetch(getProvisionalAssets, [reload]);
+  const aliases = useFetch(getAliasCandidates, [reload]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getMe().then((u) => {
       setIsAdmin(!!u && ADMIN_ROLES.includes(u.role));
-      if (u) { setMe(u.user_id); setSiteId(u.site_id); }
+      if (u) setMe(u.user_id);
       setReady(true);
     });
   }, []);
 
-  async function confirm(p: Provisional) {
-    setBusy(p.asset_id);
+  async function run(key: string, mutate: () => Promise<unknown>, failure: string) {
+    setBusy(key);
     setError(null);
     try {
-      await confirmAssetIdentity({
-        asset_id: p.asset_id,
-        tag_number: p.asset_id,
-        name: p.name,
-        equipment_class: p.equipment_class,
-        criticality: "critical",
-        site_id: siteId,
-        facility_id: siteId,
-        confirmed_by_user_id: me || "admin",
-      });
-      setProvisional((list) => list.filter((x) => x.asset_id !== p.asset_id));
+      await mutate();
+      setReload((r) => r + 1);
     } catch {
-      setError("Identity confirmation was not saved. Check the connection and try again.");
+      setError(failure);
     } finally {
       setBusy(null);
     }
   }
 
+  function confirm(p: ProvisionalAsset) {
+    return run(
+      p.asset_id,
+      () =>
+        confirmAssetIdentity({
+          asset_id: p.asset_id,
+          tag_number: p.tag_number || p.asset_id,
+          name: p.name,
+          equipment_class: p.equipment_class,
+          criticality: p.criticality,
+          site_id: p.site_id,
+          facility_id: p.facility_id,
+          confirmed_by_user_id: me || "admin",
+        }),
+      "Identity confirmation was not saved. Check the connection and try again.",
+    );
+  }
+
+  function decideAlias(a: AliasCandidate, accept: boolean) {
+    return run(
+      `alias:${a.alias}`,
+      () => (accept ? confirmAlias(a.canonical_asset_id, a.alias) : rejectAlias(a.canonical_asset_id, a.alias)),
+      `Could not ${accept ? "confirm" : "reject"} alias ${a.alias}. Try again.`,
+    );
+  }
+
   if (!ready) return <PageSkeleton />;
+
+  const provisionalItems = provisional.status === "live" ? provisional.data : [];
+  const aliasItems = aliases.status === "live" ? aliases.data : [];
 
   return (
     <div data-testid="identity-workspace" className="mx-auto max-w-5xl">
@@ -113,20 +122,30 @@ export default function BootstrapPage() {
 
       {isAdmin && (
         <div className="mt-6 space-y-6">
+          {error && <p role="alert" className="rounded-lg border border-line px-4 py-3 text-body text-danger">{error}</p>}
+
           <section data-testid="provisional-queue" className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
               <div>
                 <h2 className="text-sm font-semibold text-ink">Provisional assets</h2>
                 <p className="mt-0.5 text-caption text-muted">Records awaiting a canonical identity.</p>
               </div>
-              <StatusBadge tone={provisional.length ? "caution" : "verified"} dot={false}>
-                {provisional.length} pending
+              <StatusBadge tone={provisionalItems.length ? "caution" : "verified"} dot={false}>
+                {provisionalItems.length} pending
               </StatusBadge>
             </div>
-            {error && <p role="alert" className="border-b border-line px-4 py-3 text-body text-danger sm:px-5">{error}</p>}
             <div className="divide-y divide-line">
-              {provisional.length === 0 && <div className="p-4 sm:p-5"><EmptyState message="All provisional assets confirmed." /></div>}
-              {provisional.map((p) => (
+              {provisional.status === "loading" && <p className="p-4 text-body text-muted sm:p-5">Loading provisional records…</p>}
+              {provisional.status === "error" && (
+                <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
+                  <p className="text-body text-muted">Could not load provisional records.</p>
+                  <Button variant="ghost" onClick={provisional.retry}>Retry</Button>
+                </div>
+              )}
+              {provisional.status === "live" && provisionalItems.length === 0 && (
+                <div className="p-4 sm:p-5"><EmptyState message="Every registered asset has a confirmed identity." /></div>
+              )}
+              {provisionalItems.map((p) => (
                 <div
                   key={p.asset_id}
                   data-testid={`provisional-${p.asset_id}`}
@@ -141,7 +160,7 @@ export default function BootstrapPage() {
                   </div>
                   <div className="min-w-0 text-label text-muted">
                     <p className="truncate font-medium text-ink">{p.equipment_class.replaceAll("_", " ")}</p>
-                    <p className="mt-0.5 truncate">Source · {p.origin.replaceAll("_", " ")}</p>
+                    <p className="mt-0.5 truncate">Source · {(p.eam_source || "manual").replaceAll("_", " ")}</p>
                   </div>
                   <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id} onClick={() => confirm(p)}>
                     {busy === p.asset_id ? "Confirming…" : "Confirm identity"}
@@ -155,34 +174,46 @@ export default function BootstrapPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
               <div>
                 <h2 className="text-sm font-semibold text-ink">Unresolved tag aliases</h2>
-                <p className="mt-0.5 text-caption text-muted">Map each variant to its proposed canonical asset.</p>
+                <p className="mt-0.5 text-caption text-muted">Tags extraction found in documents, proposed as another name for an asset.</p>
               </div>
-              <StatusBadge tone={aliases.length ? "info" : "verified"} dot={false}>
-                {aliases.length} pending
+              <StatusBadge tone={aliasItems.length ? "info" : "verified"} dot={false}>
+                {aliasItems.length} pending
               </StatusBadge>
             </div>
             <div className="divide-y divide-line">
-              {aliases.length === 0 && <div className="p-4 sm:p-5"><EmptyState message="No pending aliases." /></div>}
-              {aliases.map((a) => (
-                <div key={a.alias} className="grid gap-3 px-4 py-4 transition-colors hover:bg-surface-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center sm:px-5">
-                  <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
-                    <div className="min-w-0">
-                      <p className="text-label text-muted">Observed tag</p>
-                      <p className="tabular mt-0.5 truncate text-caption font-semibold text-ink">{a.alias}</p>
-                    </div>
-                    <span className="hidden text-muted sm:block" aria-hidden="true">→</span>
-                    <div className="min-w-0">
-                      <p className="text-label text-muted">Canonical asset</p>
-                      <p className="tabular mt-0.5 truncate text-caption font-semibold text-accent">{a.canonical_asset_id}</p>
-                    </div>
-                    <StatusBadge tone="info" dot={false}>{Math.round(a.confidence * 100)}% match</StatusBadge>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 md:flex">
-                    <Button variant="ghost" className="h-11 md:h-9" aria-label={`Confirm alias ${a.alias}`} onClick={() => setAliases((l) => l.filter((x) => x.alias !== a.alias))}>Confirm</Button>
-                    <Button variant="ghost" className="h-11 text-danger md:h-9" aria-label={`Reject alias ${a.alias}`} onClick={() => setAliases((l) => l.filter((x) => x.alias !== a.alias))}>Reject</Button>
-                  </div>
+              {aliases.status === "loading" && <p className="p-4 text-body text-muted sm:p-5">Loading alias candidates…</p>}
+              {aliases.status === "error" && (
+                <div className="flex items-center justify-between gap-3 p-4 sm:p-5">
+                  <p className="text-body text-muted">Could not load alias candidates.</p>
+                  <Button variant="ghost" onClick={aliases.retry}>Retry</Button>
                 </div>
-              ))}
+              )}
+              {aliases.status === "live" && aliasItems.length === 0 && (
+                <div className="p-4 sm:p-5"><EmptyState message="No pending aliases." /></div>
+              )}
+              {aliasItems.map((a) => {
+                const key = `alias:${a.alias}`;
+                return (
+                  <div key={a.alias} className="grid gap-3 px-4 py-4 transition-colors hover:bg-surface-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center sm:px-5">
+                    <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="text-label text-muted">Observed tag</p>
+                        <p className="tabular mt-0.5 truncate text-caption font-semibold text-ink">{a.alias}</p>
+                      </div>
+                      <span className="hidden text-muted sm:block" aria-hidden="true">→</span>
+                      <div className="min-w-0">
+                        <p className="text-label text-muted">Canonical asset</p>
+                        <p className="tabular mt-0.5 truncate text-caption font-semibold text-accent">{a.canonical_asset_id}</p>
+                      </div>
+                      <StatusBadge tone="info" dot={false}>{Math.round(a.confidence * 100)}% match</StatusBadge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 md:flex">
+                      <Button variant="ghost" className="h-11 md:h-9" disabled={busy === key} aria-label={`Confirm alias ${a.alias}`} onClick={() => decideAlias(a, true)}>Confirm</Button>
+                      <Button variant="ghost" className="h-11 text-danger md:h-9" disabled={busy === key} aria-label={`Reject alias ${a.alias}`} onClick={() => decideAlias(a, false)}>Reject</Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
         </div>

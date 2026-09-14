@@ -36,7 +36,7 @@ const API_GROUPS: { group: string; layer: string; endpoint: string; probe: strin
 
 // Rate-limited external model providers — opt-in monitoring only.
 const MODELS: { key: string; name: string; sub: string }[] = [
-  { key: "nim", name: "NVIDIA NIM", sub: "LLM synthesis · llama-3.1-70b" },
+  { key: "nim", name: "NVIDIA NIM", sub: "LLM synthesis · nemotron-3-super-120b" },
   { key: "gemini", name: "Google Gemini", sub: "LLM fallback · gemini-2.5-flash-lite" },
   { key: "jina", name: "Jina", sub: "Embeddings · powers Search & RAG" },
   { key: "groq", name: "Groq", sub: "Whisper STT · voice notes" },

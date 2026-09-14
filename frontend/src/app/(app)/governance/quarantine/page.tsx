@@ -15,6 +15,7 @@ import { buildColumns, type QuarantineRow } from "./_components/columns";
 export default function QuarantinePage() {
   const role = useRole();
   const canPromote = PROMOTE_ROLES.includes(role);
+  const canResolveDeviation = role === "engineer" || role === "admin";
 
   const [reload, setReload] = useState(0);
   const state = useFetch(() => getQuarantine(), [reload]);
@@ -179,6 +180,7 @@ export default function QuarantinePage() {
           item={panelItem}
           nowMs={nowMs}
           canPromote={canPromote}
+          canResolveDeviation={canResolveDeviation}
           busy={busy === panelItem.item_id}
           escDisabled={modal !== null}
           onClose={() => setPanelId(null)}

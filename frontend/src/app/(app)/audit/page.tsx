@@ -145,7 +145,7 @@ const COLUMNS: TableColumn<AuditRow>[] = [
     className: "w-[15%]",
     render: (r) => (
       <span className="block min-w-0">
-        <span className="block truncate font-medium text-ink" title={String(r.performed_by)}>{r.performed_by}</span>
+        <span className="block truncate font-medium text-ink" title={String(r.performed_by)}>{r.performed_by_name ?? r.performed_by}</span>
         <span className="tabular-nums block truncate text-label text-muted">{r.log_id}</span>
       </span>
     ),

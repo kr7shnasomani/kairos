@@ -27,10 +27,12 @@ from api.models.document import (
     SynthesizeRequest,
     SynthesizeResponse,
 )
+from api.services.corpus import document_rows
 from api.services.graph import GraphService
 from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService, query_asset_tags
 from api.services.search_engine import SearchEngineService
 from api.services.search_service import SearchService
+from api.services.timeline import merge_timeline
 from api.services.vector_store import VectorStoreService
 
 log = structlog.get_logger(__name__)
@@ -537,6 +539,7 @@ async def generate_rca_pack(
     # Normalise Supabase operational events into timeline format
     supabase_events = [
         {
+            "event_id": row.get("event_id"),
             "event_type": row.get("event_type", ""),
             "occurred_at": row.get("occurred_at", ""),
             "description": (row.get("payload") or {}).get("description", ""),
@@ -546,9 +549,8 @@ async def generate_rca_pack(
         for row in (supabase_result.data or [])
     ]
 
-    # Merge and sort timeline chronologically
-    timeline = neo4j_events + supabase_events
-    timeline.sort(key=lambda e: e.get("occurred_at") or "")
+    # One entry per event, ordered on a UTC clock. Supabase first: its copy carries the description.
+    timeline = merge_timeline(supabase_events, neo4j_events)
 
     # -- Qdrant semantic search --
     asset_class = (asset_result.data[0].get("equipment_class") or "") if asset_result.data else ""
@@ -601,9 +603,14 @@ async def generate_rca_pack(
             refused = True
             hypotheses = []
 
+    # The vault file name is the title an engineer recognises; without it the pack listed bare
+    # "DOC-9V7Z7YCEEXEC" ids under "Supporting documents".
+    doc_rows = await document_rows(supabase, [e["document_id"] for e in evidence if e.get("document_id")])
+    file_names = {r["document_id"]: r.get("file_name") for r in doc_rows}
     supporting_documents = [
         {
             "document_id": e["document_id"],
+            "title": file_names.get(e["document_id"]) or e["document_id"],
             "authority_level": e["authority_level"],
             "confidence": e["confidence"],
         }

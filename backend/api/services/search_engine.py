@@ -47,9 +47,13 @@ class SearchEngineService:
         asset_id: str | None = None,
         limit: int = 10,
         include_superseded: bool = False,
+        document_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Exact and full-text search. Prioritizes exact tag number matches.
+
+        With `asset_id`, a hit must be filed under that asset **or** be one of `document_ids` — the
+        documents the graph links to it (see `SearchService.hybrid_search`).
 
         `include_superseded=False` (the default) drops superseded documents — ARCHITECTURE.md §8:
         they "never appear in default query results as if they were current". Time-travel callers
@@ -67,7 +71,10 @@ class SearchEngineService:
             }
         ]
         if asset_id:
-            must_clauses.append({"term": {"asset_id": asset_id}})
+            scope: list[Any] = [{"term": {"asset_id": asset_id}}]
+            if document_ids:
+                scope.append({"terms": {"document_id": document_ids}})
+            must_clauses.append({"bool": {"should": scope, "minimum_should_match": 1}})
 
         bool_query: dict[str, Any] = {"must": must_clauses}
         if not include_superseded:

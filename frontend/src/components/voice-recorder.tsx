@@ -78,6 +78,18 @@ export function VoiceRecorder({ onBlob, disabled }: Props) {
     }
   }
 
+  function acceptFile(f: File | undefined) {
+    if (!f) return;
+    if (f.size > MAX_MB * 1024 * 1024) {
+      setTooLarge(true);
+      return;
+    }
+    setTooLarge(false);
+    setBlob(f);
+    onBlob(f);
+    setState("stopped");
+  }
+
   function stopRecording() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -108,15 +120,11 @@ export function VoiceRecorder({ onBlob, disabled }: Props) {
           accept="audio/*"
           aria-label="Upload audio recording"
           className="text-body text-ink"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              setBlob(f);
-              onBlob(f);
-              setState("stopped");
-            }
-          }}
+          onChange={(e) => acceptFile(e.target.files?.[0])}
         />
+        {tooLarge && (
+          <p role="alert" className="text-body text-danger">Recording too large (max {MAX_MB} MB).</p>
+        )}
       </div>
     );
   }
@@ -146,6 +154,22 @@ export function VoiceRecorder({ onBlob, disabled }: Props) {
             />
           </svg>
         </button>
+      )}
+
+      {/* A desktop without a microphone (or a browser that never answers the permission prompt) had
+          no way to submit a note at all — the upload path only appeared after an explicit denial. */}
+      {state === "idle" && (
+        <label className={cn("text-caption text-accent underline", disabled ? "pointer-events-none opacity-50" : "cursor-pointer hover:no-underline")}>
+          or upload an audio file
+          <input
+            type="file"
+            accept="audio/*"
+            aria-label="Upload audio recording"
+            className="sr-only"
+            disabled={disabled}
+            onChange={(e) => acceptFile(e.target.files?.[0])}
+          />
+        </label>
       )}
 
       {state === "recording" && (

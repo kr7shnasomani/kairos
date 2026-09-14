@@ -8,7 +8,8 @@ and inspection records. High-recall by design: errs toward flagging over clearin
 from fastapi import APIRouter, Query
 
 from api.config import settings
-from api.dependencies import CurrentUserDep, Neo4jDep, site_scope
+from api.dependencies import CurrentUserDep, Neo4jDep, SupabaseDep, site_scope
+from api.services.corpus import document_rows
 
 router = APIRouter()
 
@@ -147,6 +148,32 @@ ORDER BY reg.clause_id ASC
 """
 
 
+def _dedupe_evidence(evidence: list[dict]) -> list[dict]:
+    """One audit-evidence entry per document.
+
+    `_AUDIT_CYPHER` collects DISTINCT over the whole map, which carries the linked asset and the edge's
+    confidence and verification status — so a procedure covering HE-301/302/303, or a document linked
+    by several edges, was listed once per link. The pack showed the same file repeatedly and
+    `total_evidence_docs` counted links, not documents. A document is verified if any link is.
+    """
+    merged: dict[str, dict] = {}
+    for item in evidence:
+        doc_id = item.get("document_id")
+        if not doc_id:
+            continue
+        asset = item.get("asset_id")
+        if doc_id not in merged:
+            merged[doc_id] = {**item, "asset_ids": [asset] if asset else []}
+            continue
+        kept = merged[doc_id]
+        if asset and asset not in kept["asset_ids"]:
+            kept["asset_ids"].append(asset)
+        if item.get("verification_status") == "verified":
+            kept["verification_status"] = "verified"
+        kept["confidence"] = max(kept.get("confidence") or 0, item.get("confidence") or 0)
+    return list(merged.values())
+
+
 @router.get("/gaps", summary="List detected compliance gaps")
 async def list_compliance_gaps(
     current_user: CurrentUserDep,
@@ -252,6 +279,7 @@ async def compliance_dashboard(
 async def generate_audit_pack(
     current_user: CurrentUserDep,
     driver: Neo4jDep,
+    supabase: SupabaseDep,
     framework: str = Query(..., description="Target regulatory framework, e.g. OISD_117"),
     clauses: list[str] | None = Query(None, description="Specific clause IDs; omit for all clauses in framework"),
 ) -> dict:
@@ -263,9 +291,22 @@ async def generate_audit_pack(
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
         result = await session.run(_AUDIT_CYPHER, framework=framework, clauses=clauses)
         rows = [dict(r) async for r in result]
+    for r in rows:
+        r["evidence"] = _dedupe_evidence(r.get("evidence") or [])
 
     human_review_required = []
     assembled = []
+
+    # An auditor reads evidence by name, so attach the vault file name (a promoted field input has no
+    # vault document and is labelled as what it is). The pack used to list bare document ids.
+    all_ids = [e.get("document_id") for r in rows for e in (r.get("evidence") or []) if e.get("document_id")]
+    file_names = {d["document_id"]: d.get("file_name") for d in await document_rows(supabase, all_ids)}
+    for r in rows:
+        for e in r.get("evidence") or []:
+            doc_id = e.get("document_id") or ""
+            e["title"] = file_names.get(doc_id) or (
+                "Promoted field input" if doc_id.startswith("PROMOTED-") else doc_id
+            )
 
     for r in rows:
         evidence = r.get("evidence") or []

@@ -18,7 +18,10 @@ import type { ModelGateResult } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { useRole, ADMIN_ROLES } from "@/components/use-role";
 
-const F1_THRESHOLD = 0.8;
+// There is no fixed F1 bar. The backend fails a run when any entity type or asset class scores below
+// the last valid run (workers/model_validation.py). A hard-coded 80% here once labelled a passed
+// 72% run as below threshold and coloured it red.
+const GATE_RULE = "fails if any entity type regresses";
 
 // ── Demo fixture (backend offline) ────────────────────────────────────────────
 /**
@@ -58,7 +61,7 @@ const COLUMNS: TableColumn<GateRow>[] = [
   { key: "precision", label: "Precision", className: "text-right", sortValue: (r) => r.precision ?? -1, render: (r) => <span className="tabular">{fmtPct(r.precision)}</span> },
   { key: "recall", label: "Recall", className: "text-right", sortValue: (r) => r.recall ?? -1, render: (r) => <span className="tabular">{fmtPct(r.recall)}</span> },
   { key: "f1", label: "F1", className: "text-right", sortValue: (r) => r.f1 ?? -1, render: (r) => (
-    <span className="tabular font-semibold" style={{ color: r.f1 >= F1_THRESHOLD ? "var(--verified)" : "var(--danger)" }}>{fmtPct(r.f1)}</span>
+    <span className="tabular font-semibold" style={{ color: r.passed ? "var(--verified)" : "var(--danger)" }}>{fmtPct(r.f1)}</span>
   ) },
   { key: "corpus_size", label: "Corpus", className: "text-right", sortValue: (r) => r.corpus_size ?? -1, render: (r) => <span className="tabular text-muted">{fmtNum(r.corpus_size)}</span> },
   { key: "passed", label: "Gate", render: (r) => <StatusBadge tone={r.passed ? "verified" : "danger"}>{r.passed ? "passed" : "failed"}</StatusBadge> },
@@ -196,8 +199,8 @@ export default function ModelGatePage() {
           <div data-testid="model-gate-summary" className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Precision" value={fmtPct(latest?.precision)} sub="latest run" tone="accent" loading={loading} />
             <MetricCard label="Recall" value={fmtPct(latest?.recall)} sub="latest run" tone="info" loading={loading} />
-            <MetricCard label="F1" value={fmtPct(latest?.f1)} sub={`gate threshold ${fmtPct(F1_THRESHOLD)}`} tone="neutral" loading={loading} />
-            <MetricCard label="Pass rate" value={fmtPct(passRate)} sub={`${passedCount} of ${rows.length} runs`} tone={passRate === null ? "neutral" : passRate >= F1_THRESHOLD ? "verified" : "danger"} loading={loading} />
+            <MetricCard label="F1" value={fmtPct(latest?.f1)} sub={GATE_RULE} tone="neutral" loading={loading} />
+            <MetricCard label="Pass rate" value={fmtPct(passRate)} sub={`${passedCount} of ${rows.length} runs`} tone={!latest ? "neutral" : latest.passed ? "verified" : "danger"} loading={loading} />
           </div>
 
           {/* Pass mix + quality trend — asymmetric 2fr/3fr split */}

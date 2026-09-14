@@ -263,10 +263,10 @@ export default function SystemBenchmarksPage() {
           a static file as live data. Run the harnesses to refresh them.
         </p>
         <p className="mt-2 text-caption text-muted">
-          Latest recorded (2026-08-16, 37 questions at the shipping 60 s cap): retrieval{" "}
-          <strong className="text-ink">37/37</strong> · answer quality{" "}
-          <strong className="text-ink">34/37</strong> (95% CI 79–97%, run validity{" "}
-          <strong className="text-ink">VALID</strong>) · provenance <strong className="text-ink">37/37</strong>{" "}
+          Latest recorded (2026-09-13, 46 questions, Nemotron 3 Super on NVIDIA NIM): retrieval{" "}
+          <strong className="text-ink">46/46</strong> · answer quality{" "}
+          <strong className="text-ink">41/46</strong> (95% CI 77–95%, run validity{" "}
+          <strong className="text-ink">VALID</strong>) · provenance <strong className="text-ink">46/46</strong>{" "}
           · compliance gap F1 <strong className="text-ink">0.912</strong> · load{" "}
           <strong className="text-ink">0% errors to 50 VU</strong>.
         </p>

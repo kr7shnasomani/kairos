@@ -3,21 +3,32 @@ Pydantic models — Events (Layer 8: Operational Event Subscription)
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def _gen_event_id() -> str:
     return str(uuid.uuid4())
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class BaseEvent(BaseModel):
     event_id: str = Field(default_factory=_gen_event_id)
     source_system: str = Field(..., description="SAP_PM, Maximo, DCS, PTW_system, manual")
     site_id: str
-    occurred_at: datetime = Field(default_factory=datetime.utcnow)
-    received_at: datetime = Field(default_factory=datetime.utcnow)
+    occurred_at: datetime = Field(default_factory=_utc_now)
+    received_at: datetime = Field(default_factory=_utc_now)
+
+    @field_validator("occurred_at", "received_at")
+    @classmethod
+    def _assume_utc(cls, value: datetime) -> datetime:
+        # A naive timestamp was stored as-is in the Event node while Postgres read it as UTC, so the
+        # RCA timeline showed one work order at two different times. Naive input is UTC by contract.
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 class WorkOrderEvent(BaseEvent):
@@ -61,7 +72,7 @@ class AlarmEvent(BaseEvent):
 class EventAck(BaseModel):
     user_id: str
     role: str
-    acknowledged_at: datetime = Field(default_factory=datetime.utcnow)
+    acknowledged_at: datetime = Field(default_factory=_utc_now)
     signature: str | None = None  # Cryptographic signature for audit trail
     notes: str | None = None
 

@@ -100,9 +100,10 @@ describe("AssetsPage", () => {
   it("shows the tailored empty state and a route error surface with retry", async () => {
     respond([]);
     render(await AssetsPage());
-    expect(screen.getByText("No assets bootstrapped")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Bootstrap assets" })).toHaveAttribute("href", "/assets/bootstrap");
-    expect(screen.getByRole("link", { name: "Register asset" })).toHaveAttribute("href", "/assets/bootstrap");
+    expect(screen.getByText("No assets registered yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Register assets" })).toHaveAttribute("href", "/assets/register");
+    // Register and identity confirmation are separate pages; register must not land on the review queues.
+    expect(await screen.findByRole("link", { name: "Register asset" })).toHaveAttribute("href", "/assets/register");
     cleanup();
 
     const reset = vi.fn();

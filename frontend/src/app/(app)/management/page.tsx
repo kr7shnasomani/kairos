@@ -54,7 +54,15 @@ async function fetchOverview(): Promise<Fetched<Overview>> {
   };
 }
 
-/** Bucket events into daily counts for the last TREND_DAYS days. */
+/** End of the trend window: now, unless the newest event is older than the whole window. Demo data
+ *  keeps its in-story dates, so a window ending today was all empty days and read as "no activity". */
+function trendEnd(events: OperationalEvent[]) {
+  const now = nowMs();
+  const newest = Math.max(...events.map((e) => Date.parse(e.occurred_at)).filter((t) => !Number.isNaN(t)));
+  return Number.isFinite(newest) && now - newest > TREND_DAYS * DAY_MS ? newest : now;
+}
+
+/** Bucket events into daily counts for the TREND_DAYS days ending at `endMs`. */
 function dailyCounts(events: OperationalEvent[], endMs: number) {
   const start = endMs - (TREND_DAYS - 1) * DAY_MS;
   const buckets = Array.from({ length: TREND_DAYS }, (_, i) => {
@@ -82,7 +90,15 @@ export default function ManagementPage() {
   const plantState = health?.overall ? label(health.overall) : healthState.status === "error" ? "Unavailable" : null;
   const plantTone = health?.overall === "healthy" ? "verified" : health?.overall === "degraded" ? "caution" : health?.overall === "down" ? "danger" : "info";
 
-  const trend = useMemo(() => (data ? dailyCounts(data.events, nowMs()) : null), [data]);
+  const trendEndMs = useMemo(() => (data ? trendEnd(data.events) : null), [data]);
+  const trend = useMemo(
+    () => (data && trendEndMs !== null ? dailyCounts(data.events, trendEndMs) : null),
+    [data, trendEndMs],
+  );
+  const trendSub =
+    trendEndMs !== null && nowMs() - trendEndMs > DAY_MS
+      ? `Daily volume, ${TREND_DAYS} days to ${new Date(trendEndMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+      : `Daily volume, last ${TREND_DAYS} days`;
   // All-zero series draws a misleading flat line — show nothing instead.
   const spark = useMemo(() => {
     const s = trend?.map((b) => b.count);
@@ -105,6 +121,12 @@ export default function ManagementPage() {
         lede="Situational awareness across knowledge, conflicts, and compliance."
         actions={
           <>
+            <Link
+              href="/management/cross-site"
+              className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-caption font-semibold text-ink outline-offset-2 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              Cross-site patterns
+            </Link>
             <Link
               href="/management/plant-state"
               className="inline-flex min-h-11 items-center rounded-lg outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent"
@@ -141,7 +163,7 @@ export default function ManagementPage() {
           <div className="mt-4">
             <ChartCard
               title="Operational events"
-              sub={`Daily volume, last ${TREND_DAYS} days`}
+              sub={trendSub}
               height={180}
               loading={trend === null}
               empty={trend !== null && trend.every((b) => b.count === 0) && "No events in this window."}

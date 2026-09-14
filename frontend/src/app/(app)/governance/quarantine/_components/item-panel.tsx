@@ -65,6 +65,7 @@ export function ItemPanel({
   item,
   nowMs,
   canPromote,
+  canResolveDeviation = false,
   busy,
   escDisabled = false,
   onClose,
@@ -73,6 +74,8 @@ export function ItemPanel({
   item: QuarantineItem;
   nowMs: number;
   canPromote: boolean;
+  /** Engineer/admin — matches `require_role` on POST /events/deviation-flag/{id}/resolve. */
+  canResolveDeviation?: boolean;
   busy: boolean;
   /** Suspends the Esc handler while an action Modal is stacked on top. */
   escDisabled?: boolean;
@@ -147,9 +150,9 @@ export function ItemPanel({
                   ) : "—"}
                 </Meta>
                 <Meta label="Work order"><span className="font-mono">{item.work_order_id ?? "—"}</span></Meta>
-                <Meta label="Submitted by">{item.submitted_by}</Meta>
+                <Meta label="Submitted by">{item.submitted_by_name ?? item.submitted_by}</Meta>
                 <Meta label="Submitted"><span className="tabular-nums">{relativeTime(item.submitted_at)}</span></Meta>
-                <Meta label="Reviewer">{item.reviewer_id ?? "—"}</Meta>
+                <Meta label="Reviewer">{item.reviewer_name ?? item.reviewer_id ?? "—"}</Meta>
               </dl>
             </div>
 
@@ -160,12 +163,12 @@ export function ItemPanel({
                 <svg className="mt-0.5 shrink-0 text-danger" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-danger">Deviation flag</p>
+                  {/* This used to send reviewers to the conflicts queue, which cannot resolve a deviation —
+                      so a flagged asset's briefs stayed frozen with no way out of the UI. */}
                   <p className="text-sm leading-relaxed text-danger/80">
-                    This flag must be{" "}
-                    <Link href="/governance/conflicts" className="font-semibold underline hover:opacity-80">
-                      resolved via conflicts queue
-                    </Link>
-                    .
+                    {canResolveDeviation
+                      ? "Briefs for this asset are frozen until an engineer confirms or dismisses the flag."
+                      : "Briefs for this asset are frozen until an engineer or admin resolves this flag."}
                   </p>
                 </div>
               </div>
@@ -176,6 +179,13 @@ export function ItemPanel({
         <footer className="absolute bottom-0 left-0 right-0 border-t border-line bg-surface/90 px-6 py-4 pb-safe backdrop-blur-md">
           {pending ? (
             <div className="flex flex-col gap-3">
+              {/* In the sticky footer with the other decisions — placed in the scrolling body it sat under
+                  this footer and could not be reached without scrolling first. */}
+              {item.input_type === "deviation_flag" && canResolveDeviation && (
+                <Button className="w-full min-h-10" variant="primary" onClick={() => onAction("resolve-deviation")} disabled={busy}>
+                  Resolve deviation
+                </Button>
+              )}
               <div className="flex items-center gap-3">
                 {canPromote && (
                   <Button className="flex-1 min-h-10" variant="primary" onClick={() => onAction("promote")} disabled={busy}>
@@ -190,7 +200,7 @@ export function ItemPanel({
                 Request additional info
               </Button>
               {!canPromote && (
-                <p className="text-center text-xs text-muted">Promotion requires reliability, engineer, or admin role.</p>
+                <p className="text-center text-xs text-muted">Promotion requires the reliability or admin role.</p>
               )}
             </div>
           ) : (

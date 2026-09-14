@@ -6,7 +6,23 @@ All tests run **inside Docker**. There is no host shortcut: host package resolut
 the pinned images and produces false results — `auth.test.ts` and `api.test.ts` fail on the host
 and pass in the container. A host run will lie to you.
 
-### Tier 1 — service-free (415 tests, no stack, no secrets, no network)
+### Flow checks — the stack, driven through the UI (`tools/e2e_flows.sh`)
+
+Walks what a reviewer clicks, as each persona, against a loaded stack: pages render with no error screen
+or console error, role redirects, API refusals (field worker → quarantine 403, engineer → PTW countersign
+403), a sourced Copilot answer and a safety refusal, an RCA pack with no duplicated events, and an audit
+pack that lists each document once. Uses host-installed `agent-browser`, so it runs on a developer
+machine, not in CI.
+
+```bash
+./tools/e2e_flows.sh            # changes no workflow state — safe on demo data
+./tools/e2e_flows.sh --mutate   # also PTW dual sign-off, deviation raise/resolve, supersede via the UI
+```
+
+`--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
+you will reset, never on the dataset you are about to demo or benchmark.
+
+### Tier 1 — service-free (476 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push.
 
@@ -15,10 +31,30 @@ docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-a
   pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,\
 model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,\
 ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,\
-superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter}.py
+superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,\
+alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence}.py
 ```
 
-All **33** files, **415 tests**. `test_attribution_evidence.py` (12 tests) covers the pure
+All **41** files, **476 tests** (2026-09-14). The seven newest:
+`test_alias_expansion.py` — a query naming a confirmed alias (P-101) also searches its canonical asset.
+`test_ner_fallback.py` — NIM NER calls are capped at 4 concurrent; a timeout or 5xx is retried but a 4xx
+is not; a long document is extracted in chunks and merged, and a failed chunk keeps the others while
+flagging recall as a floor; an unset `OLLAMA_BASE_URL` goes straight to regex.
+`test_asset_tag_filter.py` — document references (WO-, PTW-, SOP-, month-year stamps) never become
+alias candidates or quarantine items, and "HE-301 Shell and Tube Heat Exchanger" resolves to HE-301.
+`test_linked_document_scope.py` — an asset-scoped search also matches documents the graph links to the
+asset, the asset's own documents rank first within an authority level, and a graph outage degrades to
+the primary-asset scope.
+`test_nim_retry.py` — a NIM 502/503/504 is retried once before the cascade hands the answer to a
+different model; a client error is never retried.
+`test_rca_timeline.py` — the RCA timeline shows an event recorded in both Supabase and Neo4j once, orders
+mixed UTC offsets by instant, and reads a naive timestamp as UTC.
+`test_document_extraction_view.py` — the document extraction view and redacted export read entities back from
+the graph edges carrying the document id: the entity is the non-document endpoint, a re-linked entity is
+listed once at its strongest confidence, and only `MENTIONS_PERSON` names feed redaction.
+`test_audit_evidence.py` — the compliance audit pack lists a document linked by several edges or assets
+once, verified if any link is, with its highest confidence and every asset it covers.
+`test_attribution_evidence.py` (12 tests) covers the pure
 decision functions `_attribute` and `_classify_attestation` in `workers/attribution.py`,
 including the brownfield regression that `genuine_failure` was unreachable on uninstrumented assets.
 `test_authz_boundary.py` (41 tests) covers the trust boundary — which routes are policy-enforced,
@@ -89,7 +125,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 415 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 476 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud

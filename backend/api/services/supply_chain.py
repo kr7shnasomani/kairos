@@ -15,9 +15,9 @@ WHY "MODEL WEIGHT SIGNING" IS NOT WHAT THIS DOES
   substitution signing is meant to catch, and it is detectable — an OpenAI-compatible response
   echoes the model that produced it. `verify_served_model` compares that against the pin.
 
-  This matters beyond security. `docs/implementation/status.md` argues that a NIM → OpenRouter
-  fallthrough "does not change which model answered" because both serve `llama-3.1-70b`. Nothing
-  was checking that. Every benchmark figure attributed to a named model rests on the assumption.
+  This matters beyond security. Every benchmark figure attributed to a named model rests on the
+  assumption that the pinned model answered. Until NVIDIA retired `llama-3.1-70b` (2026-09-13), NIM and
+  OpenRouter both served it; tier 1 is now Nemotron, so a fallthrough always changes the model.
 """
 
 import statistics

@@ -20,7 +20,9 @@ from api.dependencies import (
     require_role,
 )
 from api.models.document import PromoteQuarantineRequest, RequestQuarantineInfoRequest
+from api.services.corpus import document_rows
 from api.services.graph import GraphService
+from api.services.identity import display_names
 from api.services.metrics import conflicts_open
 from api.services.sla_service import SLAService
 
@@ -188,23 +190,37 @@ async def list_quarantine(
         "item_id, asset_id, content, input_type, submitted_by, submitted_at, reviewer_id, review_status, work_order_id, session_context, sla_due_at, escalated_at",
         count="exact",
     )
+    # The P&ID manifest row is pipeline bookkeeping (it indexes a drawing's elements for the topology
+    # page) — not a field input anyone can promote or dispute, yet it sat in the review queue reading
+    # "PID_TOPOLOGY_MANIFEST:DOC-…". Excluded in the query so `total` still matches the list.
+    query = query.not_.like("content", "PID_TOPOLOGY_MANIFEST:%")
     if asset_id:
         query = query.eq("asset_id", asset_id)
     if reviewer_id:
         query = query.eq("reviewer_id", reviewer_id)
-    if review_status:
+    # `all` exists for the review page: it shows Promoted/Disputed counts and a Resolved tab, which
+    # were permanently 0/empty while it could only ever fetch pending rows.
+    if review_status and review_status != "all":
         query = query.eq("review_status", review_status)
-    else:
+    elif not review_status:
         query = query.eq("review_status", "pending")  # default: pending items only
 
     result = await asyncio.to_thread(
         lambda: query.order("submitted_at", desc=True).range(offset, offset + limit - 1).execute()
     )
     items = []
-    for row in result.data or []:
+    rows = result.data or []
+    # Submitter/reviewer are auth UUIDs for anything a signed-in user did; the review panel showed them raw.
+    names = await display_names(supabase, [r.get("submitted_by") for r in rows] + [r.get("reviewer_id") for r in rows])
+    for row in rows:
         sla = row.get("sla_due_at")
         is_overdue = bool(sla and datetime.fromisoformat(sla.replace("Z", "+00:00")) < now)
-        items.append({**row, "is_overdue": is_overdue})
+        items.append({
+            **row,
+            "is_overdue": is_overdue,
+            "submitted_by_name": names.get(row.get("submitted_by")),
+            "reviewer_name": names.get(row.get("reviewer_id")),
+        })
     return {
         "items": items,
         "total": result.count or 0,
@@ -525,7 +541,7 @@ async def list_moc(
 ) -> dict:
     """Returns Management of Change items, optionally filtered by status."""
     query = supabase.table("moc_items").select(
-        "moc_id, conflict_id, asset_id, description, status, approved_by, approved_at, created_at",
+        "moc_id, conflict_id, asset_id, description, status, approved_by, approved_at, created_at, blast_radius",
         count="exact",
     )
     if moc_status:
@@ -533,7 +549,13 @@ async def list_moc(
     result = await asyncio.to_thread(
         lambda: query.order("created_at", desc=True).limit(100).execute()
     )
-    return {"items": result.data or [], "total": result.count or 0}
+    # The list's "Blast radius" column read `blast_radius_count`, which this endpoint never returned, so
+    # every MoC showed 0 affected records. The drafted blast radius is stored on the row.
+    items = []
+    for row in result.data or []:
+        blast = row.pop("blast_radius", None) or []
+        items.append({**row, "blast_radius_count": len(blast) if isinstance(blast, list) else 0})
+    return {"items": items, "total": result.count or 0}
 
 
 async def _resolve_moc_conflict(
@@ -688,6 +710,18 @@ async def get_moc_item(
                     blast_count = blast.get("affected_count", 0)
                 except Exception:  # noqa: BLE001 — blast radius is best-effort enrichment
                     log.warning("moc.blast_radius_failed", moc_id=moc_id, document_id=blast_doc)
+
+    # The drafted blast radius stored on the MoC is a floor: the graph traversal can see fewer affected
+    # records than the draft listed (e.g. before downstream documents are linked).
+    stored_blast = moc.get("blast_radius") or []
+    blast_count = max(blast_count, len(stored_blast) if isinstance(stored_blast, list) else 0)
+
+    # Name the conflicting documents — the sign-off panel showed bare ids an engineer cannot read.
+    ids = [s.get("document_id") for s in (source_a, source_b) if s.get("document_id")]
+    names = {r["document_id"]: r.get("file_name") for r in await document_rows(supabase, ids)} if ids else {}
+    for s in (source_a, source_b):
+        if s.get("document_id") and not s.get("file_name") and names.get(s["document_id"]):
+            s["file_name"] = names[s["document_id"]]
 
     return {
         "moc_id": moc["moc_id"],

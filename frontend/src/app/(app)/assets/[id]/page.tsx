@@ -5,6 +5,8 @@ import { getAssetDetail } from "@/lib/api";
 import { AuthorityBadge, SourceChip, StatusBadge, PageHeader } from "@/components/ui";
 // React Flow must not SSR — imported from the client-only lazy module.
 import { KnowledgeGraph } from "@/components/lazy";
+import { AssetSearch } from "./asset-search";
+import { HierarchyPanel } from "./hierarchy-panel";
 
 const VERIF_TONE = { verified: "verified", unverified: "caution", disputed: "danger" } as const;
 
@@ -111,6 +113,11 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             </div>
           </dl>
         </aside>
+      </div>
+
+      <div className="fluid-tile-pair mt-6">
+        <AssetSearch assetId={a.asset_id} />
+        <HierarchyPanel assetId={a.asset_id} />
       </div>
 
       <section className="mt-6 overflow-hidden rounded-xl border border-line bg-surface shadow-sm">

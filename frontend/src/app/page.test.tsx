@@ -125,8 +125,8 @@ describe("Home", () => {
     // than a single flattering number, and that grading is deterministic.
     // The chart shows a point estimate, so the interval must still be
     // disclosed in the caption rather than quietly dropped.
-    expect(screen.getByText("97%")).toBeInTheDocument();
-    expect(screen.getByText("36/37")).toBeInTheDocument();
+    expect(screen.getByText("89%")).toBeInTheDocument();
+    expect(screen.getByText("41/46")).toBeInTheDocument();
     // Two: the retrieval and provenance chart bars. KG linkage is quoted
     // document-centric (85%), not as a third 100% — see status.md on why the
     // asset-centric cut isn't trustworthy to publish as-is.
@@ -134,15 +134,15 @@ describe("Home", () => {
     expect(screen.getByText("18 / 21")).toBeInTheDocument();
     expect(screen.getByText("6 / 6")).toBeInTheDocument();
     // Scoped to the <p>: a bare regex also matches every ancestor's textContent.
-    expect(screen.getByText(/thirty-seven questions written by domain experts/i, { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText(/forty-six questions written by domain experts/i, { selector: "p" })).toBeInTheDocument();
     // Said once on the chart's own sub-label, and explained once in the filled cell
     // at the foot of the section. It used to be in the section intro as well, which
     // made that cell a repeat rather than the explanation.
     expect(screen.getAllByText(/graded by fixed rules/i, { selector: "p" })).toHaveLength(1);
     expect(screen.getByText(/fixed rules, never another model/i)).toBeInTheDocument();
     // The spread is carried by the chart itself, not rounded away in prose.
-    expect(screen.getByText("36/37")).toBeInTheDocument();
-    expect(screen.getByText(/95% confidence: 86 to 100/i)).toBeInTheDocument();
+    expect(screen.getByText("41/46")).toBeInTheDocument();
+    expect(screen.getByText(/95% confidence: 77 to 95/i)).toBeInTheDocument();
     // What the chart cannot show: which model answered, and why the misses understate it.
     expect(screen.getByText(/none from a fallback\s+model/i, { selector: "p" })).toBeInTheDocument();
     // The other harnesses are on the page too, with their real figures.

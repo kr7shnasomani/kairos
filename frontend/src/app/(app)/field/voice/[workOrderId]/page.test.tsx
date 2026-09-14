@@ -4,7 +4,8 @@ import VoicePage from "./page";
 
 vi.mock("next/navigation", () => ({ useParams: () => ({ workOrderId: "WO-118" }) }));
 vi.mock("@/components/voice-recorder", () => ({ VoiceRecorder: () => <button>Start recording</button> }));
-vi.mock("@/lib/api", () => ({ submitVoiceNote: vi.fn() }));
+// getToken: the page resolves the signed-in user (useMe → getMe) to attribute the note.
+vi.mock("@/lib/api", () => ({ submitVoiceNote: vi.fn(), getToken: () => null }));
 
 describe("VoicePage", () => {
   afterEach(cleanup);

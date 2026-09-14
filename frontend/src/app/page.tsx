@@ -276,9 +276,9 @@ type EvalBar = {
   hero: boolean;
 };
 const evalBars: EvalBar[] = [
-  { label: "Retrieval", note: "The fact reaches the model", value: 100, display: "100%", badge: "37/37", sub: "graded by fixed rules", hero: false },
-  { label: "Provenance", note: "Sources cited", value: 100, display: "100%", badge: "37/37", sub: "every answer cited", hero: true },
-  { label: "Answer quality", note: "One valid run", value: 97, display: "97%", badge: "36/37", sub: "95% confidence: 86 to 100", hero: false },
+  { label: "Retrieval", note: "The fact reaches the model", value: 100, display: "100%", badge: "46/46", sub: "graded by fixed rules", hero: false },
+  { label: "Provenance", note: "Sources cited", value: 100, display: "100%", badge: "46/46", sub: "every answer cited", hero: true },
+  { label: "Answer quality", note: "One valid run", value: 89, display: "89%", badge: "41/46", sub: "95% confidence: 77 to 95", hero: false },
 ];
 
 // The five harnesses beyond the Q&A grading, all from benchmark/RESULTS.md.
@@ -347,15 +347,14 @@ const evalSuites: {
     rows: [["Memory slope", "+8.6 MB/h"], ["Connections", "+4.2/h"], ["Errors", "0.11% of 37,842"], ["Idle recovery", "4 / 4 endpoints"]],
   },
   {
-    // Every row here is the same 2026-08-17 run the chart above reports, taken
+    // Every row here is the same 2026-09-13 run the chart above reports, taken
     // from one `run_benchmark.py` output. Quoting the percentiles from one run
     // beside another run's provider mix is the mistake this card is arranged to
-    // prevent — an earlier sweep timed faster and answered 34/37, and its
-    // figures had drifted into the docs.
+    // prevent — figures from earlier sweeps had drifted into the docs.
     name: "Synthesis latency",
-    headline: "p50 32.1 s",
-    headlineNote: "NIM 70B at the 60 second cap, quoted with its slowest cases",
-    rows: [["p95", "66.0 s"], ["Mean", "34.1 s"], ["Graded questions", "37"], ["Answered by", "nim 25 · openrouter 8"]],
+    headline: "p50 1.5 s",
+    headlineNote: "Nemotron 3 Super on NVIDIA NIM at the 60 second cap, quoted with its slowest cases",
+    rows: [["p95", "9.8 s"], ["Mean", "3.1 s"], ["Graded questions", "46"], ["Answered by", "nim 40 · refused 6"]],
   },
 ];
 
@@ -454,8 +453,8 @@ const faqGroups = [
   {
     name: "Evidence",
     items: [
-      ["How was it evaluated?", "Thirty-seven questions written by domain experts across fifteen categories, graded by fixed rules. Retrieval, answer quality and sourcing are scored separately, and a refusal counts as correct when refusing was the right call."],
-      ["Why quote a confidence interval for answer quality?", "Because 33 out of 37 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 79 to 97 percent. Retrieval and sourcing are graded by fixed rules and stay at 37 out of 37. Every run is also checked for validity, and we never quote a run that a fallback model answered."],
+      ["How was it evaluated?", "Forty-six questions written by domain experts across fifteen categories, graded by fixed rules. Retrieval, answer quality and sourcing are scored separately, and a refusal counts as correct when refusing was the right call."],
+      ["Why quote a confidence interval for answer quality?", "Because 41 out of 46 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 77 to 95 percent. Retrieval and sourcing are graded by fixed rules and stay at 46 out of 46. Every run is also checked for validity, and we never quote a run that a fallback model answered."],
       ["What do these numbers not cover?", "Four things, and we would rather name them. The soak test ran for one hour, so it says nothing about days. The validation set is small: 40 labels in total and only 3 for ORGANIZATION, so quote a per-type score with the number of labels behind it. Fifty virtual users against a demo-sized dataset is not evidence that the system handles a 10,000-asset plant. And hybrid retrieval reaches 35 of 37, which is exactly what semantic search alone reaches, so we report it as matching the best single method rather than beating it."],
       ["Is any of this running against a real plant?", "No. Every figure is measured against a golden dataset we wrote ourselves, and Kairos is not connected to any live plant. That is the intended limit of this MVP. We would rather say so than let a number imply otherwise."],
       ["Can we see the failures too?", "Yes. The test harness, the question set and every raw run are in the repository, including the runs where the answer was wrong."],
@@ -1732,7 +1731,7 @@ export default function Home() {
               <Box fill>Provenance at 100%.</Box>
             </h2>
             <p className="mt-6 max-w-xl text-[16px] leading-6 text-(--lp-dark-muted)">
-              Thirty-seven questions written by domain experts across fifteen categories, run
+              Forty-six questions written by domain experts across fifteen categories, run
               against the live stack. Higher is better.
             </p>
           </div>
@@ -1798,10 +1797,11 @@ export default function Home() {
               ))}
             </div>
             <p className="mt-8 max-w-2xl text-[13px] leading-5 text-(--lp-dark-muted)">
-              One run, and every answer came from the same Llama 3.1 70B — none from a fallback
-              model. All four misses are the authority gate refusing to answer rather than guessing,
-              and we still grade a refusal as wrong. That understates the system, because refusing
-              was the correct call in each of the four.
+              One run, and every answer came from the pinned Nemotron 3 Super model on NVIDIA NIM —
+              none from a fallback model. Six safety-critical questions were refused because no
+              authoritative source covers them, and a correct refusal is graded as correct. All five
+              misses retrieved the right evidence — the gap is in how the answer is written, not in
+              what the system found.
             </p>
           </div>
 

@@ -90,26 +90,30 @@ frontend/
 | `/briefs/[id]` | Brief detail + ack + feedback | Live |
 | `/copilot` | Knowledge Q&A chat + answer rating + pending-MoC banner | Live |
 | `/assets` | Asset list | Live |
-| `/assets/[id]` | Asset detail + aliases + knowledge | Live |
+| `/assets/[id]` | Asset detail + aliases + knowledge + hierarchy + asset-scoped search | Live |
 | `/rca` | RCA pack generator | Live |
 | `/compliance` | Compliance gaps + audit readiness | Live |
 | `/governance` | Hub → all 6 governance surfaces | Live (hub page) |
 | `/governance/conflicts` | Conflict list + resolve | Live |
+| `/governance/conflicts/[id]` | Conflict detail — both sources, authority, SLA, blast radius, resolve / MoC | Live |
 | `/governance/quarantine` | Quarantine list + promote/dispute/request-info | Live (role-gated) |
 | `/governance/moc` | Management of Change queue | Live |
 | `/governance/moc/[id]` | MoC detail (sources joined from linked conflict) + engineer/admin sign-off | Live (`GET/POST /governance/moc/{id}` + `/approve`) |
 | `/governance/sla` | SLA report — overdue conflicts + quarantine | Live |
+| `/governance/timestamp-drift` | Cross-system clock drift on compound events (report-only) | Live |
+| `/governance/push-volume-gate` | EEMUA 191 briefs-per-operator-hour gate, 7/30/90-day window (report-only) | Live |
 | `/governance/circuit-breaker` | SPC circuit-breaker state by asset class | Live |
 | `/governance/model-gate` | Model gate — P/R/F1 history + validation corpus. Run is a ~2.5-min async task: button shows a queued banner, polls history, auto-refreshes | Live (Run = admin) |
 | `/compliance/audit-pack` | Audit-evidence pack by clause + human sign-off | Live |
 | `/compliance/nonconformance` | Non-conformances (conflicts + failed inspections + disputes) | Composed from existing endpoints |
 | `/documents` | Document registry | Live |
-| `/documents/[id]` | Document detail + supersede chain | Live |
+| `/documents/[id]` | Document detail + supersede chain + extraction results + PII-redacted export | Live |
 | `/documents/[id]/topology` | P&ID topology graph (React Flow) | Live |
 | `/system-benchmarks` | **Admin.** Measured evidence: model-gate F1 trend, per-entity-type F1, compliance posture, datastore health | Live |
 | `/documents/ingest` | Upload → pipeline-status timeline | Live (role-gated engineer/admin) |
 | `/documents/compare` | Side-by-side version / metadata diff | Live |
-| `/assets/bootstrap` | MDM asset identity confirmation | Live (admin-gated) |
+| `/assets/register` | Register one asset, or bulk-import the EAM golden record as CSV (`POST /assets/`, `/assets/bulk`) | Live (engineer/admin) |
+| `/assets/bootstrap` | MDM asset identity confirmation: provisional assets + unresolved tag aliases | Live (admin-gated) |
 | `/projects` | Engineering + procurement registry by equipment class | Composed from documents+assets+events |
 | `/graph` | Temporal knowledge graph (React Flow) | Live |
 | `/audit` | Audit trail — entity/action log | Live |
@@ -117,7 +121,7 @@ frontend/
 | `/events/[id]` | Event detail + ack + correlation | Live |
 | `/offboarding` · `/offboarding/[sessionId]` | Retiring-expert knowledge-transfer sessions | Live (role-gated engineer/admin) |
 | `/management` | Plant overview — KPIs, alerts, system health | Live |
-| `/management/cross-site` | Cross-site pattern alerts | Honest "no data in single-site deployment" state — **no fixture** (see §16) |
+| `/management/cross-site` | Cross-site pattern alerts (linked from the overview header) | Honest "no data in single-site deployment" state — **no fixture** (see §16) |
 | `/management/plant-state` | Plant operating-state control | Live (admin-gated write) |
 | `/management/coverage` | Knowledge-coverage matrix (`GET /assets/coverage`) | Live |
 | `/system-health` | Live probes: 11 API surfaces + 5 datastores + opt-in model probes | Live (**admin-only**) |
@@ -266,6 +270,13 @@ export const API_BASE =
 | `getConflicts()` | `GET /governance/conflicts?limit=50` |
 | `getQuarantine()` | `GET /governance/quarantine?limit=50` |
 | `resolveConflict(id, body)` | `POST /governance/conflicts/{id}/resolve` |
+| `getConflictDetail(id)` | `GET /governance/conflicts/{id}` |
+| `getTimestampDrift()` | `GET /governance/timestamp-drift` |
+| `getPushVolumeGate(days)` | `GET /governance/push-volume-gate?days=` |
+| `getDocumentExtraction(id)` | `GET /documents/{id}/extraction` |
+| `getRedactedDocument(id)` | `GET /documents/{id}/redacted` |
+| `getAssetHierarchy(id)` | `GET /assets/{id}/hierarchy` |
+| `searchAsset(id, q)` | `GET /search/assets/{id}?q=` |
 | `promoteQuarantine(id, body)` | `POST /governance/quarantine/{id}/promote` |
 | `disputeQuarantine(id, reason)` | `POST /governance/quarantine/{id}/dispute` |
 | `getDocuments()` | `GET /documents/?limit=50` |
@@ -364,7 +375,7 @@ source. Fetchers **throw** on failure. The user always sees **real data**, a **l
   because after it a technician has already read the number.
 
 Default read timeout is **4 s** (`getJson`) and **8 s** for writes (`postJson`). The two endpoints
-that run NIM 70B synthesis — `synthesize()` and `getRcaPack()` — share **`SYNTHESIS_TIMEOUT_MS`
+that run NIM synthesis — `synthesize()` and `getRcaPack()` — share **`SYNTHESIS_TIMEOUT_MS`
 (90 s)**, which the backend's `NVIDIA_NIM_TIMEOUT` must stay under. Keep them on the one constant:
 `getRcaPack` silently inherited the 8 s write default until 2026-08-23, so `/rca` rendered its retry
 state over a request that was completing normally. Any page on that budget must say the wait is
@@ -614,7 +625,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **228 passed / 67 files — fully green** (vitest, 2026-08-23). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run` — `docker exec` OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
+| Test suite | **256 passed / 75 files — fully green** (vitest, 2026-09-14). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run`, or `docker exec kairos-frontend npx vitest run --maxWorkers=2` — an unbounded `docker exec` run OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---

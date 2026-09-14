@@ -4,12 +4,14 @@ Primary: NVIDIA NIM mistral-14b via JSON prompt.
 Fallback: Ollama llama3.1:8b (local).
 """
 
+import asyncio
 import json
 import os
 import re
 from collections import Counter
 from typing import Any
 
+import httpx
 import structlog
 
 from api.services.http import shared_client
@@ -18,7 +20,71 @@ log = structlog.get_logger(__name__)
 
 _NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
+# NIM queues concurrent calls per key. A 21-document reload fired ~18 extractions at once; the
+# last 4 waited past the 60 s cap and fell to the regex path, which only finds ASSET_TAG
+# (2026-09-13). Waiting for a slot costs latency; the timeout only starts once a call is sent.
+# ponytail: fixed cap per event loop — raise it if NVIDIA lifts the per-key concurrency.
+_NIM_NER_CONCURRENCY = 4
+# Transient NIM failures (timeout / 5xx) get 3 attempts, backing off 2 s then 4 s.
+_NIM_NER_ATTEMPTS = 3
+_NIM_NER_BACKOFF_S = 2.0
+# Characters of a document sent to NER, and the chunk size they are split into (see _extract_via_nim).
+_NER_TEXT_BUDGET = 2000
+_NER_CHUNK_CHARS = 700
+
+
+def _chunk_text(text: str, size: int) -> list[str]:
+    """Split at the last newline or space before `size`, so an entity is never cut in half."""
+    chunks: list[str] = []
+    rest = text
+    while len(rest) > size:
+        cut = max(rest.rfind("\n", 0, size), rest.rfind(" ", 0, size))
+        if cut <= size // 2:
+            cut = size  # no usable boundary — a hard cut beats an unbounded chunk
+        chunks.append(rest[:cut])
+        rest = rest[cut:].lstrip()
+    if rest.strip() or not chunks:
+        chunks.append(rest)
+    return chunks
+
+
+def _merge_chunk_results(results: list[dict[str, Any]], failed_chunks: int) -> dict[str, Any]:
+    """Concatenate per-chunk NER results. Repeated mentions stay separate, as in a single-call result,
+    so `_with_spans` still places each on its own occurrence. A failed chunk makes recall a floor."""
+    entities = [entity for result in results for entity in result["entities"]]
+    low_confidence = [entity for entity in entities if entity["requires_review"]]
+    return {
+        "entities": entities,
+        "low_confidence_spans": low_confidence,
+        "requires_annotation": bool(low_confidence),
+        "total_entities": len(entities),
+        "model": results[0]["model"],
+        "parse_recovered": failed_chunks > 0 or any(r.get("parse_recovered") for r in results),
+    }
+_nim_slots: dict[int, tuple[asyncio.AbstractEventLoop, asyncio.Semaphore]] = {}
+
+
+def _nim_slot() -> asyncio.Semaphore:
+    """Concurrency gate for NIM NER calls, one per event loop (a semaphore binds to its loop)."""
+    loop = asyncio.get_running_loop()
+    entry = _nim_slots.get(id(loop))
+    if entry is None or entry[0] is not loop:
+        entry = (loop, asyncio.Semaphore(_NIM_NER_CONCURRENCY))
+        _nim_slots[id(loop)] = entry
+    return entry[1]
+
 _ASSET_TAG_RE = re.compile(r'\b([A-Z]{1,4}-\d{2,4}[A-Z]?)\b')
+
+# Tag-shaped strings that name no equipment. The model labels them ASSET_TAG because they share the
+# PREFIX-NUMBER shape: dates ("JAN-2025"), year-stamped references ("SB-2025"), record and document
+# numbers ("WO-2026-0714", "SOP-HE-301-04"), and family references ("HE-3xx").
+_MONTH_YEAR_RE = re.compile(r"^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEPT?|OCT|NOV|DEC)-\d{2,4}$")
+# A four-digit year as its own segment, anywhere: "SB-2025", "MHT-ENG-2026-03". Real tags never carry one.
+_YEAR_STAMPED_RE = re.compile(r"-(19|20)\d{2}(-|$)")
+_DOCUMENT_REF_RE = re.compile(
+    r"^(WO|PTW|SOP|INSP|MOC|NCR|CAPA|SB|PB|MP|GEN|QI|FP-SB|MHT-PB|ISO|OISD|PESO|API|ASME|IEC)-"
+)
+_SERIES_RE = re.compile(r"\d+X{1,3}\b")
 
 # The label space this extractor can actually produce. Must stay in lockstep with the taxonomy
 # listed in `_NER_PROMPT` below — `test_ner_taxonomy_matches_the_prompt` fails if they drift.
@@ -110,14 +176,13 @@ class NERService:
         self._nim_model = model or os.getenv("NVIDIA_NIM_NER_MODEL", "meta/llama-3.2-11b-vision-instruct")
         self._ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self._ollama_ner_model = os.getenv("OLLAMA_NER_MODEL", "llama3.1:8b")
-        # Same cap the synthesis path uses (config.py NVIDIA_NIM_TIMEOUT) rather than a second
-        # hardcoded number. This was 30 s, which is under NIM's normal latency spread: extraction
-        # calls timed out at exactly 30 s and fell through to `_regex_fallback`, which only matches
-        # ASSET_TAG — so those documents scored regex output under the model's name and dragged the
-        # Layer-0 F1 with them (measured: 2 of 5 extractions, 2026-08-15). Every caller is async
-        # (document_pipeline, voice_transcription, model_validation) and the one request-path caller,
-        # GET /documents/{id}/redacted, has no frontend consumer, so there is no UI budget here.
-        self._timeout = float(os.getenv("NVIDIA_NIM_TIMEOUT", "60"))
+        # Its own cap (config.py NVIDIA_NIM_NER_TIMEOUT), not the synthesis one. A short cap drops a
+        # document to `_regex_fallback`, which only matches ASSET_TAG: 30 s lost 2 of 5 extractions
+        # (2026-08-15), and the shared 60 s lost a 2,000-character document three attempts running on
+        # 2026-09-13. Every caller is async (document_pipeline, voice_transcription, model_validation)
+        # and the one request-path caller, GET /documents/{id}/redacted, has no frontend consumer, so
+        # no UI budget applies — unlike NVIDIA_NIM_TIMEOUT, which must stay under synthesis's 90 s.
+        self._timeout = float(os.getenv("NVIDIA_NIM_NER_TIMEOUT", "120"))
 
     async def extract_entities(
         self,
@@ -130,15 +195,57 @@ class NERService:
             if result is not None:
                 return self._with_spans(result, text)
 
-        result = await self._extract_via_ollama(text)
-        if result is not None:
-            return self._with_spans(result, text)
+        # An empty OLLAMA_BASE_URL (how compose ships it) means "no local model": calling it built the
+        # relative URL "/api/chat" and logged a spurious failure on every NIM miss.
+        if self._ollama_url:
+            result = await self._extract_via_ollama(text)
+            if result is not None:
+                return self._with_spans(result, text)
 
         return self._regex_fallback(text)
 
     async def _extract_via_nim(self, text: str) -> dict[str, Any] | None:
-        try:
-            client = shared_client(self._timeout)
+        """NER over the first `_NER_TEXT_BUDGET` characters, in chunks merged into one result.
+
+        The hosted NER model generates slowly, and a dense document needs a long entity list: on
+        2026-09-13 a 2,000-character work-order CSV timed out at 120 s on three attempts running, while
+        its two halves answered in ~40 s each and found more entities between them. Chunks run
+        concurrently, capped by `_nim_slot`. Only when every chunk fails does the caller fall back to regex.
+        """
+        chunks = _chunk_text(text[:_NER_TEXT_BUDGET], _NER_CHUNK_CHARS)
+        results = await asyncio.gather(*(self._extract_chunk_via_nim(chunk) for chunk in chunks))
+        succeeded = [result for result in results if result is not None]
+        if not succeeded:
+            return None
+        if len(chunks) > 1:
+            log.info("ner.chunked", chunks=len(chunks), failed=len(chunks) - len(succeeded))
+        return _merge_chunk_results(succeeded, failed_chunks=len(chunks) - len(succeeded))
+
+    async def _extract_chunk_via_nim(self, text: str) -> dict[str, Any] | None:
+        # Retry transient failures: a timeout, or a 5xx from the hosted endpoint. A miss drops the
+        # document to regex (ASSET_TAG only — no people, organisations or relationships). Timeouts cost
+        # 2 of 21 documents on one reload; on 2026-09-13 a burst of 500s cost 17 of 18. A 4xx is a
+        # request problem, not load, and fails straight to the fallback.
+        for attempt in range(1, _NIM_NER_ATTEMPTS + 1):
+            try:
+                return await self._nim_request(text)
+            except (httpx.TimeoutException, httpx.HTTPStatusError) as exc:
+                transient = isinstance(exc, httpx.TimeoutException) or exc.response.status_code >= 500
+                log.warning("ner.nim_failed", error=str(exc), exc_type=type(exc).__name__, attempt=attempt)
+                if not transient:
+                    return None
+                if attempt < _NIM_NER_ATTEMPTS:
+                    await asyncio.sleep(_NIM_NER_BACKOFF_S * attempt)
+            except Exception as exc:
+                # exc_type matters: httpx timeout exceptions stringify to "", so this logged a bare
+                # `ner.nim_failed error=` and the 30 s cap above went undiagnosed for weeks.
+                log.warning("ner.nim_failed", error=str(exc), exc_type=type(exc).__name__)
+                return None
+        return None
+
+    async def _nim_request(self, text: str) -> dict[str, Any] | None:
+        client = shared_client(self._timeout)
+        async with _nim_slot():
             resp = await client.post(
                 _NIM_URL,
                 headers={"Authorization": f"Bearer {self._nim_key}"},
@@ -150,14 +257,9 @@ class NERService:
                 },
                 timeout=self._timeout,
             )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"].strip()
-            return self._parse_response(content, source="nim")
-        except Exception as exc:
-            # exc_type matters: httpx timeout exceptions stringify to "", so this logged a bare
-            # `ner.nim_failed error=` and the 30 s cap above went undiagnosed for weeks.
-            log.warning("ner.nim_failed", error=str(exc), exc_type=type(exc).__name__)
-            return None
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        return self._parse_response(content, source="nim")
 
     async def _extract_via_ollama(self, text: str) -> dict[str, Any] | None:
         try:
@@ -353,4 +455,34 @@ class NERService:
 
     def resolve_asset_tag(self, raw_tag: str, alias_map: dict[str, str]) -> str | None:
         normalized = raw_tag.strip().upper().replace(" ", "")
-        return alias_map.get(normalized) or alias_map.get(raw_tag.strip())
+        hit = alias_map.get(normalized) or alias_map.get(raw_tag.strip())
+        if hit:
+            return hit
+        # "HE-301 Shell and Tube Heat Exchanger": the model labels the tag together with its
+        # description. The whole span never resolves; the leading tag does.
+        lead = _ASSET_TAG_RE.match(raw_tag.strip().upper())
+        if lead and lead.group(1) != normalized:
+            return alias_map.get(lead.group(1))
+        return None
+
+    @staticmethod
+    def is_reference_identifier(raw_tag: str) -> bool:
+        """True for tag-shaped strings that are dates, document/record numbers or family references.
+
+        Only consulted for tags that did not resolve: a real asset always wins through the alias map
+        first. These used to become alias candidates and quarantine items — 29 of 32 review items on
+        the 2026-09-13 reload were "Unresolved asset tag: 'JAN-2025'" and the like.
+        """
+        tag = raw_tag.strip().upper()
+        # No digit, no equipment: every asset tag carries a number (EQ-101, P-101, HX-14B). When the
+        # LLM extractor answers instead of the regex fallback, it labels phrases and codes ASSET_TAG
+        # too — "heat exchangers", "tubesheet", "MECH-SEAL-FAIL" filled 13 of 17 review items on the
+        # 2026-09-13 reload.
+        if not any(ch.isdigit() for ch in tag):
+            return True
+        return bool(
+            _MONTH_YEAR_RE.match(tag)
+            or _YEAR_STAMPED_RE.search(tag)
+            or _DOCUMENT_REF_RE.match(tag)
+            or _SERIES_RE.search(tag)
+        )

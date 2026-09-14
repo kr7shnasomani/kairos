@@ -134,12 +134,14 @@ async def _generate(item_id: str) -> dict[str, Any]:
 
     if not questions:
         # ponytail: fallback so item always reaches questions_ready even on LLM failure
+        # Families are stored as class keys ("ROTATING_CENTRIFUGAL_PUMP"); an expert reads prose.
+        family = equipment_family.replace("_", " ").lower()
         questions = [
-            f"What are the most common {equipment_family} failure modes you have encountered?",
-            f"Which {equipment_family} failure scenarios are hardest to diagnose and why?",
-            f"What operating conditions are most likely to cause {equipment_family} failures?",
-            f"Are there undocumented workarounds or field tricks for {equipment_family} issues?",
-            f"Which historical {equipment_family} incidents should future engineers know about?",
+            f"What are the most common {family} failure modes you have encountered?",
+            f"Which {family} failure scenarios are hardest to diagnose and why?",
+            f"What operating conditions are most likely to cause {family} failures?",
+            f"Are there undocumented workarounds or field tricks for {family} issues?",
+            f"Which historical {family} incidents should future engineers know about?",
         ]
 
     await asyncio.to_thread(

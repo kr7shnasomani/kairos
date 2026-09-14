@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supersedeDocument } from "@/lib/api";
+import { ingestDocument, supersedeDocument } from "@/lib/api";
 import { useRole, RESOLVE_ROLES } from "@/components/use-role";
 import { Button, Modal } from "@/components/ui";
 import type { AuthorityLevel } from "@/lib/types";
@@ -12,7 +12,7 @@ const DOC_TYPES = [
   "shift_log", "regulation", "pid_drawing",
 ] as const;
 
-export function SupersedeAction({ documentId }: { documentId: string }) {
+export function SupersedeAction({ documentId, assetId }: { documentId: string; assetId?: string | null }) {
   const role = useRole();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -35,16 +35,24 @@ export function SupersedeAction({ documentId }: { documentId: string }) {
     fd.append("document_type", docType);
     fd.append("authority_level", String(authority));
     fd.append("source_system", "manual_upload");
+    // The replacement describes the same equipment, so it links to the same asset.
+    if (assetId) fd.append("asset_id", assetId);
 
     setBusy(true);
     setError(null);
     try {
-      const result = await supersedeDocument(documentId, fd);
-      setDone(result.document_id);
+      // Two steps: the replacement enters the vault, then the old version's validity window closes.
+      const ingested = await ingestDocument(fd);
+      if (ingested.document_id === documentId) {
+        setError("That file is identical to this document — upload the revised version.");
+        return;
+      }
+      await supersedeDocument(documentId, ingested.document_id);
+      setDone(ingested.document_id);
       // Refresh the page so the version chain + blast radius update
       router.refresh();
     } catch {
-      setError("Supersede failed — check the backend logs.");
+      setError("Supersede failed — the replacement could not be saved. Try again.");
     } finally {
       setBusy(false);
     }

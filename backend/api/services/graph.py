@@ -21,6 +21,55 @@ log = structlog.get_logger(__name__)
 # shape results. Raise it only with a `PROFILE` showing the deeper plan is still a seek + expand.
 MAX_TRAVERSAL_DEPTH = 10
 
+# What the pipeline's provenance edges say about the node at the far end of them.
+_ENTITY_TYPE_BY_RELATIONSHIP = {
+    "DOCUMENTED_BY": "asset_tag",
+    "MENTIONS_PERSON": "person",
+    "MENTIONS_ORGANISATION": "organisation",
+    "CONTAINS_TOPOLOGY_ELEMENT": "topology_element",
+}
+
+
+def entities_from_edges(document_id: str, affected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Turn `get_blast_radius` rows into the extracted entities they record, one per value.
+
+    Each row is an edge carrying this document's id; the entity is whichever endpoint is not the
+    document itself (an Asset for `DOCUMENTED_BY`, a Person for `MENTIONS_PERSON`, ...).
+    """
+    entities: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in affected:
+        edge = row.get("edge") or {}
+        source, target = row.get("source") or {}, row.get("target") or {}
+        node = target if source.get("document_id") == document_id else source
+        value = node.get("asset_id") or node.get("name") or node.get("tag_number") or node.get("element_id")
+        if not value:
+            continue
+        relationship = str(edge.get("relationship_type") or "")
+        entity_type = _ENTITY_TYPE_BY_RELATIONSHIP.get(relationship, relationship.lower() or "fact")
+        confidence = min(max(float(edge.get("confidence") or 0.0), 0.0), 1.0)
+        key = (entity_type, str(value))
+        # Re-runs can link the same entity twice; keep the strongest link.
+        if key in entities and entities[key]["confidence"] >= confidence:
+            continue
+        entities[key] = {
+            "entity_type": entity_type,
+            "value": str(value),
+            "confidence": confidence,
+            "linked_asset_id": node.get("asset_id"),
+            "requires_review": edge.get("verification_status") != "verified",
+        }
+    return list(entities.values())
+
+
+def person_names_from_edges(affected: list[dict[str, Any]]) -> list[str]:
+    """Names of the Person nodes a document mentions — the redaction list for its export."""
+    names = {
+        str((row.get("target") or {}).get("name") or "").strip()
+        for row in affected
+        if (row.get("edge") or {}).get("relationship_type") == "MENTIONS_PERSON"
+    }
+    return sorted(n for n in names if n)
+
 
 class GraphService:
     """

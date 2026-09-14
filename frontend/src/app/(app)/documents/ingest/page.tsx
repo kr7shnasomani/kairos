@@ -6,12 +6,20 @@ import type { DocumentPipelineStage, DocumentStatus } from "@/lib/types";
 import { ingestDocument, getDocumentStatus, type DocumentIngestResponse } from "@/lib/api";
 import { useRole, RESOLVE_ROLES } from "@/components/use-role";
 import { Button, StatusBadge, Timeline, PageHeader } from "@/components/ui";
-import { triggerLabel } from "@/lib/utils";
 
+// Default authority follows the dataset canon (regulation L1 … field shift log L5); the uploader can
+// still override it. A flat L3 default filed SOPs and shift logs as OEM-grade evidence.
 const DOC_TYPES = [
-  "oem_manual", "procedure", "inspection_report", "ptw",
-  "shift_log", "regulation", "pid_drawing",
+  { value: "oem_manual", label: "OEM manual / bulletin", authority: "3" },
+  { value: "procedure", label: "Procedure (SOP)", authority: "4" },
+  { value: "inspection_report", label: "Inspection report", authority: "4" },
+  { value: "ptw", label: "Permit to work", authority: "4" },
+  { value: "shift_log", label: "Shift log", authority: "5" },
+  { value: "regulation", label: "Regulation", authority: "1" },
+  { value: "pid_drawing", label: "P&ID drawing", authority: "3" },
 ] as const;
+
+const TERMINAL_STAGES: DocumentPipelineStage[] = ["complete", "review_required", "failed"];
 
 const STAGE_ORDER: DocumentPipelineStage[] = ["queued", "ocr", "ner", "graph_linking", "indexing", "complete"];
 const STAGE_LABEL: Record<DocumentPipelineStage, string> = {
@@ -27,7 +35,7 @@ export default function IngestPage() {
   const [docType, setDocType] = useState<string>("procedure");
   const [assetId, setAssetId] = useState("");
   const [sourceSystem, setSourceSystem] = useState("manual_upload");
-  const [authority, setAuthority] = useState("3");
+  const [authority, setAuthority] = useState("4");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DocumentIngestResponse | null>(null);
@@ -41,12 +49,19 @@ export default function IngestPage() {
     let alive = true;
     const id = result.document_id;
     const tick = async () => {
-      const { data } = await getDocumentStatus(id);
-      if (!alive || !data) return;
-      setStatus(data);
-      if (data.stage !== "complete" && data.stage !== "failed" && data.stage !== "review_required") {
-        setTimeout(tick, 2000);
+      try {
+        const { data } = await getDocumentStatus(id);
+        if (!alive) return;
+        if (data) {
+          setStatus(data);
+          if (TERMINAL_STAGES.includes(data.stage)) return;
+        }
+      } catch {
+        // One slow status read (4 s budget) used to reject here and stop polling for good, freezing
+        // the timeline mid-pipeline. Keep polling on the same cadence instead.
+        if (!alive) return;
       }
+      setTimeout(tick, 2000);
     };
     tick();
     return () => { alive = false; };
@@ -74,10 +89,21 @@ export default function IngestPage() {
     }
   }
 
+  // `complete` is terminal, so every step is done — rendering it as the running step left the last row
+  // on "in progress" forever. `review_required` stops after OCR (the confidence gate); `failed` has
+  // nothing running.
+  const running = status && !TERMINAL_STAGES.includes(status.stage) ? STAGE_ORDER.indexOf(status.stage) : -1;
+  const lastDone = !status
+    ? -1
+    : status.stage === "complete"
+      ? STAGE_ORDER.length - 1
+      : status.stage === "review_required"
+        ? STAGE_ORDER.indexOf("ocr")
+        : running - 1;
   const timelineEvents = status
-    ? STAGE_ORDER.map((s) => {
-        const reached = STAGE_ORDER.indexOf(status.stage) >= STAGE_ORDER.indexOf(s) || status.stage === "complete";
-        const isCurrent = status.stage === s;
+    ? STAGE_ORDER.map((s, i) => {
+        const reached = i <= lastDone;
+        const isCurrent = i === running;
         return {
           id: s,
           timestamp: isCurrent ? "in progress" : reached ? "done" : "pending",
@@ -133,8 +159,16 @@ export default function IngestPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-caption">
                   <span className="font-semibold text-ink">Document type</span>
-                  <select value={docType} onChange={(e) => setDocType(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9">
-                    {DOC_TYPES.map((t) => <option key={t} value={t}>{triggerLabel(t)}</option>)}
+                  <select
+                    value={docType}
+                    onChange={(e) => {
+                      const next = DOC_TYPES.find((t) => t.value === e.target.value);
+                      setDocType(e.target.value);
+                      if (next) setAuthority(next.authority);
+                    }}
+                    className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9"
+                  >
+                    {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </label>
                 <label className="block text-caption">
@@ -145,7 +179,7 @@ export default function IngestPage() {
                 </label>
                 <label className="block text-caption">
                   <span className="font-semibold text-ink">Asset link <span className="font-normal text-muted">(optional)</span></span>
-                  <input value={assetId} onChange={(e) => setAssetId(e.target.value)} placeholder="P-101" className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9" />
+                  <input value={assetId} onChange={(e) => setAssetId(e.target.value)} placeholder="EQ-101" className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9" />
                 </label>
                 <label className="block text-caption">
                   <span className="font-semibold text-ink">Source system</span>
@@ -189,7 +223,9 @@ export default function IngestPage() {
               <span className="tabular text-body font-semibold text-accent">{result.document_id}</span>
             </div>
             <p className="mt-2 text-caption text-muted">
-              {result.message}
+              {result.status === "duplicate"
+                ? "This exact file is already in the vault, so it was not stored again."
+                : "Stored unchanged and queued for extraction. Progress updates on the right."}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={`/documents/${result.document_id}`} className="text-caption text-accent underline hover:no-underline">Open document ↗</Link>

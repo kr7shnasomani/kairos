@@ -92,6 +92,25 @@ def transcribe_voice_note(
     except Exception:
         pass
 
+    # The field capture page asks for an "asset / work-order tag", so the tag is often an asset
+    # ("EQ-103") rather than a work order. Resolved only via work orders, such a note was quarantined
+    # with no asset and never surfaced in that asset's context. Canonical id first, then a confirmed alias.
+    if asset_id is None and work_order_id:
+        try:
+            tag = work_order_id.strip()
+            direct = sb.table("assets").select("asset_id").eq("asset_id", tag).limit(1).execute()
+            if direct.data:
+                asset_id = direct.data[0]["asset_id"]
+            else:
+                alias = (
+                    sb.table("asset_alias_map").select("canonical_asset_id")
+                    .eq("alias", tag).eq("confirmed", True).limit(1).execute()
+                )
+                if alias.data:
+                    asset_id = alias.data[0]["canonical_asset_id"]
+        except Exception as exc:  # noqa: BLE001 — the note still lands in quarantine, just unlinked
+            log.warning("voice_transcription.asset_lookup_failed", tag=work_order_id, error=str(exc))
+
     # Insert into quarantine_items
     item_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()

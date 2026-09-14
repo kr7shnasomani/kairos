@@ -12,7 +12,9 @@ import { DetailSkeleton } from "@/components/skeleton";
 import { BlastRadiusPanel } from "@/components/lazy";
 
 const STATUS_TONE: Record<string, "caution" | "verified" | "danger"> = {
+  draft: "caution",
   pending: "caution",
+  pending_approval: "caution",
   approved: "verified",
   rejected: "danger",
 };
@@ -76,7 +78,10 @@ export default function MocDetailPage() {
     );
   }
 
-  const isPending = moc.status === "pending";
+  // Backend lifecycle is draft → pending_approval → approved | rejected. Checking for "pending" (a status
+  // the API never returns) sent every auto-drafted MoC to the else branch: no Approve button, and a
+  // footer that read "Rejected".
+  const isPending = moc.status !== "approved" && moc.status !== "rejected";
 
   return (
     <div data-testid="moc-case-workspace" className="mx-auto max-w-[1400px]">
@@ -121,7 +126,7 @@ export default function MocDetailPage() {
                   href={`/documents/${s.document_id}`}
                   className="tabular mt-0.5 block text-label text-accent hover:underline"
                 >
-                  {s.document_id}
+                  {typeof s.file_name === "string" ? s.file_name : s.document_id}
                 </Link>
               )}
             </div>

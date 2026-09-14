@@ -4,6 +4,7 @@ import type {
   ComplianceDashboard,
   ComplianceGapsResponse,
   AssetsResponse,
+  Conflict,
   ConflictsResponse,
   QuarantineResponse,
   PromoteQuarantineRequest,
@@ -26,6 +27,7 @@ import type {
   BlastRadiusItem,
   Annotation,
   AnnotationStats,
+  ElicitationQuestion,
   ElicitationSession,
   OffboardingProgramme,
   OperationalEvent,
@@ -167,7 +169,7 @@ export async function fetchWithSession(path: string, init: RequestInit, timeoutM
 // fail-fast — but still bounded, so a hung backend fails visibly instead of hanging forever.
 const WRITE_TIMEOUT_MS = 8000;
 
-/** Budget for the two endpoints that run NIM 70B synthesis: `/search/synthesize` and
+/** Budget for the two endpoints that run NIM synthesis: `/search/synthesize` and
  *  `/search/rca-pack`. Both measure ~90s end to end, so they cannot share the 8s write default.
  *  Kept as one constant because they must move together — and must stay above
  *  `NVIDIA_NIM_TIMEOUT` (60s) so the backend's own cascade gets to run before the client aborts. */
@@ -467,7 +469,9 @@ export async function getConflicts(): Promise<Fetched<ConflictsResponse>> {
 
 export async function getQuarantine(): Promise<Fetched<QuarantineResponse>> {
   try {
-    const data = await getJson<QuarantineResponse>("/governance/quarantine?limit=50");
+    // `review_status=all`: the page derives Pending/Promoted/Disputed counts and a Resolved tab from
+    // this one list. Fetching only the default (pending) left those permanently at 0.
+    const data = await getJson<QuarantineResponse>("/governance/quarantine?review_status=all&limit=200");
     if (!data.items) throw new Error("no items");
     return { data, source: "live" };
   } catch (e) {
@@ -711,7 +715,7 @@ export async function getRcaPack(
   includeQuarantine?: boolean
 ): Promise<RcaPack> {
   try {
-    // SYNTHESIS_TIMEOUT_MS, not the 8s write default. This endpoint runs NIM 70B synthesis and
+    // SYNTHESIS_TIMEOUT_MS, not the 8s write default. This endpoint runs NIM synthesis and
     // measures ~90s, so the abort always fired first: the page showed retry while the backend
     // request completed normally. `synthesize()` already had this budget; rca-pack hits the same
     // model and was simply never given one.
@@ -933,9 +937,11 @@ export async function getBlastRadius(documentId: string): Promise<Fetched<BlastR
     }>(`/governance/blast-radius/${documentId}`);
     const items: BlastRadiusItem[] = (raw.affected ?? []).map((a, i) => {
       const edge = a.edge ?? {};
-      // The affected entity is the edge SOURCE (the asset/concept whose knowledge
-      // derives from this document); the target is the document node itself.
-      const node = a.source && Object.keys(a.source).length ? a.source : (a.target ?? {});
+      // The affected entity is whichever endpoint is not this document: the SOURCE for
+      // Asset→Document edges (DOCUMENTED_BY), the TARGET for Document→Person/Organisation
+      // mentions. Always taking the source labelled every mention "Linked entity".
+      const source = a.source ?? {};
+      const node = Object.keys(source).length && source.document_id !== documentId ? source : (a.target ?? {});
       const assetId = (node.asset_id as string) ?? (node.tag_number as string) ?? undefined;
       return {
         item_id: (edge.edge_id as string) ?? `br-${i}`,
@@ -1011,7 +1017,20 @@ export function triggerElicitation(workOrderId: string, assetId?: string) {
 
 export async function getElicitationQuestions(workOrderId: string): Promise<Fetched<ElicitationSession | null>> {
   try {
-    const data = await getJson<ElicitationSession>(`/elicitation/${workOrderId}/questions`);
+    const raw = await getJson<Omit<ElicitationSession, "questions"> & { questions: Array<string | ElicitationQuestion> }>(
+      `/elicitation/${workOrderId}/questions`,
+    );
+    // The backend stores and returns questions as plain strings. The page reads `question_text` and
+    // keys answers by `question_id`, so un-normalised every question rendered blank and every answer
+    // was stored under the same `undefined` key.
+    const data: ElicitationSession = {
+      ...raw,
+      questions: (raw.questions ?? []).map((q, i) =>
+        typeof q === "string"
+          ? { question_id: `q${i}`, question_text: q, context: "", options: null, question_type: "free_text" as const }
+          : q,
+      ),
+    };
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -1022,7 +1041,9 @@ export async function getElicitationQuestions(workOrderId: string): Promise<Fetc
 
 export function submitElicitationResponses(
   workOrderId: string,
-  responses: Array<{ question_id: string; answer: string }>,
+  // Backend `ElicitationAnswer`: `question_index` and/or the question text. A `question_id` key is
+  // not part of the contract and was silently dropped, so stored answers lost their questions.
+  responses: Array<{ question_index: number; question: string; answer: string }>,
 ) {
   return postJson<{ status: string; items_queued: number }>(
     `/elicitation/${workOrderId}/responses`,
@@ -1033,9 +1054,12 @@ export function submitElicitationResponses(
 export function submitVoiceNote(workOrderId: string, blob: Blob, submittedBy: string) {
   const form = new FormData();
   // Endpoint expects the field named "file" (UploadFile param in elicitation router).
-  form.append("file", blob, "recording.webm");
+  // Keep an uploaded file's real name: Whisper infers the audio format from the extension, so a WAV or
+  // MP3 sent as "recording.webm" was decoded as the wrong container.
+  form.append("file", blob, blob instanceof File ? blob.name : "recording.webm");
   form.append("submitted_by", submittedBy);
-  return postMultipart<{ task_id: string; status: string }>(`/elicitation/${workOrderId}/voice`, form);
+  // `status: "duplicate"` means this exact audio is already in quarantine and no transcription runs.
+  return postMultipart<{ task_id?: string; status: string; message?: string }>(`/elicitation/${workOrderId}/voice`, form);
 }
 
 // --- Offboarding ---
@@ -1132,6 +1156,23 @@ export function postShiftHandover(body: {
   return postJson<EventIngestResponse>("/events/shift-handover", body);
 }
 
+/** Flow A trigger — mirrors backend WorkOrderEvent. The brief goes to `assigned_technician_id`. */
+export function postWorkOrder(body: {
+  source_system: string; site_id: string; work_order_id: string; asset_id: string; failure_code: string;
+  description: string; assigned_technician_id: string; priority?: "critical" | "high" | "normal" | "low";
+}) {
+  return postJson<EventIngestResponse>("/events/work-order", body);
+}
+
+/** Flow B trigger — mirrors backend PTWEvent. The PTW brief goes to `issuing_engineer_id` and waits for a
+ *  reliability countersignature. */
+export function postPtw(body: {
+  source_system: string; site_id: string; ptw_id: string; work_area: string; asset_ids: string[];
+  ptw_type: "isolation" | "hot_work" | "confined_space" | "high_pressure_line"; issuing_engineer_id: string;
+}) {
+  return postJson<EventIngestResponse>("/events/ptw", body);
+}
+
 export function postDeviationFlag(body: {
   asset_id: string;
   description: string;
@@ -1198,6 +1239,127 @@ export async function getGovernorState(userId: string): Promise<Fetched<Governor
 // isolation_boundaries, instrumentation_loops) with no explicit edges. Flatten into the
 // flat {nodes, edges} the viewer expects; synthesise edges from boundary→isolation refs.
 const EQUIP_TYPE_MAP: Record<string, string> = { pump: "Pump", vessel: "Vessel" };
+
+// --- Governance reports, document extraction/export, asset hierarchy & scoped search ---
+
+export async function getConflictDetail(conflictId: string): Promise<Fetched<Conflict>> {
+  const raw = await getJson<{ conflict: Conflict }>(`/governance/conflicts/${encodeURIComponent(conflictId)}`, 8000);
+  return { data: raw.conflict, source: "live" };
+}
+
+export interface DriftItem {
+  compound_event_id: string;
+  drift_minutes: number;
+  tolerance_minutes?: number;
+  reason: string;
+  sources: string[];
+  canonical_timestamp?: string | null;
+  canonical_source?: string | null;
+  action?: string;
+}
+
+export interface TimestampDriftReport {
+  compound_events_checked: number;
+  drift_detected_count: number;
+  tolerance_minutes: number;
+  enforcement: string;
+  items: DriftItem[];
+}
+
+export async function getTimestampDrift(): Promise<Fetched<TimestampDriftReport>> {
+  // One alignment query per compound event — slower than a plain read.
+  const data = await getJson<TimestampDriftReport>("/governance/timestamp-drift", 15000);
+  return { data, source: "live" };
+}
+
+export interface PushVolumeGate {
+  window_days: number;
+  ceiling_per_operator_per_hour: number;
+  peak_per_operator_per_hour: number;
+  breach_count: number;
+  breaches: Array<{ recipient_user_id: string; hour: string; count: number }>;
+  briefs_delivered: number;
+  within_eemua_norms: boolean;
+  current_phase: number;
+  enforcement: string;
+}
+
+export async function getPushVolumeGate(days: number): Promise<Fetched<PushVolumeGate>> {
+  const data = await getJson<PushVolumeGate>(`/governance/push-volume-gate?days=${days}`, 8000);
+  return { data, source: "live" };
+}
+
+export interface ExtractedEntity {
+  entity_type: string;
+  value: string;
+  confidence: number;
+  linked_asset_id?: string | null;
+  requires_review: boolean;
+}
+
+export interface DocumentExtraction {
+  document_id: string;
+  extraction_model: string;
+  entities: ExtractedEntity[];
+  graph_edges_created: number;
+  review_items: Array<{ item_id: string; content: string; review_status: string; submitted_at: string }>;
+  extraction_path: string;
+  handwriting_suspect: boolean;
+}
+
+export async function getDocumentExtraction(documentId: string): Promise<Fetched<DocumentExtraction>> {
+  const data = await getJson<DocumentExtraction>(`/documents/${encodeURIComponent(documentId)}/extraction`, 8000);
+  return { data, source: "live" };
+}
+
+export interface RedactedExport {
+  document_id: string;
+  document_type: string | null;
+  redacted_text: string;
+  pii_found: boolean;
+  pii_counts: Record<string, number>;
+  pii_span_count: number;
+  note: string;
+}
+
+/** Bare value, so it throws on failure. Long timeout: a document never linked to the graph
+ *  falls back to live NER on the backend, which can take up to two minutes. */
+export async function getRedactedDocument(documentId: string): Promise<RedactedExport> {
+  return getJson<RedactedExport>(`/documents/${encodeURIComponent(documentId)}/redacted`, 150000, true);
+}
+
+export interface HierarchyAsset {
+  asset_id: string;
+  name?: string;
+  equipment_class?: string;
+}
+
+export interface AssetHierarchy {
+  asset: HierarchyAsset;
+  ancestors: HierarchyAsset[];
+  children: HierarchyAsset[];
+}
+
+export async function getAssetHierarchy(assetId: string): Promise<Fetched<AssetHierarchy>> {
+  const data = await getJson<AssetHierarchy>(`/assets/${encodeURIComponent(assetId)}/hierarchy`, 8000);
+  return { data, source: "live" };
+}
+
+export interface AssetSearchHit {
+  document_id: string;
+  document_type: string;
+  title: string;
+  snippet?: string;
+  authority_level: AuthorityLevel;
+  relevance_score?: number;
+}
+
+/** Bare value, so it throws on failure. */
+export async function searchAsset(assetId: string, q: string): Promise<AssetSearchHit[]> {
+  const qs = new URLSearchParams({ q, limit: "10" });
+  const data = await getJson<{ results: AssetSearchHit[] }>(`/search/assets/${encodeURIComponent(assetId)}?${qs}`, 12000);
+  return data.results ?? [];
+}
 
 export async function getDocumentTopology(documentId: string): Promise<Fetched<TopologyGraph | null>> {
   try {
@@ -1312,8 +1474,11 @@ export function verifyTopologyElements(
   }>(`/documents/${documentId}/topology/verify`, { decisions });
 }
 
-export function supersedeDocument(documentId: string, formData: FormData) {
-  return postMultipart<VaultDocument>(`/documents/${documentId}/supersede`, formData);
+/** Supersede takes the id of a replacement that is **already in the vault** — ingest it first
+ *  (`ingestDocument`). It used to post the file itself, which the endpoint never accepted, so
+ *  every supersede from the UI failed. */
+export function supersedeDocument(documentId: string, newDocumentId: string) {
+  return postJson<{ document_id?: string }>(`/documents/${documentId}/supersede`, { new_document_id: newDocumentId });
 }
 
 // The live payload names the stage `pipeline_stage` and uses the worker's own vocabulary
@@ -1460,6 +1625,87 @@ export function confirmAssetIdentity(body: {
   confirmed_by_user_id: string;
 }) {
   return postJson<{ asset_id: string; tag_number: string; status: "created" }>("/assets", body);
+}
+
+// --- Identity confirmation queues (Layer 1) ---
+export interface ProvisionalAsset {
+  asset_id: string;
+  tag_number: string;
+  name: string;
+  equipment_class: string;
+  criticality: "safety_critical" | "critical" | "non_critical";
+  site_id: string;
+  facility_id: string;
+  eam_source: string;
+}
+
+export interface AliasCandidate {
+  alias: string;
+  canonical_asset_id: string;
+  confidence: number;
+  alias_source: string;
+}
+
+export async function getProvisionalAssets(): Promise<Fetched<ProvisionalAsset[]>> {
+  try {
+    const data = await getJson<{ items: ProvisionalAsset[] }>("/assets/provisional");
+    return { data: data.items ?? [], source: "live" };
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+export async function getAliasCandidates(): Promise<Fetched<AliasCandidate[]>> {
+  try {
+    const data = await getJson<{ items: AliasCandidate[] }>("/assets/aliases/pending");
+    return { data: data.items ?? [], source: "live" };
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+export function confirmAlias(assetId: string, alias: string) {
+  return postJson<{ status: string }>(
+    `/assets/${encodeURIComponent(assetId)}/aliases/${encodeURIComponent(alias)}/confirm`,
+    {},
+  );
+}
+
+export function rejectAlias(assetId: string, alias: string) {
+  return postJson<{ status: string }>(
+    `/assets/${encodeURIComponent(assetId)}/aliases/${encodeURIComponent(alias)}/reject`,
+    {},
+  );
+}
+
+// --- Golden-record bulk import (Layer 1) — mirrors backend AssetImportRow / bulk_import_assets ---
+export interface AssetImportRow {
+  asset_id?: string;
+  tag_number: string;
+  name: string;
+  equipment_class: string;
+  criticality: "safety_critical" | "critical" | "non_critical";
+  site_id: string;
+  facility_id: string;
+  parent_asset_id?: string;
+  eam_source?: string;
+}
+
+type ImportRowRef = { row?: number; asset_id?: string; error?: string; site_id?: string };
+
+export interface AssetBulkImportResult {
+  submitted: number;
+  created: number;
+  created_asset_ids: string[];
+  already_present: ImportRowRef[];
+  duplicate_in_payload: ImportRowRef[];
+  site_forbidden: ImportRowRef[];
+  failed: ImportRowRef[];
+}
+
+/** Partial success is the contract: every row that did not land comes back with its reason. */
+export function bulkImportAssets(assets: AssetImportRow[]) {
+  return postJson<AssetBulkImportResult>("/assets/bulk", { assets }, 60_000);
 }
 
 // --- Document ingest (multipart) ---

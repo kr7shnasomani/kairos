@@ -5,6 +5,8 @@ import AssetDetailPage from "./page";
 const mocks = vi.hoisted(() => ({ getAssetDetail: vi.fn() }));
 
 vi.mock("@/lib/api", () => ({ getAssetDetail: mocks.getAssetDetail }));
+vi.mock("./asset-search", () => ({ AssetSearch: () => <div>Asset search</div> }));
+vi.mock("./hierarchy-panel", () => ({ HierarchyPanel: () => <div>Hierarchy</div> }));
 vi.mock("@/components/lazy", () => ({
   KnowledgeGraph: ({ assetId }: { assetId: string }) => <div data-testid="knowledge-graph">{assetId}</div>,
 }));

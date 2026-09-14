@@ -127,10 +127,11 @@ export default function ElicitationPage() {
       return;
     }
     setSubmitting(true);
-    const responses = Object.entries(answers).map(([question_id, answer]) => ({
-      question_id,
-      answer,
-    }));
+    // Positional + text, the shape the backend stores against the session's question list — also what
+    // the offline queue replays, so a queued submission lands identically.
+    const responses = questions
+      .map((q, question_index) => ({ question_index, question: q.question_text, answer: answers[q.question_id] ?? "" }))
+      .filter((r) => r.answer.trim());
     try {
       await submitElicitationResponses(workOrderId, responses);
       setSubmitted(true);

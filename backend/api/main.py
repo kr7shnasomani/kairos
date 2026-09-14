@@ -40,14 +40,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifecycle: startup and shutdown."""
     log.info("kairos.startup", env=settings.APP_ENV, version=settings.APP_VERSION)
 
-    # Initialize connections and ensure collections/indices
-    qdrant_client = await get_qdrant_client(settings)
-    vector_store = VectorStoreService(qdrant_client, settings)
-    await vector_store.ensure_collections()
+    # Ensure collections/indices exist. A cloud store blip must not stop the API from booting: they
+    # already exist after `make init-all`, a failure here used to exit the process on every hot reload,
+    # and /health/detailed reports a store that is actually down.
+    try:
+        qdrant_client = await get_qdrant_client(settings)
+        await VectorStoreService(qdrant_client, settings).ensure_collections()
+    except Exception as exc:  # noqa: BLE001 — startup must survive a transient store outage
+        log.error("startup.qdrant_ensure_failed", error=repr(exc))
 
-    es_client = await get_es_client(settings)
-    search_engine = SearchEngineService(es_client, settings)
-    await search_engine.ensure_indices()
+    try:
+        es_client = await get_es_client(settings)
+        await SearchEngineService(es_client, settings).ensure_indices()
+    except Exception as exc:  # noqa: BLE001 — startup must survive a transient store outage
+        log.error("startup.elasticsearch_ensure_failed", error=repr(exc))
 
     yield
 
@@ -130,6 +136,20 @@ def create_app() -> FastAPI:
     # -------------------------------------------------------------------------
     # Global exception handler
     # -------------------------------------------------------------------------
+    # A specific handler runs inside CORS; the catch-all `Exception` handler below runs outside it, so
+    # a Supabase constraint error reached the browser as an opaque "Failed to fetch" with no status.
+    from postgrest.exceptions import APIError
+
+    @app.exception_handler(APIError)
+    async def supabase_api_error_handler(request, exc: APIError) -> JSONResponse:
+        code = getattr(exc, "code", None)
+        log.warning("supabase_api_error", code=code, detail=getattr(exc, "details", None), path=str(request.url))
+        if code == "23503":  # foreign-key violation — the request referenced a record that does not exist
+            return JSONResponse(status_code=422, content={"detail": f"Referenced record does not exist: {getattr(exc, 'details', '')}"})
+        if code == "23505":  # unique violation
+            return JSONResponse(status_code=409, content={"detail": "A record with these identifiers already exists."})
+        return JSONResponse(status_code=500, content={"detail": "Database request failed. Check logs for details."})
+
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc: Exception) -> JSONResponse:
         log.error("unhandled_exception", exc=str(exc), path=str(request.url))

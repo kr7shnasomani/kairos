@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import VoiceCapturePage from "./page";
 
 vi.mock("@/components/voice-recorder", () => ({ VoiceRecorder: () => <button>Start recording</button> }));
-vi.mock("@/lib/api", () => ({ submitVoiceNote: vi.fn() }));
+// getToken: the page resolves the signed-in user (useMe → getMe) to attribute the note.
+vi.mock("@/lib/api", () => ({ submitVoiceNote: vi.fn(), getToken: () => null }));
 
 describe("VoiceCapturePage", () => {
   afterEach(cleanup);

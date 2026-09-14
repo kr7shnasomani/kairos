@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { getConflicts, getQuarantine } from "@/lib/api";
 import { KpiCard, PageHeader, StatusBadge, statusTone } from "@/components/ui";
 
-type SurfaceKey = "conflicts" | "quarantine" | "moc" | "sla" | "circuit-breaker" | "model-gate";
+type SurfaceKey = "conflicts" | "quarantine" | "moc" | "sla" | "timestamp-drift" | "push-volume-gate" | "circuit-breaker" | "model-gate";
 
 const SURFACES: Array<{ key: SurfaceKey; href: string; group: string; title: string; desc: string }> = [
   {
@@ -35,6 +35,20 @@ const SURFACES: Array<{ key: SurfaceKey; href: string; group: string; title: str
     group: "Oversight",
     title: "SLA report",
     desc: "Track overdue governance decisions, countdowns, and escalation state across active queues.",
+  },
+  {
+    key: "timestamp-drift",
+    href: "/governance/timestamp-drift",
+    group: "Oversight",
+    title: "Timestamp drift",
+    desc: "Check clock disagreement between source systems that recorded the same physical event.",
+  },
+  {
+    key: "push-volume-gate",
+    href: "/governance/push-volume-gate",
+    group: "Oversight",
+    title: "Push-volume gate",
+    desc: "Confirm briefs per operator stay within the EEMUA 191 hourly ceiling before proactive mode is the default.",
   },
   {
     key: "circuit-breaker",
@@ -99,6 +113,7 @@ export default function GovernancePage() {
     if (key === "quarantine") return { label: `${value("pendingQuarantine")} pending`, tone: overview?.pendingQuarantine ? statusTone("pending") : "neutral" };
     if (key === "moc") return { label: `${value("pendingMoc")} pending`, tone: overview?.pendingMoc ? statusTone("pending") : "neutral" };
     if (key === "sla") return { label: `${value("overdue")} overdue`, tone: overview?.overdue ? statusTone("overdue") : "neutral" };
+    if (key === "timestamp-drift" || key === "push-volume-gate") return { label: "Report", tone: statusTone("monitor") };
     return key === "circuit-breaker"
       ? { label: "Monitor", tone: statusTone("monitor") }
       : { label: "Validation", tone: statusTone("validation") };
@@ -108,6 +123,8 @@ export default function GovernancePage() {
     if (key === "quarantine") return `Review ${status.label} inputs`;
     if (key === "moc") return `Review ${status.label} changes`;
     if (key === "sla") return `Inspect ${status.label} decisions`;
+    if (key === "timestamp-drift") return "Inspect clock drift";
+    if (key === "push-volume-gate") return "Check push volume";
     return key === "circuit-breaker" ? "Inspect anomaly gates" : "Review model validation";
   };
 
@@ -142,7 +159,7 @@ export default function GovernancePage() {
           <h2 className="text-sm font-semibold text-ink">Governance controls</h2>
           <p className="text-caption text-muted">Open a queue to review evidence, make a decision, or inspect a safeguard.</p>
         </div>
-        <span className="tabular shrink-0 text-caption text-muted">6 controls</span>
+        <span className="tabular shrink-0 text-caption text-muted">{SURFACES.length} controls</span>
       </div>
 
       <div data-testid="governance-surfaces" className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">

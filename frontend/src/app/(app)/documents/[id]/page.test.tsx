@@ -15,6 +15,8 @@ vi.mock("@/lib/api", () => ({
   }),
 }));
 
+vi.mock("./extraction-panel", () => ({ ExtractionPanel: () => <div>Extraction</div> }));
+vi.mock("./redacted-export", () => ({ RedactedExport: () => <div>Redacted export</div> }));
 vi.mock("@/components/lazy", () => ({
   BlastRadiusPanel: () => <div>Blast radius</div>,
   SupersedeAction: () => <button>Supersede</button>,

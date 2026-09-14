@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import type { AuthorityLevel, QuarantineItem } from "@/lib/types";
-import { promoteQuarantine, disputeQuarantine, requestQuarantineInfo } from "@/lib/api";
+import { promoteQuarantine, disputeQuarantine, requestQuarantineInfo, resolveDeviationFlag } from "@/lib/api";
 import { Button, Modal } from "@/components/ui";
 
-export type ActionMode = "promote" | "dispute" | "request-info";
+export type ActionMode = "promote" | "dispute" | "request-info" | "resolve-deviation";
 
 const AUTH_LEVELS: AuthorityLevel[] = [1, 2, 3, 4, 5];
 
@@ -37,9 +37,12 @@ export function ActionModals({
                 promoteQuarantine(id, {
                   authority_level,
                   relationship_type: relationship_type || "DOCUMENTED_BY",
-                  document_type: "procedure",
+                  // A promoted field input is a verified observation, not a controlled document. This
+                  // was "procedure" for every promotion, so a technician's voice note cleared OISD-117
+                  // §4.1.1 ("documented maintenance procedures") in the audit pack.
+                  document_type: "field_observation",
                   notes: notes || undefined,
-                }), // frozen payload — do not reshape
+                }),
               `Promoted ${id} to the canonical graph.`,
               `Could not promote ${id} — backend offline or rejected.`,
             )
@@ -56,6 +59,25 @@ export function ActionModals({
           onCancel={onClose}
           onSubmit={(reason) =>
             run(() => disputeQuarantine(id, reason || "Disputed by reviewer"), `Dispute recorded for ${id}.`, `Could not dispute ${id} — backend offline or rejected.`)
+          }
+        />
+      </Modal>
+    );
+  }
+  if (mode === "resolve-deviation") {
+    return (
+      <Modal title="Resolve deviation flag" onClose={onClose}>
+        <ResolveDeviationForm
+          busy={busy}
+          onCancel={onClose}
+          onSubmit={(resolution, mocWarranted, notes) =>
+            run(
+              () => resolveDeviationFlag(id, { resolution, moc_warranted: mocWarranted, notes: notes || undefined }),
+              resolution === "promoted"
+                ? `Deviation confirmed${mocWarranted ? " and a Management of Change drafted" : ""}. Briefs for ${item.asset_id ?? "the asset"} are released.`
+                : `Deviation dismissed. Briefs for ${item.asset_id ?? "the asset"} are released.`,
+              "Could not resolve the deviation — only an engineer or admin can, and it must still be pending.",
+            )
           }
         />
       </Modal>
@@ -160,6 +182,43 @@ function DisputeForm({ busy, onCancel, onSubmit }: {
         </Button>
       </div>
     </form>
+  );
+}
+
+function ResolveDeviationForm({ busy, onCancel, onSubmit }: {
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (resolution: "promoted" | "disputed", mocWarranted: boolean, notes: string) => void;
+}) {
+  const [mocWarranted, setMocWarranted] = useState(false);
+  const [notes, setNotes] = useState("");
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-caption text-muted">
+        Briefs for this asset are frozen until you decide. Confirm it if the physical condition really differs
+        from the drawing or procedure; dismiss it if it does not.
+      </p>
+      <label className="flex items-center gap-2 text-caption text-ink">
+        <input type="checkbox" checked={mocWarranted} onChange={(e) => setMocWarranted(e.target.checked)} className="size-4" />
+        Confirmed change needs a Management of Change
+      </label>
+      <input
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Engineering notes (optional)"
+        aria-label="Engineering notes"
+        className="h-8 rounded-lg border border-line bg-surface px-2 text-caption outline-none focus:border-accent"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="primary" type="button" disabled={busy} onClick={() => onSubmit("promoted", mocWarranted, notes)}>
+          {busy ? "Saving…" : "Confirm deviation"}
+        </Button>
+        <Button variant="danger" type="button" disabled={busy} onClick={() => onSubmit("disputed", false, notes)}>
+          Not a deviation
+        </Button>
+        <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
   );
 }
 

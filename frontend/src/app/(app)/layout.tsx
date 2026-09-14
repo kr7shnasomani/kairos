@@ -19,7 +19,8 @@ export const dynamic = "force-dynamic";
 const ROUTE_LABELS: [string, string][] = [
   ["/briefs", "Briefs"],
   ["/copilot", "Copilot"],
-  ["/assets/bootstrap", "Asset Bootstrap"],
+  ["/assets/register", "Register Assets"],
+  ["/assets/bootstrap", "Identity Confirmation"],
   ["/assets", "Assets"],
   ["/events", "Events"],
   ["/rca", "RCA"],
@@ -50,6 +51,8 @@ const ROUTE_LABELS: [string, string][] = [
   ["/governance/sla", "SLA Report"],
   ["/governance/circuit-breaker", "Circuit Breaker"],
   ["/governance/model-gate", "Model Gate"],
+  ["/governance/timestamp-drift", "Timestamp Drift"],
+  ["/governance/push-volume-gate", "Push-Volume Gate"],
   ["/governance", "Governance"],
 ];
 

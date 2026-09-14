@@ -2,11 +2,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import EventsPage from "./page";
 
-const mocks = vi.hoisted(() => ({ getEvents: vi.fn(), getMe: vi.fn(), postTagOut: vi.fn(), push: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getEvents: vi.fn(), getMe: vi.fn(), postTagOut: vi.fn(), postWorkOrder: vi.fn(), push: vi.fn() }));
 
 vi.mock("@/lib/api", () => ({
   getEvents: mocks.getEvents,
   postTagOut: mocks.postTagOut,
+  postWorkOrder: mocks.postWorkOrder,
+  postPtw: vi.fn(),
   postInspectionComplete: vi.fn(),
   postAlarm: vi.fn(),
   postShiftHandover: vi.fn(),
@@ -131,15 +133,16 @@ describe("EventsPage", () => {
   it("attributes emitted events to the signed-in user", async () => {
     mocks.getMe.mockResolvedValue({ user_id: "operator-7", site_id: "SITE-B" });
     mocks.getEvents.mockResolvedValue({ data: { items: events, total: 3, limit: 50, offset: 0 }, source: "live" });
-    mocks.postTagOut.mockResolvedValue({ status: "accepted", event_id: "EV-4" });
+    mocks.postWorkOrder.mockResolvedValue({ status: "accepted", event_id: "EV-4" });
 
     render(<EventsPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Emit event" }));
+    // Work order is the default type: the headline flow, assigned to the signed-in user.
     fireEvent.click(screen.getByRole("button", { name: "Emit" }));
 
-    await waitFor(() => expect(mocks.postTagOut).toHaveBeenCalledWith(expect.objectContaining({
+    await waitFor(() => expect(mocks.postWorkOrder).toHaveBeenCalledWith(expect.objectContaining({
       site_id: "SITE-B",
-      performed_by: "operator-7",
+      assigned_technician_id: "operator-7",
     })));
   });
 });

@@ -828,7 +828,14 @@ async def link_to_graph(
             # Unresolved: register as unconfirmed alias candidate (if we have a parent asset) + quarantine.
             # Still create a graph edge from the explicitly-passed asset_id so the document
             # appears in that asset's knowledge even when NER can't confirm the specific tag.
-            if asset_id:
+            #
+            # Dates, record/document numbers and family references are tag-shaped but name no
+            # equipment, so they are neither alias candidates nor review work — proposing
+            # "JAN-2025 → EQ-101" buried the queue. The fallback edge below still links the document.
+            reference = ner.is_reference_identifier(raw_tag)
+            if reference:
+                log.info("link.reference_identifier_skipped", document_id=document_id, tag=raw_tag)
+            if asset_id and not reference:
                 try:
                     normalized = raw_tag.strip().upper().replace(" ", "")
                     await asyncio.to_thread(
@@ -843,6 +850,7 @@ async def link_to_graph(
                 except Exception as exc:
                     log.warning("link.alias_insert_failed", alias=raw_tag, error=str(exc))
 
+            if asset_id:
                 try:
                     await graph.create_knowledge_edge(
                         source_id=asset_id,
@@ -861,6 +869,22 @@ async def link_to_graph(
                 except Exception as exc:
                     log.warning("link.fallback_edge_failed", asset_id=asset_id, document_id=document_id, error=str(exc))
 
+            if reference:
+                continue
+            # One review item per unresolved tag per asset. Chunked extraction and several documents
+            # naming the same part number used to queue "FSL-2240B" three times over.
+            content = f"Unresolved asset tag: '{raw_tag}'"
+            already_queued = await asyncio.to_thread(
+                lambda c=content: supabase.table("quarantine_items")
+                .select("item_id")
+                .eq("content", c)
+                .eq("review_status", "pending")
+                .limit(1)
+                .execute()
+            )
+            if already_queued.data:
+                log.info("link.unresolved_tag_already_queued", document_id=document_id, tag=raw_tag)
+                continue
             await asyncio.to_thread(
                 lambda e=entity, rt=raw_tag: supabase.table("quarantine_items").insert({
                     "asset_id": asset_id,
@@ -933,7 +957,10 @@ async def index_vectors(
         if not vector:
             log.warning("index_vectors.embed_failed", document_id=document_id, chunk=idx,
                         hint="Jina and Ollama both unreachable — check JINA_API_KEY and OLLAMA_BASE_URL")
-            continue
+            # Raise so Temporal retries the activity. Skipping the chunk let the pipeline report
+            # `complete` with zero vectors — shift_log.txt lost semantic search on the 2026-09-13 reload
+            # from one transient Jina failure, and nothing downstream could tell.
+            raise RuntimeError(f"embedding failed for {document_id} chunk {idx}")
 
         point_id = str(uuid_lib.uuid5(uuid_lib.NAMESPACE_URL, f"{document_id}:{idx}"))
         await vector_store.upsert(

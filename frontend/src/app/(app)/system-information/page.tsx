@@ -38,7 +38,7 @@ const PRINCIPLES: { title: string; body: string }[] = [
 const STACK: { group: string; items: string[] }[] = [
   { group: "Backend", items: ["FastAPI · Python 3.12", "Go (Gin) OT connectors", "Celery", "Temporal"] },
   { group: "Datastores", items: ["Neo4j", "Qdrant", "Elasticsearch", "Redis", "Supabase (Postgres)"] },
-  { group: "Models (cloud)", items: ["NIM Llama 3.1 70B", "Ministral 14B NER", "Nemotron OCR", "Jina v3 embed", "Groq Whisper"] },
+  { group: "Models (cloud)", items: ["NIM Nemotron 3 Super 120B", "Llama 3.2 11B Vision NER", "Nemotron OCR", "Jina v3 embed", "Groq Whisper"] },
   { group: "Frontend & Ops", items: ["Next.js 16 · React 19", "Tailwind v4", "OPA", "OTEL → Grafana"] },
 ];
 

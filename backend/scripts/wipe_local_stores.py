@@ -45,9 +45,17 @@ async def wipe() -> None:
             log.info("wipe.es", index=idx, deleted=r.json().get("deleted") if r.status_code < 300 else r.status_code)
 
     # Qdrant — delete all points in each collection (config kept). Empty filter matches all.
-    with httpx.Client(base_url=settings.QDRANT_URL, timeout=30) as qd:
+    # Qdrant Cloud rejects unauthenticated calls with 403 — without the key this wiped nothing and still
+    # printed `wipe.done`, leaving stale vectors for documents that no longer exist anywhere else.
+    qd_headers = {"api-key": settings.QDRANT_API_KEY} if settings.QDRANT_API_KEY else {}
+    with httpx.Client(base_url=settings.QDRANT_URL, headers=qd_headers, timeout=30) as qd:
         for col in (settings.QDRANT_COLLECTION_KNOWLEDGE, settings.QDRANT_COLLECTION_DOCUMENTS):
-            r = qd.post(f"/collections/{col}/points/delete", json={"filter": {"must": []}})
+            r = qd.post(
+                f"/collections/{col}/points/delete", params={"wait": "true"}, json={"filter": {"must": []}}
+            )
+            if r.status_code >= 300:
+                log.error("wipe.qdrant_failed", collection=col, status=r.status_code, body=r.text[:200])
+                sys.exit(1)
             log.info("wipe.qdrant", collection=col, status=r.status_code)
 
     log.info("wipe.done")

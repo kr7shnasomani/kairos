@@ -606,7 +606,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="flex min-w-0 flex-1 flex-col pb-[calc(56px+env(safe-area-inset-bottom))] lg:pb-0 print:pb-0"
       >
         <AppHeader
-          name="Kairos user"
+          name={user?.email ?? "Kairos user"}
           role={role}
           onOpenSearch={() => setPalette(true)}
           onOpenCalendar={() => setCalendarOpen((open) => !open)}
@@ -614,7 +614,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onCreate={() => router.push("/documents/ingest")}
           onOpenBriefs={() => router.push("/briefs")}
           onOpenUser={() => setAccountOpen((open) => !open)}
-          userInitial={getUserInitials("Kairos user")}
+          userInitial={getUserInitials(user?.email)}
         />
         <MobileAppHeader
           onOpenMenu={() => setMobileDrawerOpen(true)}
@@ -624,7 +624,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onCreate={() => router.push("/documents/ingest")}
           onOpenBriefs={() => router.push("/briefs")}
           onOpenUser={() => setAccountOpen((open) => !open)}
-          userInitial={getUserInitials("Kairos user")}
+          userInitial={getUserInitials(user?.email)}
         />
 
         {/* Plant operating state banner */}
@@ -658,7 +658,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* No mobile bottom tab bar. `BottomTabs` was deleted on 2026-08-15 — it had been
           commented out since the mobile UX was deferred, so it was neither shipped nor
           removed. Mobile navigates via the hamburger sidebar; recover from git if revived. */}
-      <AccountMenu open={accountOpen} onClose={() => setAccountOpen(false)} name="Kairos user" role={role} onSignOut={signOut} />
+      <AccountMenu open={accountOpen} onClose={() => setAccountOpen(false)} name={user?.email ?? "Kairos user"} role={role} onSignOut={signOut} />
     </div>
   );
 }

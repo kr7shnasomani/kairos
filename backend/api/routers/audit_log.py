@@ -9,6 +9,7 @@ import structlog
 from fastapi import APIRouter, Query
 
 from api.dependencies import CurrentUserDep, SupabaseDep
+from api.services.identity import display_names
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -45,8 +46,13 @@ async def get_audit_log(
     result = await asyncio.to_thread(
         lambda: query.order("timestamp", desc=True).range(offset, offset + limit - 1).execute()
     )
+    items = result.data or []
+    # The trail listed who acted as raw auth UUIDs; an auditor reads a name. The id stays for filtering.
+    names = await display_names(supabase, [i.get("performed_by") for i in items])
+    for i in items:
+        i["performed_by_name"] = names.get(i.get("performed_by"))
     return {
-        "items": result.data or [],
+        "items": items,
         "total": result.count or 0,
         "limit": limit,
         "offset": offset,
