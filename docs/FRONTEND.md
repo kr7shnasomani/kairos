@@ -627,7 +627,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **267 passed / 75 files — fully green** (vitest, 2026-09-14). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run`, or `docker exec kairos-frontend npx vitest run --maxWorkers=2` — an unbounded `docker exec` run OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
+| Test suite | **271 passed / 75 files — fully green** (vitest, 2026-09-14). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run`, or `docker exec kairos-frontend npx vitest run --maxWorkers=2` — an unbounded `docker exec` run OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---

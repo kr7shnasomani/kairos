@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CopilotAnswer } from "@/lib/copilot";
-import { Answer } from "./answer-card";
+import { Answer, provisionalText } from "./answer-card";
 
 vi.mock("@/lib/api", () => ({ submitAnswerFeedback: vi.fn().mockResolvedValue(true) }));
 
@@ -93,3 +93,26 @@ describe("unreported confidence is not zero confidence", () => {
     expect(screen.queryByText(/Confidence not reported/i)).not.toBeInTheDocument();
   });
 });
+
+// Regression: the raw `ANSWER:` / `CONFIDENCE:` contract flashed on screen while an answer streamed.
+describe("provisional streamed text", () => {
+  it("drops the ANSWER: prefix and everything from the first section marker", () => {
+    expect(provisionalText("ANSWER: The seal failed.\nCONFIDENCE: 0.95\nSOURCES_USED: 1,2")).toBe("The seal failed.");
+  });
+
+  it("hides a marker that has only partly arrived", () => {
+    expect(provisionalText("ANSWER: The seal failed.\nCONFID")).toBe("The seal failed.");
+    expect(provisionalText("ANS")).toBe("");
+  });
+
+  it("leaves ordinary answer text, including capitalised tags, untouched", () => {
+    expect(provisionalText("ANSWER: Replace FSL-2240B on EQ-101")).toBe("Replace FSL-2240B on EQ-101");
+  });
+
+  it("renders the cleaned text while synthesizing", () => {
+    render(<Answer data={{ ...base, is_synthesizing: true }} streaming={"ANSWER: The pump was last\nCONFIDENCE: 0.9"} />);
+    expect(screen.getByText(/The pump was last/)).toBeInTheDocument();
+    expect(screen.queryByText(/CONFIDENCE/)).not.toBeInTheDocument();
+  });
+});
+

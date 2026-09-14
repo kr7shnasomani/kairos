@@ -11,6 +11,22 @@ import { EntityAnnotations } from "./entity-annotations";
 const PHASE = process.env.NEXT_PUBLIC_KAIROS_PHASE ?? "3";
 export const SYNTHESIS_ENABLED = PHASE !== "1";
 
+const SECTION_MARKERS = ["CONFIDENCE:", "UNCERTAINTY:", "SOURCES_USED:"];
+
+/** Streamed text with the model's section scaffolding removed, for display while synthesis runs.
+ *  The provider streams its raw `ANSWER: … CONFIDENCE: … SOURCES_USED: …` contract; the final
+ *  answer is parsed server-side, so this only keeps markers — including one still half-arrived at
+ *  the end of a chunk — from flashing on screen. Nothing after the first section marker is shown. */
+export function provisionalText(raw: string): string {
+  if ("ANSWER:".startsWith(raw.trim().toUpperCase())) return "";
+  let body = raw.replace(/^\s*ANSWER:\s*/i, "");
+  const cut = SECTION_MARKERS.map((m) => body.indexOf(m)).filter((i) => i >= 0);
+  if (cut.length) body = body.slice(0, Math.min(...cut));
+  const tail = body.match(/\s([A-Z_]{1,13}:?)$/);
+  if (tail && SECTION_MARKERS.some((m) => m.startsWith(tail[1]))) body = body.slice(0, tail.index);
+  return body.trimEnd();
+}
+
 export function Thinking() {
   return (
     <div className="flex items-center gap-2 text-body text-muted">
@@ -226,7 +242,7 @@ export function Answer({ data, query = "", streaming }: {
         streaming ? (
           <div aria-live="polite" aria-busy="true">
             <p className="whitespace-pre-wrap text-body text-ink/85">
-              {streaming}
+              {provisionalText(streaming)}
               <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-accent align-baseline" aria-hidden="true" />
             </p>
             <p className="mt-2 text-caption text-muted">

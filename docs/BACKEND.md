@@ -139,6 +139,7 @@ All backends are injected as FastAPI dependencies. Each is a singleton (module-l
 
 | Dependency | Type | Notes |
 |------------|------|-------|
+| `SupabaseDep` resilience | — | Every PostgREST session (API, workers, scripts) goes through `api/supabase_http.py`, installed by `api/__init__.py`: a GET/HEAD on a pooled HTTP/2 connection Supabase already closed is retried once; writes are never replayed. |
 | `Neo4jDep` | `AsyncDriver` | Bolt to `NEO4J_URI`. Pool hygiene for Aura: `liveness_check_timeout=30` + `max_connection_lifetime=300` recycle idle connections so a stale one never throws `SessionExpired`. |
 | `QdrantDep` | `AsyncQdrantClient` | HTTP to `QDRANT_URL` |
 | `ElasticsearchDep` | `AsyncElasticsearch` | HTTP to `ELASTICSEARCH_URL` |

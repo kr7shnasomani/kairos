@@ -370,7 +370,7 @@ invisible in the graph. The denylist stays, and widening it needs the same evide
 
 **Caution on the FastAPI upgrade specifically.** It is code-only, but it carries real breakage risk
 across every router *and* there is **no current full-suite pass count** to catch a regression (D4) —
-the 488-test service-free tier is the only backstop, and it cannot exercise queries or routing. Do
+the 494-test service-free tier is the only backstop, and it cannot exercise queries or routing. Do
 not start it casually. `ecdsa` has no released fix regardless, so it closes 7 of 8 advisories, not 8.
 
 **What is already done and must not be re-opened:** the OCR parse and size-ceiling defects (fixed and
@@ -708,7 +708,10 @@ the report will circulate again and the corrections are worth more than the orig
   raised, so a dropped connection renders as "no work orders" rather than an error. Reproduced
   live: `P-101` returned `0` on one call and the true `6` on the next two, with
   `asset.enrichment_failed … error=<ConnectionTerminated …>` in the log each time. Intermittent
-  and cloud-side (HTTP/2 connection reset), so it is not a code defect exactly — but the failure
+  and cloud-side (HTTP/2 connection reset). **The reset itself is handled since 2026-09-14:**
+  `api/supabase_http.py` retries a Supabase REST GET/HEAD once on a dropped pooled connection (writes
+  are never replayed), which also removed intermittent 500s on `/briefs` and `/governance/*`. The
+  enrichment's `0` substitution below still applies to any other failure — but the failure
   mode is invisible to the caller, and a fabricated `0` on a maintenance count is the kind of
   claim this project otherwise refuses to make. The new list endpoint copies this degradation
   **deliberately**, so the two surfaces stay consistent; if it is changed, change both. Same
@@ -960,10 +963,10 @@ recorded above.
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **488 passed** across **43 files** (2026-09-14) — no stack / secrets / network.
+- **Service-free tier:** **494 passed** across **44 files** (2026-09-14) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md` and
   `.github/workflows/tests.yml` and **all three must be updated together** (they have drifted twice).
-- **Frontend:** **267 passed across 75 files — fully green** (2026-09-14), `tsc` clean, `eslint`
+- **Frontend:** **271 passed across 75 files — fully green** (2026-09-14), `tsc` clean, `eslint`
   0 errors / 3 pre-existing unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
   container, so the file could not collect. `docker compose up -d --force-recreate --no-deps

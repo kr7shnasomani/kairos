@@ -434,8 +434,9 @@ async def synthesize_stream(
         except Exception as exc:  # noqa: BLE001 — a dead stream must still terminate the client
             log.warning("synthesis.stream_error", error=str(exc), exc_type=type(exc).__name__)
             # The exception text is logged above, never streamed: sent to the browser it exposed
-        # provider/internal details (code scanning py/stack-trace-exposure).
-        yield _sse("error", {"message": "Synthesis stream failed."})
+            # provider/internal details (code scanning py/stack-trace-exposure). This yield must
+            # stay inside the except — outside it, every successful stream also ended in `error`.
+            yield _sse("error", {"message": "Synthesis stream failed."})
 
     return StreamingResponse(
         _events(),

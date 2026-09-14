@@ -1055,7 +1055,8 @@ export function submitElicitationResponses(
   // not part of the contract and was silently dropped, so stored answers lost their questions.
   responses: Array<{ question_index: number; question: string; answer: string }>,
 ) {
-  return postJson<{ status: string; items_queued: number }>(
+  // The work-order endpoint stores the whole interview as one quarantine item and returns its id.
+  return postJson<{ item_id: string; status: string }>(
     `/elicitation/${workOrderId}/responses`,
     { responses },
   );

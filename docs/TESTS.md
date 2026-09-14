@@ -22,7 +22,7 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
 you will reset, never on the dataset you are about to demo or benchmark.
 
-### Tier 1 — service-free (488 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (494 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push.
 
@@ -35,7 +35,7 @@ superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging
 alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence}.py
 ```
 
-All **43** files, **488 tests** (2026-09-14). The seven newest:
+All **44** files, **494 tests** (2026-09-14). The seven newest:
 `test_alias_expansion.py` — a query naming a confirmed alias (P-101) also searches its canonical asset.
 `test_ner_fallback.py` — NIM NER calls are capped at 4 concurrent; a timeout or 5xx is retried but a 4xx
 is not; a long document is extracted in chunks and merged, and a failed chunk keeps the others while
@@ -49,6 +49,11 @@ the primary-asset scope.
 different model; a client error is never retried.
 `test_rca_timeline.py` — the RCA timeline shows an event recorded in both Supabase and Neo4j once, orders
 mixed UTC offsets by instant, and reads a naive timestamp as UTC.
+`test_supabase_http.py` — Supabase REST reads survive a dropped pooled HTTP/2 connection: a GET/HEAD that hits a
+dead connection is retried once, a second failure still raises, a write is never replayed, and every PostgREST
+session in the process goes through the retry transport.
+`test_synthesis_stream.py` also pins the streaming route's terminal events: a successful stream ends on `done` with
+no `error`, and a failed one ends on `error` without exposing the exception text.
 `test_image_utils.py` — the one shared NIM image downscale helper (OCR and P&ID): an image that fits after JPEG
 re-encoding keeps full resolution, one already under the ceiling is sent untouched, one no step can fit returns
 nothing, and both callers keep their return shapes.
@@ -130,7 +135,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 488 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 494 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud
