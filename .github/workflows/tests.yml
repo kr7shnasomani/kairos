@@ -40,14 +40,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Layer cache keyed on requirements.txt: the pip install dominates the build, and it
       # only changes when dependencies do. Cache hit takes this job from ~4 min to ~40 s.
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Cache Docker layers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-backend-${{ hashFiles('backend/requirements.txt', 'backend/Dockerfile') }}
@@ -156,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # `secrets` is unavailable in a job-level `if`, so gate on an output instead.
       - name: Check for CI credentials
