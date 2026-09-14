@@ -7,13 +7,16 @@ name: kairos
 #                (auto-merges docker-compose.override.yml → hot-reload, debug
 #                 ports, dev UIs. `make dev` does exactly this.)
 #
-#   AWS / prod:  docker compose -f docker-compose.yml up -d --build
+#   Deploy    :  make prod   (on the AWS server — full procedure in docs/DEPLOY.md)
+#                == docker compose -f docker-compose.yml --profile prod up -d <services>
 #                (base only — no bind-mounts, no debug ports, non-root images,
-#                 network isolation, resource limits.)
+#                 network isolation, resource limits. Backend only: the frontend is
+#                 hosted on Vercel. `--profile prod` adds kairos-caddy, HTTPS on 80/443.)
 #
 # Cloud services (NOT containers): Supabase Postgres + Storage + Auth + Vault.
-# Only the two edge ports (frontend 3000, API 8000) are published here; every
-# datastore stays internal. Dev exposes the rest via the override file.
+# Only two edge ports are published: frontend 3000, and API 8000 on 127.0.0.1 (loopback only,
+# so a server never exposes it directly). Every datastore stays internal. Dev exposes the rest
+# via the override file.
 # =============================================================================
 
 # --- reusable fragments ----------------------------------------------------
@@ -84,7 +87,7 @@ services:
     <<: [*svc, *backend-build]
     container_name: kairos-backend-api
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"   # loopback only: public traffic reaches the API through kairos-caddy
     environment:
       <<: *backend-env
       PYTHONPATH: /app
@@ -423,11 +426,11 @@ services:
 
 
   # ===========================================================================
-  # HTTPS reverse proxy — prod/AWS only (auto-TLS via Let's Encrypt).
-  #   docker compose -f docker-compose.yml --profile prod up -d --build
-  # Skipped by local dev (no profile). Needs KAIROS_DOMAIN in .env, DNS → the box,
-  # and the frontend built with NEXT_PUBLIC_API_URL=https://$KAIROS_DOMAIN/api.
-  # Open only 80/443 in the AWS security group; 3000/8000 stay unreachable externally.
+  # HTTPS for the API — deployment only (auto-TLS via Let's Encrypt). See docs/DEPLOY.md.
+  # The frontend is hosted on Vercel, so this proxies the backend API and nothing else.
+  #   docker compose -f docker-compose.yml --profile prod up -d <services>
+  # Skipped by local dev (no profile). Needs KAIROS_DOMAIN in .env and DNS → the box.
+  # Open only 22 (your IP), 80 and 443 in the AWS security group; 8000 stays unreachable.
   # ===========================================================================
   kairos-caddy:
     <<: *svc
@@ -439,12 +442,11 @@ services:
       - "443:443"
     environment:
       KAIROS_DOMAIN: ${KAIROS_DOMAIN:-localhost}
-      KAIROS_TLS_EMAIL: ${KAIROS_TLS_EMAIL:-}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - kairos-caddy_data:/data
       - kairos-caddy_config:/config
-    depends_on: [kairos-frontend, kairos-backend-api]
+    depends_on: [kairos-backend-api]
     networks: [edge]
     deploy:
       resources:

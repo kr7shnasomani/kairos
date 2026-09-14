@@ -1,4 +1,4 @@
-module github.com/kr1shnasomani/kairos/connectors
+module github.com/kr7shnasomani/kairos/connectors
 
 go 1.25.0
 

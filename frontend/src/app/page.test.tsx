@@ -220,7 +220,7 @@ describe("Home", () => {
     const hrefs = [...container.querySelectorAll("footer a")].map((a) => a.getAttribute("href"));
     expect(hrefs.length).toBeGreaterThan(0);
     const allowedExternal = [
-      "https://github.com/kr1shnasomani/kairos",
+      "https://github.com/kr7shnasomani/kairos",
       "https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view?usp=drive_link",
     ];
     for (const href of hrefs) {

@@ -26,6 +26,16 @@
 
 ## Headline
 
+**Where things stand (2026-09-15).** Submitted to the AI Builders Hackathon (deadline 2026-09-15,
+judging 16 to 20 September) as release
+[`v2.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v2.0.0) (`c654615`); the earlier ET AI
+Hackathon 2.0 submission is [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0)
+(`b81ed1f`). **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
+**https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
+494/494 service-free backend tests, 271/271 frontend tests, `tsc` clean, `eslint` 0 errors, end-to-end
+flows 46/46, CI green. What is still open is listed under
+[Pending — as of 2026-09-15](#pending--as-of-2026-09-15).
+
 **All 13 architecture layers are implemented.** Architecture conformance is **~91.5%** — the mean of
 the 13 per-layer scores in [Conformance](#architecture--implementation-conformance).
 
@@ -49,7 +59,9 @@ numbers are honestly measured on that corpus, and where corpus size limits what 
 mock adapters are real code with a documented one-line switch to go live *if* a plant is ever
 connected; until then, the mock **is** the product.
 
-**Deployment is out of scope** (user decision 2026-08-15). The Aura keep-alive is done and
+**Deployed 2026-09-15:** backend on one AWS EC2 host (`https://kairos-deterium.duckdns.org`), frontend
+on Vercel (`https://kairos-deterium.vercel.app`); procedure, costs and pause/resume notes in
+[`DEPLOY.md`](../DEPLOY.md). (Deployment was out of scope until then, user decision 2026-08-15.) The Aura keep-alive is done and
 independent of deployment (`.github/workflows/uptime.yml`, daily 03:17 UTC; GitHub disables
 scheduled workflows after 60 days of repo inactivity). That workflow also carries the
 **idle-connection recovery probe** (added 2026-08-23): it queries Aura, idles 11 minutes past
@@ -209,8 +221,10 @@ scale-out beyond the single-site MVP:
 
 ## Benchmarks — current numbers
 
-**Measured 2026-08-16/17** on the shipping configuration: 37 questions, 40 NER labels,
-`NVIDIA_NIM_TIMEOUT=60`. (Sweep 08-16; `run_benchmark`, `run_safety_eval` and `run_brief_eval` re-run 08-17.) Raw output: [`benchmark/RESULTS.md`](../../benchmark/RESULTS.md).
+**Measured on the shipping configuration** (40 NER labels, `NVIDIA_NIM_TIMEOUT=60`). The answer-quality,
+provenance and latency rows are **current: 2026-09-13, Nemotron 3 Super, 46 questions**. Every other row
+carries its own measurement date in its cell (the full sweep ran 2026-08-16/17 on 37 questions, with
+later re-runs where noted). Raw output: [`benchmark/RESULTS.md`](../../benchmark/RESULTS.md).
 Methodology: [`docs/BENCHMARKS.md`](../BENCHMARKS.md).
 
 | Metric | Result | Harness |
@@ -489,6 +503,22 @@ a new PS criterion arrives without a harness.
 ---
 
 ## Pending
+
+### Pending — as of 2026-09-15
+
+Safety class as in [Next actions](#next-actions--in-order-with-their-safety-class): 🟢 repo only ·
+🟡 provider quota or account settings · 🔴 writes to a cloud store (needs an explicit ask).
+
+| # | Item | Class | Notes |
+|---|---|---|---|
+| P1 | **Public demo login is admin.** The login page's "Try demo · signs in as admin" button and the seeded persona passwords (in this repo and the public `deterium-kairos` copy) let anyone act as admin on the live data. | 🔴 | Accepted for the judging window (user decision 2026-09-15). Fix: a read-only `demo` role (one write-blocking check in the backend, admin-equivalent reads, the button pointed at it), then rotate the seeded passwords in Supabase Auth |
+| P2 | **Vercel preview deployments are public.** Protection was turned off entirely with the CLI; production must be public, previews need not be | 🟡 | Vercel → `kairos` → Settings → Deployment Protection → Vercel Authentication → *Only Preview Deployments* |
+| P3 | **Regenerate the DuckDNS token** — it was shown in a screenshot during setup | 🟡 | duckdns.org; nothing in the repo uses it |
+| P4 | **Stop the EC2 instance after the results** (about 2026-09-25) and follow *Pause between events* in [`DEPLOY.md`](../DEPLOY.md); check the AWS Free plan end date before restarting | 🟡 | Running costs about $2.63/day of credit, stopped about $0.21/day |
+| P5 | **Five open Dependabot PRs** — #52 (npm, 17 updates), #46 (vitest 5, major), #41 (docker), #40 (python, 37 updates), #23 (go). Held back to keep the submission tree unchanged during judging | 🟢 | Review and merge after judging; vitest 5 and the Python group need a full service-free and frontend run |
+| P6 | **Server Elasticsearch snapshot is from 2026-09-13** (18 documents / 10 assets vs 20 / 11 locally — the QA test document and asset are missing) | 🟢 | Harmless: both are test data. Re-export with `make export-search-index` if the corpus changes |
+| P7 | **Stale measurements** — `run_retrieval_baseline.py` (predates the 2026-08-24 `/search` fix), `run_safety_eval.py` (not re-run since 2026-08-17), `run_cross_functional.py` (measured at n=37) | 🟡 | Re-run after judging, not during it (provider quota) |
+| P8 | Backlog carry-overs: synthesis verdict (#8), form-parsing layout pass (#6), FastAPI major upgrade (#2), D3 `COMPONENT` labels, 7 eslint unused-var warnings | 🟢 | Unchanged; see [Next actions](#next-actions--in-order-with-their-safety-class) and the [Backlog](#improvement-backlog) |
 
 ### Reported UI/wiring issues — triaged and fixed 2026-08-23
 
@@ -957,17 +987,21 @@ recorded above.
 
 ## Verification snapshot
 
-- **Benchmarks** (cloud stores, 2026-08-16): see [Benchmarks](#benchmarks--current-numbers) above.
+- **Benchmarks** (cloud stores; answer quality re-measured 2026-09-13): see [Benchmarks](#benchmarks--current-numbers) above.
+- **Deployment (2026-09-15):** all 11 backend containers healthy on the EC2 host; public `/health`, CORS
+  from the Vercel origin, and a signed-in read through the public site verified; only 22, 80 and 443
+  reachable from the internet. See [`DEPLOY.md`](../DEPLOY.md).
+- **End-to-end flows:** `tools/e2e_flows.sh --mutate` **46/46** (2026-09-14).
 - **Backend test suite:** **576 collected** across 50 files (2026-08-23). The last full green run was
   **412 passed · 0 failed** (2026-08-22); 164 tests have landed since, so **no current pass count
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **494 passed** across **44 files** (2026-09-14) — no stack / secrets / network.
+- **Service-free tier:** **494 passed** across **44 files** (re-run 2026-09-15) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md` and
   `.github/workflows/tests.yml` and **all three must be updated together** (they have drifted twice).
-- **Frontend:** **271 passed across 75 files — fully green** (2026-09-14), `tsc` clean, `eslint`
-  0 errors / 3 pre-existing unused-var warnings. `landing-figures.test.ts` was red until the
+- **Frontend:** **271 passed across 75 files — fully green** (re-run 2026-09-15), `tsc` clean, `eslint`
+  0 errors / 7 unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
   container, so the file could not collect. `docker compose up -d --force-recreate --no-deps
   --no-build kairos-frontend` picks it up and rebuilds nothing (`node_modules` is baked into the
@@ -1102,7 +1136,7 @@ recorded above.
 - **Supabase MCP** (`mcp__claude_ai_Supabase__*`) — SQL, migrations, table inspection. Prefer over `docker exec`.
 
 **Supabase:** project `ernffgrvdcikwwhkhiix` · bucket `kairos-vault` (private, immutable, 500 MB max)  
-**Tests:** counts live in **one** place — [Verification snapshot](#verification-snapshot). Do not restate them here; this line held a stale copy for long enough to be quoted. Notables: `tests/test_contract.py` (response-shape contracts), `tests/test_model_validation.py` (NER surface-form-overlap matcher). Self-cleans on teardown · Package: `ghcr.io/kr1shnasomani/kairos`
+**Tests:** counts live in **one** place — [Verification snapshot](#verification-snapshot). Do not restate them here; this line held a stale copy for long enough to be quoted. Notables: `tests/test_contract.py` (response-shape contracts), `tests/test_model_validation.py` (NER surface-form-overlap matcher). Self-cleans on teardown · Package: `ghcr.io/kr7shnasomani/kairos`
 
 **CI:** `tests.yml` is two tiers — **`unit`** runs the service-free tests (PII, query classification, retrieval fusion, spreadsheet/email ingestion, NER matching, P&ID, auth cache, config, **authz boundary**) with **no secrets and no network**, so it is green on every push and fork PR; **`integration`** runs the full suite against `--profile local-stores` and *skips with exit 0* unless `CI_SUPABASE_*` is set. **Never point CI at the production Supabase / Aura / Qdrant Cloud project** — the suite creates+purges entities and `make init-all` reinitialises schema, so it would corrupt the golden dataset on every push. Use a throwaway Supabase project, and set the secrets with `gh secret set CI_SUPABASE_URL` (etc.) yourself — they are never read from `.env` by any script in this repo. **Currently unset by choice (2026-08-23), so tier 2 never runs.** Note `--profile local-stores` covers Neo4j + Qdrant only; Supabase has no local counterpart, which is why tier 2 needs a project at all. **Recommended: leave tier 2 disabled** — it costs ~20 provider calls per push (Jina embed per `/search`, a synthesis cascade call per synthesize) and exhausting a provider tier makes synthesis silently return no answer, which reads as collapsed answer quality. `frontend.yml` (tsc·eslint·build·audit) passes in full. **`deps-audit.yml`** (added 2026-08-22) is the
 per-push dependency check Dependabot cannot provide — `pip-audit` / `npm audit` / `govulncheck` on push

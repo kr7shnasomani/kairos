@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kr1shnasomani/kairos/connectors/internal/ot"
+	"github.com/kr7shnasomani/kairos/connectors/internal/ot"
 )
 
 var (

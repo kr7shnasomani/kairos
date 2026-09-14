@@ -3,7 +3,7 @@
 
 <div align="center">
 
-[Problem Statement](./docs/problem_statement/) · [Solution](./docs/ARCHITECTURE.md) · [Demo Video](https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view) · [Documentation](./docs/)
+[Live Demo](https://kairos-deterium.vercel.app) · [Problem Statement](./docs/problem_statement/) · [Solution](./docs/ARCHITECTURE.md) · [Demo Video](https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view) · [Documentation](./docs/)
 
 A 13-layer platform organised into five planes: **perception, knowledge, governance, retrieval, and delivery**. A FastAPI core orchestrates five datastores, durable Temporal workflows, Celery workers, and Go OT connectors, with a Next.js interface on top.
 
@@ -127,7 +127,7 @@ The entire stack runs inside Docker — no local Python, Node, or Go required.
 
 ```bash
 # 1. Clone and configure
-git clone https://github.com/kr1shnasomani/kairos.git
+git clone https://github.com/kr7shnasomani/kairos.git
 cd kairos
 cp .env.example .env          # add cloud keys (NIM, Groq, Supabase) when ready
 

@@ -15,7 +15,8 @@ WHY THIS IS NOT A PROXY
   The criterion says *improvement*, and an improvement needs a counterfactual — what the asker
   would have found **without** the cross-silo view.
 
-  So this runs two arms over the same 37 golden questions:
+  So this runs two arms over the golden questions in benchmark/questions.json (37 when this was
+  last measured; 46 since 2026-09-13):
 
     full   retrieval over the whole corpus (what ships)
     silo   retrieval restricted to ONE function's documents, once per function
@@ -35,7 +36,7 @@ THREE LIMITS, STATED RATHER THAN BURIED
      each function's best hits from that ranking, rather than rebuilding a per-silo index. It is
      an approximation of what a function-local search would surface, not an observation of what
      a human in that function actually does.
-  3. n=37 on a 24-document corpus. Report the count, not a headline percentage.
+  3. n=37 (last run) on a 24-document corpus. Report the count, not a headline percentage.
 
     docker compose run --rm --no-deps kairos-backend-api python benchmark/run_cross_functional.py
 """

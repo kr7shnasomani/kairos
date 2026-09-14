@@ -750,7 +750,7 @@ correctness.
 | `run_soak_test.py` | Memory and connection-pool behaviour over hours, including idle-connection recovery |
 | `run_ocr_gate.py` | OCR recall of operationally salient tokens — asset tags, measurements with units, standards references, dates — against the clean sibling documents the dataset manifest pairs them with |
 | `run_kg_completeness.py` | Linkage completeness: the fraction of active vault documents whose knowledge is reachable in the graph, with the unlinked remainder classified rather than left as a percentage |
-| `run_cross_functional.py` | Cross-functional discovery as a counterfactual — full-corpus retrieval against retrieval restricted to one function's documents, over the same 37 questions |
+| `run_cross_functional.py` | Cross-functional discovery as a counterfactual — full-corpus retrieval against retrieval restricted to one function's documents, over the golden question set in `benchmark/questions.json` (37 when last measured; 46 since 2026-09-13) |
 
 Three conventions make the numbers readable rather than decorative. Every run states a **validity
 verdict** — a run that fell through to a different model tier is marked suspect rather than reported as

@@ -470,7 +470,7 @@ const footerColumns: { heading: string; links: [string, string][] }[] = [
 
 const developers = ["Krishna Somani", "Arnav Bansal", "M Arshad"];
 
-const GITHUB_URL = "https://github.com/kr1shnasomani/kairos";
+const GITHUB_URL = "https://github.com/kr7shnasomani/kairos";
 // Demo recording. Currently a Drive link; swap in a YouTube URL when one exists
 // and nothing else needs to change.
 const YOUTUBE_DEMO_URL = "https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view?usp=drive_link";

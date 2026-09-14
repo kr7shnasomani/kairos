@@ -7,8 +7,9 @@
 #   • runs as root to avoid bind-mount permission friction
 #   • publishes every internal datastore + UI port to the host for debugging
 #
-# AWS / prod skips this file entirely:
-#   docker compose -f docker-compose.yml up -d --build
+# The deployment server never uses this file (it is not even copied there):
+#   make prod   # == docker compose -f docker-compose.yml --profile prod up -d <services>
+# See docs/DEPLOY.md.
 # =============================================================================
 
 services:

@@ -36,19 +36,20 @@ The stack is defined by **two files** that select the run mode:
 
 | File | Role | Loaded when |
 |------|------|-------------|
-| `docker-compose.yml` | **Base — production / AWS-safe.** Non-root images, network isolation, resource limits, healthchecks, only ports **3000 + 8000** published, code baked into images. | Always |
+| `docker-compose.yml` | **Base — production / AWS-safe.** Non-root images, network isolation, resource limits, healthchecks, only ports **3000** and **8000** published (the API on `127.0.0.1` only), code baked into images. | Always |
 | `docker-compose.override.yml` | **Dev.** Source bind-mounts + hot-reload (`uvicorn --reload`, `next dev`, `go run`), runs as root, publishes every datastore/UI port for debugging. | Auto-loaded by plain `docker compose up` |
 
 ```bash
 # LOCAL DEV  (base + override, auto)          → hot-reload, all debug ports
 docker compose up -d --build        #  ==  make dev
 
-# PRODUCTION / AWS  (base only, override skipped)
-docker compose -f docker-compose.yml up -d --build   #  ==  make prod
+# PRODUCTION / AWS SERVER  (base only + `prod` profile, backend services only)
+make prod    # == docker compose -f docker-compose.yml --profile prod up -d <services>
 ```
 
 Passing `-f docker-compose.yml` explicitly disables the automatic override
-merge — that single flag is the entire dev/prod switch.
+merge; `--profile prod` adds `kairos-caddy` (HTTPS). Together they are the dev/prod switch.
+The deployed setup and its full procedure are in [`DEPLOY.md`](./DEPLOY.md).
 
 ---
 
@@ -165,52 +166,37 @@ Neo4j 2g + Qdrant 1g. Size the AWS host for the default (see §9).
 
 ## 9. AWS deployment
 
-**Target:** a single EC2 instance running Docker + Compose v2 (simplest path;
-ECS/EKS is a later migration). Recommended: **t3.xlarge / m6i.xlarge (4 vCPU,
-16 GB)** with a **≥ 40 GB gp3** EBS volume (images ~5 GB + data).
+The live deployment and its step-by-step procedure are in [`DEPLOY.md`](./DEPLOY.md). Summary:
+
+- **Host:** one EC2 `m7i-flex.large` (2 vCPU, 8 GiB) in `ap-south-1`, Ubuntu 24.04, 30 GB gp3, an
+  Elastic IP and a DuckDNS name. Measured without the frontend the stack uses about 2.4 GiB.
+- **What runs there:** the backend only (API, Celery, both Temporal workers, Temporal + Postgres,
+  Go connector, Elasticsearch, Redis, OPA) plus `kairos-caddy` for HTTPS. **The frontend is on Vercel.**
+- **Start or update** (on the server, after copying the code as in DEPLOY.md §8):
 
 ```bash
-# 1. Provision EC2 (Amazon Linux 2023 / Ubuntu 22.04), install Docker + compose plugin.
-# 2. Clone the repo onto the instance.
-git clone <repo> kairos && cd kairos
-
-# 3. Create the production .env (real secrets — do NOT commit).
-cp .env.example .env && $EDITOR .env
-#    Set at minimum: SUPABASE_*, NVIDIA_NIM_API_KEY, JINA_API_KEY, GROQ_API_KEY,
-#    NEO4J_PASSWORD, INTERNAL_API_KEY, GRAFANA_ADMIN_PASSWORD, APP_SECRET_KEY,
-#    APP_DEBUG=False, APP_ENV=production,
-#    NEXT_PUBLIC_API_URL=https://<your-domain-or-ALB>  (browser-reachable API URL; build-time value)
-
-# 4. Start production stack (base only — override skipped).
-make prod          # == docker compose -f docker-compose.yml up -d --build
-
-# 5. One-time init (runs inside the API container).
-make init-all && make seed && make load-dataset
+make prod    # builds the backend images, then starts the backend services + kairos-caddy
 ```
+
+- **Never** run `make init-all`, `make seed`, `make load-dataset`, `make purge-test-data` or the full
+  test suite on the server — they write to the shared cloud stores (the 🛑 rule in `CLAUDE.md`). A fresh
+  server restores the local Elasticsearch index from `db/snapshots/` instead (DEPLOY.md §10).
 
 ### AWS security checklist
-- **Security Group:** inbound **80/443 only** (to a reverse proxy) — or 3000 +
-  8000 if going direct. **Never** open 6379/7687/9200/7474/etc.; in prod they
-  are not published at all, but keep the SG tight regardless.
-- **TLS / reverse proxy:** put an ALB or nginx in front of 3000 (frontend) and
-  8000 (API). Point `NEXT_PUBLIC_API_URL` at the public API URL; the frontend's
-  server-side `API_INTERNAL_URL` stays `http://kairos-backend-api:8000`. Public
-  Next.js variables are embedded during `next build`, so change the value before
-  `make prod`/the frontend image build and rebuild the image to deploy it.
-- **Secrets:** load `.env` from AWS SSM Parameter Store / Secrets Manager at
-  deploy time; do not bake secrets into images. `APP_DEBUG=False` disables the
-  dev auth bypass — verify it is off.
+- **Security group:** inbound **22 (your IP), 80, 443** only. The base file publishes the API's 8000 on
+  `127.0.0.1` only, so it stays unreachable from outside even if the security group were widened.
+  **Never** open 6379/7233/8181/9200.
+- **TLS:** `kairos-caddy` gets and renews a Let's Encrypt certificate for `KAIROS_DOMAIN`. Keep
+  `infra/caddy/Caddyfile` free of an `encode` block so Copilot's Server-Sent Events stream unbuffered.
+- **Secrets:** `.env` lives only on the server (`chmod 600`), never in images or git. With
+  `APP_ENV=production` the API refuses to boot on a default `APP_SECRET_KEY` or `INTERNAL_API_KEY`,
+  or an empty `SUPABASE_JWT_SECRET`.
 - **ES has `xpack.security.enabled=false`** — safe only because it is unpublished
-  and internal-network-only. Do not expose port 9200 on AWS.
-- **Persistence:** the named volumes live on the instance's EBS volume. Snapshot
-  EBS for backups, or migrate stores to managed services later.
+  and internal-network-only.
+- **Persistence:** the named volumes live on the instance's EBS volume and survive a stop/start.
 
 ### Rebuild / redeploy
-```bash
-git pull
-docker compose -f docker-compose.yml up -d --build      # rebuild changed images
-docker compose -f docker-compose.yml up -d --no-deps --build kairos-frontend   # one service
-```
+Re-run the rsync from DEPLOY.md §8 on your Mac, then `make prod` on the server.
 
 ---
 
@@ -218,7 +204,7 @@ docker compose -f docker-compose.yml up -d --no-deps --build kairos-frontend   #
 
 ```bash
 make dev            # local dev stack (hot-reload, all debug ports)
-make prod           # production stack (base only)
+make prod           # backend production stack, on the AWS server only (base + prod profile)
 make stop           # docker compose down
 make nuke           # down -v  ← destroys ALL volumes
 make ps / make logs # status / tail logs

@@ -1,18 +1,8 @@
-# Kairos — HTTPS reverse proxy (prod/AWS). Auto-TLS via Let's Encrypt.
-# One domain, same-origin: browser hits https://DOMAIN (frontend) and https://DOMAIN/api/* (API),
-# so no CORS. Requires KAIROS_DOMAIN (+ optional KAIROS_TLS_EMAIL) in the environment, and the
-# frontend built with NEXT_PUBLIC_API_URL=https://DOMAIN/api. DNS A record → the EC2 IP first.
+# Kairos — HTTPS for the backend API (deployment only). Auto-TLS via Let's Encrypt.
+# The frontend is hosted on Vercel and calls https://DOMAIN directly, so the API allows the
+# Vercel origin through CORS_ORIGINS. Requires KAIROS_DOMAIN in .env, DNS A record → the EC2 IP,
+# and ports 80 and 443 open. Used by the `kairos-caddy` service (profile prod). See docs/DEPLOY.md.
+# No `encode` block: compression can buffer the Copilot answer stream (text/event-stream).
 {$KAIROS_DOMAIN} {
-	encode zstd gzip
-	tls {$KAIROS_TLS_EMAIL}
-
-	# API under /api/* → strip the prefix and proxy to FastAPI (/api/search → /search)
-	handle_path /api/* {
-		reverse_proxy kairos-backend-api:8000
-	}
-
-	# Everything else → Next.js frontend
-	handle {
-		reverse_proxy kairos-frontend:3000
-	}
+	reverse_proxy kairos-backend-api:8000
 }

@@ -52,12 +52,18 @@ dev:
 	@echo "    Grafana:         http://localhost:3001  (admin / kairos_dev_password)"
 	@echo ""
 
-# Production / AWS: base only (no override) — no bind-mounts, no debug ports,
-# non-root images, network isolation, resource limits. See docs/DOCKER.md.
+# Production / AWS server: base file only (no override) plus the `prod` profile, which adds
+# kairos-caddy (HTTPS for the API on 80/443). Backend services only — the frontend is on Vercel,
+# and a bare `up` would also try to build it. Run ON THE SERVER. Full procedure: docs/DEPLOY.md.
+PROD_SERVICES = kairos-elasticsearch kairos-redis kairos-opa kairos-temporal-postgres kairos-temporal \
+	kairos-backend-api kairos-celery-worker kairos-temporal-activity-worker kairos-elicitation-worker \
+	kairos-backend-go kairos-caddy
+
 prod:
-	docker compose -f docker-compose.yml up -d --build
+	docker compose -f docker-compose.yml --profile prod build kairos-backend-api kairos-backend-go
+	docker compose -f docker-compose.yml --profile prod up -d $(PROD_SERVICES)
 	@echo ""
-	@echo "  Kairos (production mode) — only ports 3000 (frontend) + 8000 (API) published."
+	@echo "  Kairos backend (production) — reachable only through Caddy on 80/443. See docs/DEPLOY.md."
 	@echo ""
 
 stop:

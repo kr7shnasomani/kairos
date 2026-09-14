@@ -95,7 +95,7 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 | Database schemas · frontend routes & wiring | `docs/DATABASE.md` · `FRONTEND.md` |
 | Implementation plans · E2E sweep (44 routes × 5 personas) | `docs/implementation/BE.md` · `FE.md` · `e2e-sweep.md` |
 | Tests · golden dataset · benchmarks (results → `benchmark/RESULTS.md`) | `docs/TESTS.md` · `DATASET.md` · `BENCHMARKS.md` |
-| Backend fixtures (mock-by-design) · deploy (**OUT OF SCOPE**) | `docs/FIXTURES.md` · `DEPLOY.md` |
+| Backend fixtures (mock-by-design) · deploy (AWS EC2 backend + Vercel frontend) | `docs/FIXTURES.md` · `DEPLOY.md` |
 
 ---
 

@@ -38,7 +38,7 @@ All services run as Docker containers. Start with `make dev` (or `docker compose
 | `kairos-temporal_ui` | temporalio/ui:2.26.2 | `8088` | Temporal dashboard |
 | `kairos-temporal_postgres` | postgres:14-alpine | — | Temporal internal DB |
 | `kairos-opa` | openpolicyagent/opa:0.65.0 | `8181` | Policy enforcement — writes + sensitive reads. Reach it as `http://kairos-opa:8181`, **never `localhost`** (inside the API container that is the API itself). Policy is loaded at container start, so `docker compose restart kairos-opa` after editing `kairos.rego` |
-| `kairos-caddy` | caddy:2-alpine | `80`, `443` | HTTPS reverse proxy — **`--profile prod` only**, does not start in dev |
+| `kairos-caddy` | caddy:2-alpine | `80`, `443` | HTTPS for the API on the deployment server (Let's Encrypt) — **`--profile prod` only**, does not start in dev. See [`DEPLOY.md`](./DEPLOY.md) |
 
 > **Observability is CLOUD (Grafana Cloud).** The former local `kairos-otel-collector`, `kairos-tempo`,
 > and `kairos-grafana` containers were **removed** — the backend exports traces/metrics directly to the
@@ -198,7 +198,7 @@ datasource picker on the import screen.
 |------|---------|--------|
 | `infra/policies/kairos.rego` | OPA RBAC rules | **Active** (mounted by `kairos-opa`) |
 | `infra/temporal/dynamicconfig.yaml` | Temporal server dynamic config | **Active** (mounted by `kairos-temporal`) |
-| `infra/caddy/Caddyfile` | HTTPS reverse proxy (prod) | **Active** under `--profile prod` |
+| `infra/caddy/Caddyfile` | HTTPS for the API (deployment only; the frontend is on Vercel) | **Active** under `--profile prod` |
 | `infra/grafana/provisioning/dashboards/*.json` | Grafana dashboard definitions | **Legacy** — not mounted (obs is Grafana Cloud); **keep** — importable into Grafana Cloud |
 | `infra/grafana/provisioning/datasources/`, `infra/otel/otel-config.yaml`, `infra/tempo/tempo.yaml` | Local Grafana/OTEL-collector/Tempo configs | **Dead** — their containers were removed; no runtime use |
 | `docker-compose.yml` + `docker-compose.override.yml` | Base (prod-safe) + auto-loaded dev override | **Active** |
@@ -267,13 +267,18 @@ docker exec kairos-backend-api python scripts/seed_regulations.py
 # Run tests — full suite (needs the stack up; use local stores, never cloud)
 docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120
 
-# Run the service-free tests with NO stack running at all (146 tests, no secrets, no network).
-# This is what CI's tier-1 `unit` job runs. Re-measured 2026-08-17.
+# Run the service-free tests with NO stack running at all (494 tests, 44 files, no secrets, no network).
+# This is what CI's tier-1 `unit` job runs. Re-measured 2026-09-15. The list must match AGENTS.md,
+# docs/TESTS.md and .github/workflows/tests.yml.
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \
   pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,\
 model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,\
 ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,\
-superseded_filter,brief_signing}.py
+superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,\
+quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
+form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,\
+asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view,\
+image_utils,ocr_review_release,supabase_http}.py
 
 # Lint the backend exactly as CI does (pinned ruff + backend/ruff.toml)
 docker run --rm -v "$(pwd)/backend:/b" -w /b ghcr.io/astral-sh/ruff:0.16.0 check .
