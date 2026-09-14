@@ -486,6 +486,171 @@ async def get_extraction_results(
     )
 
 
+def vault_storage_path(vault_url: str | None) -> str | None:
+    """The Storage object path inside the vault bucket, recovered from a document's stored `vault_url`.
+
+    The documents table keeps only the authenticated URL, so this is the one place that path is parsed.
+    """
+    marker = f"/object/authenticated/{settings.SUPABASE_STORAGE_BUCKET}/"
+    idx = (vault_url or "").find(marker)
+    return vault_url[idx + len(marker):] if idx != -1 and vault_url else None
+
+
+def release_workflow_params(doc: dict, asset_id: str | None, job_id: str, reviewed_by: str) -> dict:
+    """Workflow params to re-run extraction on a document a human released from the OCR gate.
+
+    Same shape as ingestion, plus `ocr_reviewed_by`, which tells `run_ocr` that a person has looked at
+    the scan and accepted it — the gate is recorded as overridden rather than silently skipped.
+    Raises ValueError when the vault path cannot be recovered: re-running without the artifact would
+    extract nothing.
+    """
+    vault_path = vault_storage_path(doc.get("vault_url"))
+    if not vault_path:
+        raise ValueError(f"Vault storage path unavailable for {doc.get('document_id')}")
+    return {
+        "document_id": doc["document_id"],
+        "vault_path": vault_path,
+        "mime_type": doc.get("mime_type") or "application/octet-stream",
+        "asset_id": asset_id,
+        "document_type": doc.get("document_type") or "unknown",
+        "authority_level": doc.get("authority_level") or 4,
+        "job_id": job_id,
+        "ocr_reviewed_by": reviewed_by,
+    }
+
+
+class OcrReviewDecision(BaseModel):
+    note: str | None = Field(None, max_length=1000, description="Why the reviewer released or rejected the scan")
+
+
+async def _held_job(supabase, document_id: str) -> dict:
+    """The document's latest extraction job, which must be the one the OCR gate stopped (409 otherwise)."""
+    result = await asyncio.to_thread(
+        lambda: supabase.table("extraction_jobs").select("*").eq("document_id", document_id)
+        .order("created_at", desc=True).limit(1).execute()
+    )
+    job = result.data[0] if result.data else None
+    if not job or job.get("pipeline_stage") != "review_required":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Document '{document_id}' is not held for OCR review.",
+        )
+    return job
+
+
+async def _audit(supabase, action: str, document_id: str, user_id: str, details: dict) -> None:
+    try:
+        await asyncio.to_thread(
+            lambda: supabase.table("audit_log").insert({
+                "action": action, "entity_type": "document", "entity_id": document_id,
+                "performed_by": user_id, "details": details,
+            }).execute()
+        )
+    except Exception as exc:  # noqa: BLE001 — the decision itself is already committed
+        log.warning("document.ocr_review_audit_failed", document_id=document_id, action=action, error=str(exc))
+
+
+@router.post("/{document_id}/ocr-review/release", summary="Release a document held by the OCR gate")
+async def release_held_document(
+    document_id: str,
+    supabase: SupabaseDep,
+    temporal: TemporalDep,
+    decision: OcrReviewDecision | None = None,
+    current_user: dict = Depends(require_role("reliability", "admin")),
+) -> dict:
+    """
+    A reviewer has looked at the original scan and judged it legible: re-run extraction past the gate.
+
+    Human-only, like quarantine promotion (reliability/admin). Extracted facts still enter the graph as
+    `unverified` edges and low-confidence entities still quarantine, so releasing the scan does not
+    verify what is read from it. The previous job row is kept; the release gets a new one.
+    """
+    held = await _held_job(supabase, document_id)
+    reviewer = current_user.get("user_id", "unknown")
+
+    doc_result = await asyncio.to_thread(
+        lambda: supabase.table("documents")
+        .select("document_id, vault_url, mime_type, document_type, authority_level")
+        .eq("document_id", document_id).limit(1).execute()
+    )
+    if not doc_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found")
+    link_result = await asyncio.to_thread(
+        lambda: supabase.table("document_asset_links").select("asset_id").eq("document_id", document_id).limit(1).execute()
+    )
+    asset_id = link_result.data[0]["asset_id"] if link_result.data else None
+
+    try:
+        params = release_workflow_params(doc_result.data[0], asset_id, "pending", reviewer)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    job_result = await asyncio.to_thread(
+        lambda: supabase.table("extraction_jobs").insert({
+            "document_id": document_id, "pipeline_stage": "queued", "progress_pct": 0,
+            "created_at": datetime.now(UTC).isoformat(),
+        }).execute()
+    )
+    job_id = str(job_result.data[0]["job_id"])
+    params["job_id"] = job_id
+
+    try:
+        await temporal.start_workflow(
+            DocumentIngestionWorkflow.run,
+            args=[params],
+            id=f"ocr-release-{document_id}-{shortuuid.uuid()[:8]}",
+            task_queue=settings.TEMPORAL_TASK_QUEUE,
+        )
+    except Exception as exc:
+        log.error("document.ocr_release_workflow_failed", document_id=document_id, error=str(exc))
+        await asyncio.to_thread(
+            lambda: supabase.table("extraction_jobs").update({
+                "pipeline_stage": "review_required", "error": held.get("error"), "review_pending": 1,
+            }).eq("job_id", job_id).execute()
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The extraction workflow could not be started — the document is still held. Try again.",
+        ) from exc
+
+    await _audit(supabase, "ocr_review_released", document_id, reviewer, {
+        "note": (decision.note if decision else None), "held_job_id": held.get("job_id"),
+        "gate_reason": held.get("error"), "release_job_id": job_id,
+    })
+    log.info("document.ocr_review_released", document_id=document_id, reviewer=reviewer, job_id=job_id)
+    return {"status": "released", "document_id": document_id, "job_id": job_id}
+
+
+@router.post("/{document_id}/ocr-review/reject", summary="Reject a document held by the OCR gate")
+async def reject_held_document(
+    document_id: str,
+    supabase: SupabaseDep,
+    decision: OcrReviewDecision | None = None,
+    current_user: dict = Depends(require_role("reliability", "admin")),
+) -> dict:
+    """
+    A reviewer judged the scan unreadable: nothing is extracted from it, ever, from this job.
+
+    The vault artifact is never deleted (immutability) — the job is closed as `rejected` so it leaves the
+    review state, and a legible rescan is ingested as a new document (and may supersede this one).
+    """
+    held = await _held_job(supabase, document_id)
+    reviewer = current_user.get("user_id", "unknown")
+    note = (decision.note if decision else None) or "scan unreadable"
+    await asyncio.to_thread(
+        lambda: supabase.table("extraction_jobs").update({
+            "pipeline_stage": "rejected", "review_pending": 0,
+            "error": f"Rejected at OCR review: {note}",
+            "completed_at": datetime.now(UTC).isoformat(),
+        }).eq("job_id", held["job_id"]).execute()
+    )
+    await _audit(supabase, "ocr_review_rejected", document_id, reviewer, {
+        "note": note, "job_id": held.get("job_id"), "gate_reason": held.get("error"),
+    })
+    log.info("document.ocr_review_rejected", document_id=document_id, reviewer=reviewer)
+    return {"status": "rejected", "document_id": document_id}
+
+
 @router.get("/{document_id}/artifact-url", summary="Get a short-lived signed URL to open the vault artifact")
 async def get_artifact_url(
     document_id: str,
@@ -509,12 +674,9 @@ async def get_artifact_url(
     if not doc_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found")
 
-    vault_url = doc_result.data[0].get("vault_url") or ""
-    marker = f"/object/authenticated/{settings.SUPABASE_STORAGE_BUCKET}/"
-    idx = vault_url.find(marker)
-    if idx == -1:
+    storage_path = vault_storage_path(doc_result.data[0].get("vault_url"))
+    if not storage_path:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Artifact storage path unavailable")
-    storage_path = vault_url[idx + len(marker):]
 
     try:
         signed = await asyncio.to_thread(

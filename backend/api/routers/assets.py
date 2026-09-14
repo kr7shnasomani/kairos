@@ -253,6 +253,10 @@ async def create_asset(
     """
     asset_id = payload.asset_id or f"ASSET-{shortuuid.uuid()[:8].upper()}"
     now = datetime.now(UTC).isoformat()
+    # Who confirmed the identity comes from the session, never from the request body — the body
+    # field is client-supplied, so trusting it let any engineer or admin record the confirmation as
+    # someone else (and the UI fell back to the literal "admin"). Same rule as alias confirm/reject.
+    confirmed_by = current_user.get("user_id") or payload.confirmed_by_user_id
 
     graph = GraphService(driver)
     await graph.create_asset_node({
@@ -279,7 +283,7 @@ async def create_asset(
         "parent_asset_id": payload.parent_asset_id,
         "eam_source": payload.eam_source,
         "identity_confirmed": True,
-        "identity_confirmed_by": payload.confirmed_by_user_id,
+        "identity_confirmed_by": confirmed_by,
         "identity_confirmed_at": now,
     }
     await asyncio.to_thread(
@@ -291,7 +295,7 @@ async def create_asset(
             "action": "asset_created",
             "entity_type": "asset",
             "entity_id": asset_id,
-            "performed_by": payload.confirmed_by_user_id,
+            "performed_by": confirmed_by,
             "details": {"tag_number": payload.tag_number, "eam_source": payload.eam_source},
         }).execute()
     )
@@ -315,7 +319,7 @@ async def create_asset(
     except Exception as exc:
         log.warning("asset.es_index_failed", asset_id=asset_id, error=str(exc))
 
-    log.info("asset.created", asset_id=asset_id, tag_number=payload.tag_number, confirmed_by=payload.confirmed_by_user_id)
+    log.info("asset.created", asset_id=asset_id, tag_number=payload.tag_number, confirmed_by=confirmed_by)
     return {"asset_id": asset_id, "tag_number": payload.tag_number, "status": "created"}
 
 

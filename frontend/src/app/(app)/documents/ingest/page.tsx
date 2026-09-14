@@ -19,13 +19,13 @@ const DOC_TYPES = [
   { value: "pid_drawing", label: "P&ID drawing", authority: "3" },
 ] as const;
 
-const TERMINAL_STAGES: DocumentPipelineStage[] = ["complete", "review_required", "failed"];
+const TERMINAL_STAGES: DocumentPipelineStage[] = ["complete", "review_required", "rejected", "failed"];
 
 const STAGE_ORDER: DocumentPipelineStage[] = ["queued", "ocr", "ner", "graph_linking", "indexing", "complete"];
 const STAGE_LABEL: Record<DocumentPipelineStage, string> = {
   queued: "Queued", ocr: "OCR extraction", ner: "Entity extraction",
   graph_linking: "Graph linking", indexing: "Vector + text indexing",
-  complete: "Complete", review_required: "Review required", failed: "Failed",
+  complete: "Complete", review_required: "Review required", rejected: "Rejected at review", failed: "Failed",
 };
 
 export default function IngestPage() {
@@ -240,15 +240,17 @@ export default function IngestPage() {
               <p className="text-label font-bold uppercase tracking-[0.1em] text-muted">Pipeline status</p>
               {status?.stage === "review_required" && <StatusBadge tone="caution">Review required</StatusBadge>}
               {status?.stage === "failed" && <StatusBadge tone="danger">Failed</StatusBadge>}
+              {status?.stage === "rejected" && <StatusBadge tone="neutral">Rejected at review</StatusBadge>}
             </div>
             <div className="mt-4">
               {timelineEvents.length > 0
                 ? <Timeline events={timelineEvents} />
                 : <p className="text-body text-muted">Waiting for the first pipeline update…</p>}
             </div>
+            {/* A held document is not a quarantine item — the review happens on the document itself. */}
             {status?.stage === "review_required" && (
-              <Link href="/governance/quarantine" className="mt-2 inline-block text-caption text-accent underline hover:no-underline">
-                Low-confidence extraction — review in quarantine ↗
+              <Link href={`/documents/${result.document_id}`} className="mt-2 inline-block text-caption text-accent underline hover:no-underline">
+                Held by the OCR confidence gate — review the scan on the document ↗
               </Link>
             )}
           </div>

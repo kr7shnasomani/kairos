@@ -29,7 +29,8 @@
 > [`status.md` § Open decisions](docs/implementation/status.md#open-decisions--blocked-on-a-human-call-not-on-work).**
 > Those items are specified and cheap — they are waiting on a human call, not on engineering, so
 > they are the wrong thing to "just implement" and the right thing to ask about. **D1 (what makes an
-> OCR extraction quarantine) is the only open item with a data-integrity consequence.**
+> OCR extraction quarantine) is decided — any span < 0.7 holds the document — and no open item has a
+> data-integrity consequence.**
 >
 > **Hit a bug, a build failure, or something that looks wrong?** Check
 > [`docs/implementation/status.md` § Known Pitfalls](docs/implementation/status.md#known-pitfalls)
@@ -113,8 +114,8 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed → load-dataset`. Gotcha rebuilds: `--no-deps --build kairos-frontend` (new npm deps) · `--force-recreate kairos-backend-api` (NIM env).
 
 **Tests — Docker only, never the host.** Host package resolution differs from the pinned images and produces false results.
-- Service-free tier (**476 tests**, 41 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
-  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view}.py`
+- Service-free tier (**488 tests**, 43 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
+  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view,image_utils,ocr_review_release}.py`
 - Full suite (needs the stack; **local stores only, never cloud**): `docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120`
 
 ---

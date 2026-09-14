@@ -1,11 +1,17 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExtractionPanel } from "./extraction-panel";
+import { OcrReviewActions } from "./ocr-review-actions";
 import { RedactedExport } from "./redacted-export";
 
-const mocks = vi.hoisted(() => ({ getDocumentExtraction: vi.fn(), getRedactedDocument: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getDocumentExtraction: vi.fn(), getRedactedDocument: vi.fn(), releaseHeldDocument: vi.fn(), rejectHeldDocument: vi.fn(),
+}));
+const ctx = vi.hoisted(() => ({ role: "reliability", refresh: vi.fn() }));
 
 vi.mock("@/lib/api", () => mocks);
+vi.mock("@/components/use-role", () => ({ useRole: () => ctx.role, PROMOTE_ROLES: ["reliability", "admin"] }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: ctx.refresh }) }));
 
 window.matchMedia = ((query: string) => ({
   matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},
@@ -78,5 +84,48 @@ describe("RedactedExport", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Export redacted text" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 404");
+  });
+});
+
+describe("OcrReviewActions", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    ctx.role = "reliability";
+  });
+
+  it("releases a held scan only after the reviewer confirms, with their note", async () => {
+    mocks.releaseHeldDocument.mockResolvedValue({ status: "released", job_id: "job-2" });
+    render(<OcrReviewActions documentId="DOC-9" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Release for extraction" }));
+    expect(mocks.releaseHeldDocument).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Review note"), { target: { value: "Pressure values legible on the original" } });
+    fireEvent.click(screen.getByRole("button", { name: "Release scan" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Released");
+    expect(mocks.releaseHeldDocument).toHaveBeenCalledWith("DOC-9", "Pressure values legible on the original");
+    expect(mocks.rejectHeldDocument).not.toHaveBeenCalled();
+    expect(ctx.refresh).toHaveBeenCalled();
+  });
+
+  it("sends Reject to the reject endpoint and keeps the dialog open on failure", async () => {
+    mocks.rejectHeldDocument.mockRejectedValue(new Error("/documents/DOC-9/ocr-review/reject → HTTP 409"));
+    render(<OcrReviewActions documentId="DOC-9" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reject scan" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Reject scan" }).at(-1)!);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 409");
+    expect(mocks.rejectHeldDocument).toHaveBeenCalledWith("DOC-9", "");
+    expect(mocks.releaseHeldDocument).not.toHaveBeenCalled();
+  });
+
+  it("offers no decision to a role that cannot promote", () => {
+    ctx.role = "engineer";
+    render(<OcrReviewActions documentId="DOC-9" />);
+
+    expect(screen.queryByRole("button", { name: "Release for extraction" })).not.toBeInTheDocument();
+    expect(screen.getByText(/reliability engineer or admin decides/)).toBeInTheDocument();
   });
 });

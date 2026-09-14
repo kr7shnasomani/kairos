@@ -26,6 +26,23 @@ _NIM_CV_BASE = "https://ai.api.nvidia.com/v1/cv"
 # A span the model itself does not trust. Matches the `< 0.7` quarantine threshold in CLAUDE.md so
 # "the model is unsure about this text" and "this knowledge needs a human" mean the same number.
 _LOW_CONFIDENCE_SPAN = 0.7
+# Below this weighted mean the text is unusable as a whole, not merely suspect in places.
+_UNUSABLE_OVERALL = 0.5
+
+
+def ocr_review_reason(result: dict[str, Any]) -> str | None:
+    """Why an OCR result must stop for human review, or None when it may continue (decision D1 = b).
+
+    Gates on *shape*, not only on the mean: a scan whose average passes can still carry one misread
+    value ("18.5 bar" for "16.2 bar"), and that single span is the dangerous failure. So any span the
+    model itself scores under `_LOW_CONFIDENCE_SPAN` holds the document, whatever the overall score.
+    Native text and digital PDFs carry no spans and default to passing.
+    """
+    if result.get("overall_confidence", 0.0) < _UNUSABLE_OVERALL:
+        return "low_ocr_confidence"
+    if result.get("low_confidence_spans", 0) > 0:
+        return "low_confidence_spans"
+    return None
 
 _TEXT_MIMES = ("text/plain", "text/markdown", "text/csv")
 

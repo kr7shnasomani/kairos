@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getHealthDetailed, probeEndpoint, probeModel, type ProbeResult, type ModelProbe } from "@/lib/api";
+import { getHealthDetailed, getOtConnectors, probeEndpoint, probeModel, type OtConnectorRegistry, type ProbeResult, type ModelProbe } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { ADMIN_ROLES } from "@/components/use-role";
 import { PageHeader, StatusBadge } from "@/components/ui";
@@ -48,6 +48,8 @@ const TONE = { healthy: "verified", degraded: "caution", down: "danger" } as con
 // dot identical to a real outage, so a freshly-loaded page looked like four dead providers.
 const DOT = { healthy: "bg-verified", degraded: "bg-caution", down: "bg-danger", idle: "bg-muted" } as const;
 const STORE_RANK: Record<ServiceHealth["status"], number> = { down: 0, degraded: 1, healthy: 2 };
+const CONNECTOR_TONE = { active: "verified", not_configured: "neutral", registered: "info" } as const;
+const CONNECTOR_LABEL: Record<string, string> = { active: "Active", not_configured: "Not configured", registered: "Registered" };
 
 type ProbeRow = (typeof API_GROUPS)[number] & { result?: ProbeResult };
 
@@ -80,6 +82,8 @@ export default function SystemHealthPage() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [stores, setStores] = useState<HealthDetailed | null>(null);
+  // `undefined` = not loaded yet; `null` = the connector service is unreachable (a real state).
+  const [connectors, setConnectors] = useState<OtConnectorRegistry | null | undefined>(undefined);
   const [apis, setApis] = useState<ProbeRow[]>(API_GROUPS);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,12 +118,14 @@ export default function SystemHealthPage() {
     let alive = true;
     const load = async () => {
       setRefreshing(true);
-      const [health, results] = await Promise.all([
+      const [health, results, registry] = await Promise.all([
         getHealthDetailed(),
         Promise.all(API_GROUPS.map((g) => probeEndpoint(g.probe))),
+        getOtConnectors().then((r) => r.data).catch(() => null),
       ]);
       if (!alive) return;
       setStores(health.data);
+      setConnectors(registry);
       setApis(API_GROUPS.map((g, i) => ({ ...g, result: results[i] })));
       setCheckedAt(new Date().toISOString());
       setLoading(false);
@@ -306,6 +312,54 @@ export default function SystemHealthPage() {
           </div>
         </section>
       </div>
+
+      {/* OT historian connectors (Layer 5) — what this deployment can read telemetry from */}
+      <section data-testid="ot-connectors" className="mt-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-label font-bold uppercase tracking-[0.1em] text-muted">OT historian connectors</h2>
+          {connectors && <p className="tabular text-label text-muted">{connectors.active_count} of {connectors.connectors.length} active</p>}
+        </div>
+        {connectors === undefined ? (
+          <Skeleton className="mt-3 h-24 w-full rounded-xl" />
+        ) : connectors === null ? (
+          <p className="mt-3 rounded-xl border border-line bg-surface p-4 text-caption text-danger">
+            The OT connector service is unreachable, so the connector registry is unavailable.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 overflow-x-auto rounded-xl border border-line">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-line bg-surface-2 text-label uppercase tracking-wide text-muted">
+                    <th scope="col" className="px-4 py-2.5 font-semibold">Connector</th>
+                    <th scope="col" className="hidden px-4 py-2.5 font-semibold md:table-cell">Configured by</th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {connectors.connectors.map((c) => (
+                    <tr key={c.name} className="border-b border-line last:border-0">
+                      <td className="px-4 py-3">
+                        <p className="text-body font-medium text-ink">{c.name}</p>
+                        <p className="text-label text-muted">{c.protocol}{c.detail ? ` · ${c.detail}` : ""}</p>
+                      </td>
+                      <td className="hidden px-4 py-3 md:table-cell"><code className="text-caption text-muted">{c.config_var}</code></td>
+                      <td className="px-4 py-3 text-right">
+                        <StatusBadge tone={CONNECTOR_TONE[c.status as keyof typeof CONNECTOR_TONE] ?? "neutral"}>{CONNECTOR_LABEL[c.status] ?? c.status}</StatusBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {connectors.serving_historian.note && (
+              <p className="mt-2 text-label text-muted">
+                {connectors.serving_historian.mock ? "Telemetry is served by the mock historian — " : ""}{connectors.serving_historian.note}
+              </p>
+            )}
+          </>
+        )}
+      </section>
 
       {/* AI models & rate-limited services — opt-in */}
       <section className="mt-8">

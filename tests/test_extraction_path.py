@@ -13,7 +13,7 @@ So: a separate field, and confidence left alone.
 
 import asyncio
 
-from api.services.ocr import OCRService
+from api.services.ocr import OCRService, ocr_review_reason
 
 QUARANTINE_THRESHOLD = 0.7
 
@@ -266,43 +266,28 @@ def test_weighted_confidence_separates_the_corpus_documents():
 # to route a document through the span-shape quarantine gate.
 # =============================================================================
 
-def test_clean_spans_emit_zero_low_confidence_spans():
+def test_the_worst_corpus_scan_is_held_although_its_average_passes():
     """
-    A detection set where every span is above the 0.7 threshold must report
-    low_confidence_spans == 0 so the new gate does not fire.
+    scanned_oem_bulletin_degraded: weighted mean 0.719 (above 0.7), but 4 of 22 spans below 0.7
+    and one at 0.253. The mean alone would let it into the canonical graph — the gate must not.
     """
-    # Simulate OCRService._nim_ocr returning clean spans (no network call needed)
-    spans: list[tuple[str, float]] = [
-        ("SHIFT LOG - PRODUCTION UNIT 2", 0.913),
-        ("Date: 15-Jan-2026", 0.903),
-        ("EQ-101 pump sounded a bit different tonight", 0.895),
-        ("Operator: Rajan Mehta", 0.920),
-    ]
-    _LOW = 0.7
-    weak = [c for _, c in spans if c < _LOW]
-    assert len(weak) == 0, "clean spans must produce zero low-confidence spans"
-    assert min(c for _, c in spans) > _LOW
+    result = {"overall_confidence": 0.719, "low_confidence_spans": 4, "min_span_confidence": 0.253}
+    assert ocr_review_reason(result) == "low_confidence_spans"
 
 
-def test_garbled_scan_emits_positive_low_confidence_spans_and_low_min():
-    """
-    A detection set matching the worst corpus document (scanned_oem_bulletin_degraded)
-    must report low_confidence_spans > 0 and min_span_confidence < 0.7 — the two
-    values the span gate in document_pipeline.run_ocr reads.
-    """
-    spans: list[tuple[str, float]] = [
-        ("FISCHER PUMPS LTD..-SERVICE BULLETIN", 0.843),
-        ("Issue date: 202--01-15 SSperredess none", 0.253),   # garbled
-        ("Distribution: Al operetors of EO-xxx series", 0.402),  # garbled
-        ("Model: EO-xxx series centrifugal pump", 0.612),     # garbled
-        ("Revision A", 0.910),
-    ]
-    _LOW = 0.7
-    weak = [c for _, c in spans if c < _LOW]
-    min_confidence = min(c for _, c in spans)
+def test_a_clean_handwritten_scan_continues():
+    """The corpus's handwritten notes read at ~0.90 with no weak span — review would be pure noise."""
+    result = {"overall_confidence": 0.91, "low_confidence_spans": 0, "min_span_confidence": 0.895}
+    assert ocr_review_reason(result) is None
 
-    assert len(weak) > 0, "garbled scan must have at least one span below 0.7"
-    assert min_confidence < _LOW, "min_span_confidence must be below the gate threshold"
+
+def test_an_unusable_scan_is_held_for_its_mean_first():
+    result = {"overall_confidence": 0.31, "low_confidence_spans": 12, "min_span_confidence": 0.1}
+    assert ocr_review_reason(result) == "low_ocr_confidence"
+
+
+def test_native_text_carries_no_spans_and_is_never_held():
+    assert ocr_review_reason(_extract(b"Pump P-101 seal replaced on 2026-03-04.", "text/plain")) is None
 
 
 def test_ocr_result_envelope_carries_all_span_gate_keys():

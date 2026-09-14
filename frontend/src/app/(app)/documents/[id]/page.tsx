@@ -1,11 +1,12 @@
 // Vault document detail: provenance, version chain, topology link, supersede action.
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDocument } from "@/lib/api";
+import { getDocument, getDocumentStatus, isForbidden, isNotFound } from "@/lib/api";
 import { authorityLabel, relativeTime, triggerLabel } from "@/lib/utils";
 import { AuthorityBadge, SourceChip, StatusBadge, Timeline, type TimelineEvent, PageHeader } from "@/components/ui";
 import { BlastRadiusPanel, SupersedeAction } from "@/components/lazy";
 import { ExtractionPanel } from "./extraction-panel";
+import { OcrReviewActions } from "./ocr-review-actions";
 import { OpenArtifactButton } from "./open-artifact";
 import { RedactedExport } from "./redacted-export";
 import type { VaultDocument } from "@/lib/types";
@@ -40,13 +41,21 @@ function buildVersionChain(old: VaultDocument, newer: VaultDocument): TimelineEv
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { data: d } = await getDocument(id);
+  const res = await getDocument(id).catch((e) => {
+    if (isNotFound(e)) notFound();
+    if (isForbidden(e)) return null;
+    throw e;
+  });
+  if (!res) return null;
+  const { data: d } = res;
   if (!d) notFound();
 
-  // Fetch the superseding doc to build the version chain timeline
-  const supersedingDoc = d.version_chain
-    ? await getDocument(d.version_chain).then(({ data }) => data).catch(() => null)
-    : null;
+  // Superseding doc (version chain) and pipeline status are independent — fetch together.
+  // A status failure hides only the review notice; it never blocks the document itself.
+  const [supersedingDoc, status] = await Promise.all([
+    d.version_chain ? getDocument(d.version_chain).then(({ data }) => data).catch(() => null) : null,
+    getDocumentStatus(d.document_id).then(({ data }) => data).catch(() => null),
+  ]);
 
   const meta: { label: string; value: React.ReactNode }[] = [
     { label: "Type", value: triggerLabel(d.document_type) },
@@ -88,6 +97,27 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           </div>
         ))}
       </div>
+
+      {/* The OCR gate (D1) stopped this document: nothing from it was indexed or linked, so saying
+          so here is the difference between "held for review" and "a document with no facts". */}
+      {status?.stage === "review_required" && (
+        <div data-testid="ocr-review-held" role="status" className="mt-4 rounded-xl border border-[color-mix(in_srgb,var(--caution)_35%,var(--line))] bg-[color-mix(in_srgb,var(--caution)_9%,var(--surface))] p-4">
+          <p className="text-body font-semibold text-caution">Held for OCR review</p>
+          <p className="mt-1 text-caption text-muted">
+            {status.details ?? "The scan's recognised text is not reliable enough to use unreviewed."}
+            {" "}Its text has not been indexed or linked into the knowledge graph, so it contributes no facts until a person reviews the scan.
+          </p>
+          <OcrReviewActions documentId={d.document_id} />
+        </div>
+      )}
+      {status?.stage === "rejected" && (
+        <div data-testid="ocr-review-rejected" className="mt-4 rounded-xl border border-line bg-surface p-4">
+          <p className="text-body font-semibold text-ink">Rejected at OCR review</p>
+          <p className="mt-1 text-caption text-muted">
+            {status.details ?? "A reviewer judged the scan unreadable."} Nothing is extracted from this scan; the original stays in the vault.
+          </p>
+        </div>
+      )}
 
       {d.document_type === "pid_drawing" && (
         <div className="mt-4 flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-3">

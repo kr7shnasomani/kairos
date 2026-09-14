@@ -184,9 +184,11 @@ async def run_ocr(
     mime_type: str,
     job_id: str,
     document_type: str = "unknown",
+    ocr_reviewed_by: str | None = None,
 ) -> dict[str, Any]:
     """
     Downloads the document from Storage and runs the OCR pipeline.
+    - ocr_reviewed_by   → a person released this scan from the OCR gate; the gate is overridden and logged
     - pid_drawing       → skips OCR; extracts topology via vision model (fixture fallback); routes all elements to quarantine
     - Confidence >= 0.5 → advances stage to ner_running
     - Confidence < 0.5  → sets stage to review_required, publishes to kairos:events:review_required
@@ -325,9 +327,19 @@ async def run_ocr(
     overall_confidence = result.get("overall_confidence", 0.0)
     low_confidence_spans = result.get("low_confidence_spans", 0)
     min_span_confidence = result.get("min_span_confidence", 1.0)
-    requires_review = overall_confidence < 0.5
+    from api.services.ocr import ocr_review_reason
 
-    if requires_review:
+    review_reason = ocr_review_reason(result)
+    if review_reason and ocr_reviewed_by:
+        # POST /documents/{id}/ocr-review/release: a person looked at the scan and accepted it. Human
+        # authority overrides the gate; the override is logged and audited, never silent.
+        log.warning("activity.ocr_gate_released", document_id=document_id, reason=review_reason,
+                    reviewed_by=ocr_reviewed_by, overall_confidence=overall_confidence,
+                    low_confidence_spans=low_confidence_spans)
+        review_reason = None
+    requires_review = review_reason is not None
+
+    if review_reason == "low_ocr_confidence":
         # Route to human review — stop the pipeline here
         await asyncio.to_thread(
             lambda: supabase.table("extraction_jobs").update({
@@ -361,13 +373,12 @@ async def run_ocr(
             confidence=overall_confidence,
         )
 
-    elif low_confidence_spans > 0:
+    elif review_reason == "low_confidence_spans":
         # Span-shape gate (D1 = option b): the average-confidence gate above is blind to
         # partial failures — a scan where most spans are fine but one reads "18.5 bar"
         # instead of "16.2 bar" can pass at 0.719. A single garbled span is the dangerous
         # failure mode for safety-critical facts, so any span below _LOW_CONFIDENCE_SPAN
         # quarantines the document for human review regardless of the overall mean.
-        requires_review = True
         await asyncio.to_thread(
             lambda: supabase.table("extraction_jobs").update({
                 "pipeline_stage": "review_required",
@@ -1082,7 +1093,7 @@ class DocumentIngestionWorkflow:
         # ── Step 2: OCR ─────────────────────────────────────────────────────
         ocr_result = await workflow.execute_activity(
             run_ocr,
-            args=[document_id, vault_path, mime_type, job_id, document_type],
+            args=[document_id, vault_path, mime_type, job_id, document_type, params.get("ocr_reviewed_by")],
             start_to_close_timeout=timedelta(minutes=10),
             retry_policy=DEFAULT_RETRY,
         )

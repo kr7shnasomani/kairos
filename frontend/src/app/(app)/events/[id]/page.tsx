@@ -91,6 +91,19 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 </Link>
               )}
 
+              {/* A work order is where tacit knowledge gets captured (Layer 6): the micro-interview
+                  and the voice note both key on its id, and nothing else in the app linked to them. */}
+              {typeof event.payload.work_order_id === "string" && event.payload.work_order_id && (
+                <section data-testid="work-order-capture" className="rounded-xl border border-line bg-surface px-4 py-4 shadow-sm sm:px-5">
+                  <h2 className="text-sm font-semibold text-ink">Capture knowledge from <span className="tabular">{event.payload.work_order_id}</span></h2>
+                  <p className="mt-0.5 text-caption text-muted">Answer the micro-interview or record a voice note. Both go to quarantine for engineering review.</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={`/field/elicitation/${encodeURIComponent(event.payload.work_order_id)}`} className="inline-flex h-9 items-center rounded-lg bg-accent px-3.5 text-body font-semibold text-on-accent hover:brightness-105">Knowledge capture</Link>
+                    <Link href={`/field/voice/${encodeURIComponent(event.payload.work_order_id)}`} className="inline-flex h-9 items-center rounded-lg border border-line px-3.5 text-body font-semibold text-ink hover:bg-surface-2">Voice note</Link>
+                  </div>
+                </section>
+              )}
+
               <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
                 <div className="border-b border-line px-4 py-4 sm:px-5">
                   <h2 className="text-sm font-semibold text-ink">Event payload</h2>

@@ -44,6 +44,20 @@ describe("AssetsPage", () => {
     expect(screen.getByTestId("assets-summary")).toHaveTextContent("Rotating equipment");
   });
 
+  it("shows open work orders and compliance gaps per asset, muting zeroes", async () => {
+    respond([asset(1, { asset_id: "P-101", open_work_orders_count: 3, compliance_gap_count: 2 }), asset(2, { asset_id: "V-247" })]);
+
+    render(await AssetsPage());
+
+    expect(screen.getByRole("columnheader", { name: /Open WOs/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Compliance gaps/ })).toBeInTheDocument();
+    const row = screen.getByText("P-101").closest("tr")!;
+    expect(row).toHaveTextContent("3");
+    expect([...row.querySelectorAll("td")].at(-1)).toHaveClass("text-right");
+    expect(row.querySelector(".text-danger")).toHaveTextContent("2");
+    expect(screen.getByText("V-247").closest("tr")!.querySelector(".text-danger")).toBeNull();
+  });
+
   it("filters the registry and routes row clicks to the asset detail", async () => {
     respond([
       asset(1, { asset_id: "P-101", name: "Feed pump", criticality: "safety_critical" }),

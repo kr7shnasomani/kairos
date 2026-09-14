@@ -116,7 +116,7 @@ class DocumentStatus(BaseModel):
     document_id: str
     pipeline_stage: str = Field(
         ...,
-        description="queued, ocr_running, ner_running, graph_linking, vector_indexing, review_required, complete, failed"
+        description="queued, ocr_running, ner_running, graph_linking, vector_indexing, review_required, rejected, complete, failed"
     )
     progress_percent: int = Field(..., ge=0, le=100)
     ocr_confidence: float | None = None

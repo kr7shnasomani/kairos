@@ -255,7 +255,10 @@ Register a new canonical asset.
 Key fields:
 - `asset_id` — canonical identifier (tag number). Must be globally unique.
 - `criticality` — `safety_critical | critical | non_critical`
-- `confirmed_by_user_id` — **mandatory**. AI-inferred identities are rejected.
+- `confirmed_by_user_id` — **mandatory** (AI-inferred identities are rejected), but **not trusted**: the
+  confirmer recorded in `identity_confirmed_by` and `audit_log.performed_by` is the **authenticated caller**.
+  The body value is used only if the session carries no user id. Trusting it let a caller attribute a
+  confirmation to someone else.
 - `eam_source` — `SAP_PM | IBM_Maximo | other`
 
 **Response `201`:**
@@ -860,6 +863,29 @@ Unknown element ids are reported, never silently ignored. `400` if no decision a
 
 `canonical_ready` turns true only when **every** safety-critical element (isolation boundaries,
 instrumentation loops) is confirmed and none are disputed.
+
+---
+
+### `POST /documents/{document_id}/ocr-review/release` · `POST /documents/{document_id}/ocr-review/reject`
+
+The human decision on a document the OCR confidence gate held (`pipeline_stage: review_required` — see
+D1: a mean below 0.5 **or any span below 0.7** holds the scan). The reviewer opens the original scan first.
+
+**Auth required:** Yes · **Role:** `reliability` or `admin` (the same authority that promotes quarantine)
+
+**Body (optional):** `{"note": "Pressure values legible on the original"}` — max 1000 chars, recorded in the audit trail.
+
+- **release** re-runs `DocumentIngestionWorkflow` from the vault artifact with `ocr_reviewed_by` set, so
+  `run_ocr` logs the gate as a human override (`activity.ocr_gate_released`) and continues. What is read still
+  enters the graph as `unverified` edges and low-confidence entities still quarantine — releasing the scan does
+  not verify its content. A new `extraction_jobs` row is created; the held one is kept.
+  **`200`** `{status: "released", document_id, job_id}` · **`503`** if the workflow cannot start (the document stays held)
+- **reject** closes the held job as `pipeline_stage: rejected` with the note. The artifact is never deleted;
+  a legible rescan is ingested as a new document.
+  **`200`** `{status: "rejected", document_id}`
+
+Both write an `audit_log` row (`ocr_review_released` / `ocr_review_rejected`) with the gate reason.
+**`409`** if the document's latest job is not held · **`403`** for any other role.
 
 ---
 

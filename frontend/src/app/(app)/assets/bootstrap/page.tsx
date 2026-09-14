@@ -13,16 +13,16 @@ import {
 } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { useFetch } from "@/lib/use-fetch";
-import { ADMIN_ROLES } from "@/components/use-role";
 import { Button, StatusBadge, EmptyState, PageHeader } from "@/components/ui";
 import { PageSkeleton } from "@/components/skeleton";
+import { MDM_ROLES } from "../identity-action";
 
 // Both queues are live: provisional records are `assets` rows with no confirmed identity, and alias
 // candidates are the extraction pipeline's unconfirmed `asset_alias_map` proposals. This page used to
 // render three hardcoded provisional assets and two aliases whose Confirm/Reject changed nothing.
 // Registering new assets lives on its own page, /assets/register.
 export default function BootstrapPage() {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canConfirm, setCanConfirm] = useState(false);
   const [ready, setReady] = useState(false);
   const [me, setMe] = useState<string>("");
   const [reload, setReload] = useState(0);
@@ -33,7 +33,7 @@ export default function BootstrapPage() {
 
   useEffect(() => {
     getMe().then((u) => {
-      setIsAdmin(!!u && ADMIN_ROLES.includes(u.role));
+      setCanConfirm(!!u && MDM_ROLES.includes(u.role));
       if (u) setMe(u.user_id);
       setReady(true);
     });
@@ -64,7 +64,8 @@ export default function BootstrapPage() {
           criticality: p.criticality,
           site_id: p.site_id,
           facility_id: p.facility_id,
-          confirmed_by_user_id: me || "admin",
+          // The API records the confirmer from the session; this satisfies the required field.
+          confirmed_by_user_id: me,
         }),
       "Identity confirmation was not saved. Check the connection and try again.",
     );
@@ -114,13 +115,13 @@ export default function BootstrapPage() {
         </div>
       </div>
 
-      {!isAdmin && (
+      {!canConfirm && (
         <div className="mt-6 rounded-xl border border-line bg-surface p-5 text-body text-muted">
-          Identity confirmation requires the <span className="font-semibold text-ink">admin</span> role.
+          Identity confirmation requires the <span className="font-semibold text-ink">engineer</span> or <span className="font-semibold text-ink">admin</span> role.
         </div>
       )}
 
-      {isAdmin && (
+      {canConfirm && (
         <div className="mt-6 space-y-6">
           {error && <p role="alert" className="rounded-lg border border-line px-4 py-3 text-body text-danger">{error}</p>}
 
@@ -162,7 +163,7 @@ export default function BootstrapPage() {
                     <p className="truncate font-medium text-ink">{p.equipment_class.replaceAll("_", " ")}</p>
                     <p className="mt-0.5 truncate">Source · {(p.eam_source || "manual").replaceAll("_", " ")}</p>
                   </div>
-                  <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id} onClick={() => confirm(p)}>
+                  <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id || !me} onClick={() => confirm(p)}>
                     {busy === p.asset_id ? "Confirming…" : "Confirm identity"}
                   </Button>
                 </div>

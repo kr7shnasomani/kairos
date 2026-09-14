@@ -623,7 +623,7 @@ export interface GovernorEventState {
 // --- Document pipeline status (GET /documents/{id}/status) ---
 export type DocumentPipelineStage =
   | "queued" | "ocr" | "ner" | "graph_linking" | "indexing"
-  | "complete" | "review_required" | "failed";
+  | "complete" | "review_required" | "rejected" | "failed";
 
 export interface DocumentStatus {
   document_id: string;

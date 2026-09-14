@@ -89,11 +89,11 @@ frontend/
 | `/briefs` | Brief inbox | Live |
 | `/briefs/[id]` | Brief detail + ack + feedback | Live |
 | `/copilot` | Knowledge Q&A chat + answer rating + pending-MoC banner | Live |
-| `/assets` | Asset list | Live |
+| `/assets` | Asset list — search, class/criticality filters, open work orders + compliance gaps per asset | Live |
 | `/assets/[id]` | Asset detail + aliases + knowledge + hierarchy + asset-scoped search | Live |
 | `/rca` | RCA pack generator | Live |
 | `/compliance` | Compliance gaps + audit readiness | Live |
-| `/governance` | Hub → all 6 governance surfaces | Live (hub page) |
+| `/governance` | Hub → all 8 governance surfaces | Live (hub page) |
 | `/governance/conflicts` | Conflict list + resolve | Live |
 | `/governance/conflicts/[id]` | Conflict detail — both sources, authority, SLA, blast radius, resolve / MoC | Live |
 | `/governance/quarantine` | Quarantine list + promote/dispute/request-info | Live (role-gated) |
@@ -107,24 +107,24 @@ frontend/
 | `/compliance/audit-pack` | Audit-evidence pack by clause + human sign-off | Live |
 | `/compliance/nonconformance` | Non-conformances (conflicts + failed inspections + disputes) | Composed from existing endpoints |
 | `/documents` | Document registry | Live |
-| `/documents/[id]` | Document detail + supersede chain + extraction results + PII-redacted export | Live |
+| `/documents/[id]` | Document detail + supersede chain + extraction results + PII-redacted export; a document held by the OCR gate says so, and reliability/admin release or reject it there | Live |
 | `/documents/[id]/topology` | P&ID topology graph (React Flow) | Live |
 | `/system-benchmarks` | **Admin.** Measured evidence: model-gate F1 trend, per-entity-type F1, compliance posture, datastore health | Live |
 | `/documents/ingest` | Upload → pipeline-status timeline | Live (role-gated engineer/admin) |
 | `/documents/compare` | Side-by-side version / metadata diff | Live |
 | `/assets/register` | Register one asset, or bulk-import the EAM golden record as CSV (`POST /assets/`, `/assets/bulk`) | Live (engineer/admin) |
-| `/assets/bootstrap` | MDM asset identity confirmation: provisional assets + unresolved tag aliases | Live (admin-gated) |
+| `/assets/bootstrap` | MDM asset identity confirmation: provisional assets + unresolved tag aliases | Live (engineer/admin — mirrors the API) |
 | `/projects` | Engineering + procurement registry by equipment class | Composed from documents+assets+events |
 | `/graph` | Temporal knowledge graph (React Flow) | Live |
 | `/audit` | Audit trail — entity/action log | Live |
 | `/events` | Operational event surfaces + demo emit forms | Live |
-| `/events/[id]` | Event detail + ack + correlation | Live |
+| `/events/[id]` | Event detail + ack + correlation; work-order events link to knowledge capture and a voice note | Live |
 | `/offboarding` · `/offboarding/[sessionId]` | Retiring-expert knowledge-transfer sessions | Live (role-gated engineer/admin) |
 | `/management` | Plant overview — KPIs, alerts, system health | Live |
 | `/management/cross-site` | Cross-site pattern alerts (linked from the overview header) | Honest "no data in single-site deployment" state — **no fixture** (see §16) |
 | `/management/plant-state` | Plant operating-state control | Live (admin-gated write) |
 | `/management/coverage` | Knowledge-coverage matrix (`GET /assets/coverage`) | Live |
-| `/system-health` | Live probes: 11 API surfaces + 5 datastores + opt-in model probes | Live (**admin-only**) |
+| `/system-health` | Live probes: 11 API surfaces + 5 datastores + OT historian connector registry + opt-in model probes | Live (**admin-only**) |
 | `/system-information` | Static architecture explainer (pipeline, 13 layers, stack) | Live (all roles) |
 | `/settings` | System settings | Live |
 | `/field/deviation` | Physical deviation flag (freezes affected asset briefs) | Live (mobile field capture) |
@@ -277,6 +277,8 @@ export const API_BASE =
 | `getRedactedDocument(id)` | `GET /documents/{id}/redacted` |
 | `getAssetHierarchy(id)` | `GET /assets/{id}/hierarchy` |
 | `searchAsset(id, q)` | `GET /search/assets/{id}?q=` |
+| `releaseHeldDocument(id, note)` · `rejectHeldDocument(id, note)` | `POST /documents/{id}/ocr-review/release` · `/reject` |
+| `getOtConnectors()` | `GET /health/connectors` |
 | `promoteQuarantine(id, body)` | `POST /governance/quarantine/{id}/promote` |
 | `disputeQuarantine(id, reason)` | `POST /governance/quarantine/{id}/dispute` |
 | `getDocuments()` | `GET /documents/?limit=50` |
@@ -625,7 +627,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **256 passed / 75 files — fully green** (vitest, 2026-09-14). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run`, or `docker exec kairos-frontend npx vitest run --maxWorkers=2` — an unbounded `docker exec` run OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
+| Test suite | **267 passed / 75 files — fully green** (vitest, 2026-09-14). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run`, or `docker exec kairos-frontend npx vitest run --maxWorkers=2` — an unbounded `docker exec` run OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---
@@ -651,7 +653,7 @@ These are deliberate decisions, not open gaps — the UI handles each honestly t
 | Item | Decision |
 |------|----------|
 | `/management/cross-site` live data | Cross-site pattern aggregation is a **roadmap** feature needing multi-site data (the architecture defines layers 0–12; the old "Layer 13" label was wrong and was corrected in the UI too). This is a single-site deployment, so the page shows an honest **"No cross-site data in this deployment"** empty state — no fabricated alerts. |
-| SSR bearer token | Server components use the backend **dev-bypass** on purpose (fast, demo-friendly). Wire `getToken()` through SSR only if a strict-auth deployment needs it. |
+| SSR bearer token | Login mirrors the access token into the `kairos-access` cookie in every mode, and every read sends the signed-in user's token (browser: storage; server components: the cookie). Strict mode only decides whether a 401 forces a re-login. The backend dev bypass applies only to a request with no session at all — it used to answer every SSR read, which showed a field worker the dev user's inbox and 404'd their own briefs. |
 | Offline app-shell | **Prod-only by design** — the service worker is disabled in dev (it fought HMR). The IndexedDB write-queue (`idb.ts`) works in dev. |
 
 **Browser verification:** ✅ complete. Every desktop route + all field routes verified against the golden

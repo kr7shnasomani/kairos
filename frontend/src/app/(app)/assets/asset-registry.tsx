@@ -23,7 +23,7 @@ const CRIT_RANK: Record<string, number> = { safety_critical: 0, high: 0, critica
 
 const COLUMNS: TableColumn<AssetRow>[] = [
   { key: "asset_id", label: "Asset", sortable: true, render: (r) => <span className="tabular whitespace-nowrap font-semibold text-link">{r.asset_id}</span> },
-  { key: "name", label: "Name", sortable: true, className: "w-[38%]", render: (r) => <span className="block truncate font-medium text-ink">{r.name}</span> },
+  { key: "name", label: "Name", sortable: true, className: "w-[30%]", render: (r) => <span className="block truncate font-medium text-ink">{r.name}</span> },
   { key: "equipment_class", label: "Equipment class", sortable: true, render: (r) => <span className="block truncate text-caption text-muted">{label(r.equipment_class)}</span> },
   {
     key: "criticality", label: "Criticality", sortValue: (r) => CRIT_RANK[r.criticality] ?? 9,
@@ -36,6 +36,16 @@ const COLUMNS: TableColumn<AssetRow>[] = [
         </span>
       );
     },
+  },
+  // Issue counts from `GET /assets/` (D6). Zero stays muted so the rows that need attention stand
+  // out; a gap is a compliance finding, so it takes the danger tone rather than the accent.
+  {
+    key: "open_work_orders_count", label: "Open WOs", align: "right", sortable: true,
+    render: (r) => <span className={`tabular ${r.open_work_orders_count ? "font-semibold text-ink" : "text-muted"}`}>{r.open_work_orders_count}</span>,
+  },
+  {
+    key: "compliance_gap_count", label: "Compliance gaps", align: "right", sortable: true,
+    render: (r) => <span className={`tabular ${r.compliance_gap_count ? "font-semibold text-danger" : "text-muted"}`}>{r.compliance_gap_count}</span>,
   },
 ];
 

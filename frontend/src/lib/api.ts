@@ -94,25 +94,35 @@ export function storeSession(accessToken: string, refreshToken?: string): void {
     localStorage.setItem(TOKEN_KEY, accessToken);
     if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
   } catch {
-    // Storage can be disabled; strict mode retains the short-lived cookie.
+    // Storage can be disabled; the short-lived cookie still carries the session.
   }
-  if (isStrictAuth()) {
-    document.cookie = `${ACCESS_COOKIE}=${encodeURIComponent(accessToken)}; Path=/; SameSite=Lax; Max-Age=${accessTokenMaxAge(accessToken)}${location.protocol === "https:" ? "; Secure" : ""}`;
-  }
+  writeAccessCookie(accessToken);
 }
 
-/** Client-side bearer token (set at login). Server reads use the dev-mode bypass. */
+// Mirrors the access token into a cookie so server components can read as the signed-in user.
+// Written in every mode, not only strict: without it, SSR reads fell back to the backend's dev
+// mock user, so a field worker's own brief 404'd and their inbox showed someone else's.
+function writeAccessCookie(accessToken: string): void {
+  document.cookie = `${ACCESS_COOKIE}=${encodeURIComponent(accessToken)}; Path=/; SameSite=Lax; Max-Age=${accessTokenMaxAge(accessToken)}${location.protocol === "https:" ? "; Secure" : ""}`;
+}
+
+/** Client-side bearer token (set at login). */
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem(TOKEN_KEY);
+    // Sessions created before the cookie mirror existed get it on first use, not only at next login.
+    if (token && !document.cookie.includes(`${ACCESS_COOKIE}=`)) writeAccessCookie(token);
+    return token;
   } catch {
     return null;
   }
 }
 
+/** The signed-in user's token for a read — from storage in the browser, the cookie mirror on the
+ *  server. Sent whenever it exists; strict mode only decides whether a 401 forces a re-login.
+ *  With no session at all, the request goes out bare and the backend's dev bypass applies. */
 async function getStrictReadToken(): Promise<string | null> {
-  if (!isStrictAuth()) return null;
   if (typeof window !== "undefined") return getToken();
   const { cookies } = await import("next/headers");
   return (await cookies()).get(ACCESS_COOKIE)?.value ?? null;
@@ -1239,6 +1249,50 @@ export async function getGovernorState(userId: string): Promise<Fetched<Governor
 // isolation_boundaries, instrumentation_loops) with no explicit edges. Flatten into the
 // flat {nodes, edges} the viewer expects; synthesise edges from boundary→isolation refs.
 const EQUIP_TYPE_MAP: Record<string, string> = { pump: "Pump", vessel: "Vessel" };
+
+export interface OtConnector {
+  name: string;
+  protocol: string;
+  status: "active" | "not_configured" | "registered" | string;
+  config_var: string;
+  configured: boolean;
+  detail: string;
+}
+
+export interface OtConnectorRegistry {
+  connectors: OtConnector[];
+  active_count: number;
+  serving_historian: { mock: boolean; note: string };
+}
+
+/** Layer 5 historian connector registry. Throws on 503 — an unreachable connector service is not
+ *  an empty registry. */
+/** True for a read the API refused on role. A server-rendered page for a role-gated route renders
+ *  nothing on this: the app shell is already redirecting that role away, so an error screen would
+ *  only flash before the redirect. */
+export function isForbidden(e: unknown): boolean {
+  return e instanceof Error && e.message.endsWith("HTTP 403");
+}
+
+/** True for a read of a record that does not exist — render the not-found page, not the error screen. */
+export function isNotFound(e: unknown): boolean {
+  return e instanceof Error && e.message.endsWith("HTTP 404");
+}
+
+/** Reviewer decision on a document held by the OCR gate. Release re-runs extraction; reject closes the
+ *  job. Both are reliability/admin and write an audit row. */
+export function releaseHeldDocument(documentId: string, note?: string): Promise<{ status: string; job_id: string }> {
+  return postJson(`/documents/${encodeURIComponent(documentId)}/ocr-review/release`, { note: note || null });
+}
+
+export function rejectHeldDocument(documentId: string, note?: string): Promise<{ status: string }> {
+  return postJson(`/documents/${encodeURIComponent(documentId)}/ocr-review/reject`, { note: note || null });
+}
+
+export async function getOtConnectors(): Promise<Fetched<OtConnectorRegistry>> {
+  const data = await getJson<OtConnectorRegistry>("/health/connectors", 8000);
+  return { data, source: "live" };
+}
 
 // --- Governance reports, document extraction/export, asset hierarchy & scoped search ---
 

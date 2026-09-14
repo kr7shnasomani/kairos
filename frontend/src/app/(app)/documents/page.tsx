@@ -1,12 +1,14 @@
 // Vault document list: every ingested source, active or superseded.
 import Link from "next/link";
-import { getDocuments } from "@/lib/api";
+import { getDocuments, isForbidden } from "@/lib/api";
 import { EmptyState, PageHeader } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 import { DocumentsTable } from "./_components/documents-table";
 
 export default async function DocumentsPage() {
-  const { data } = await getDocuments();
+  const res = await getDocuments().catch((e) => { if (isForbidden(e)) return null; throw e; });
+  if (!res) return null;
+  const { data } = res;
   const items = data.items ?? [];
   const activeCount = items.filter((d) => d.status === "active").length;
 

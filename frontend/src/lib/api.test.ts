@@ -1,5 +1,51 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Regression: outside strict mode reads went out with no token, so the backend answered as its dev
+// mock user — a field worker saw that user's inbox and their own brief 404'd.
+describe("reads outside strict mode", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.NEXT_PUBLIC_AUTH_STRICT;
+    localStorage.clear();
+    document.cookie = "kairos-access=; Path=/; Max-Age=0";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("still sends the signed-in user's token", async () => {
+    localStorage.setItem("kairos-token", "field-token");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ briefs: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getBriefs } = await import("./api");
+    await getBriefs();
+
+    expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer field-token" }),
+    }));
+  });
+
+  it("mirrors the token into the cookie server components read", async () => {
+    const { storeSession } = await import("./api");
+    storeSession("field-token");
+
+    expect(document.cookie).toContain("kairos-access=field-token");
+  });
+
+  it("sends no Authorization header when nobody is signed in", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ briefs: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getBriefs } = await import("./api");
+    await getBriefs();
+
+    expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty("Authorization");
+  });
+});
+
 describe("strict-auth reads", () => {
   beforeEach(() => {
     vi.resetModules();

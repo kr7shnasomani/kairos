@@ -13,11 +13,11 @@
 
 ## Current State
 
-The frontend is a Next.js 16 / React 19 / Tailwind v4 app (`frontend/`) with **all 36 plan tasks implemented** (Tasks 1–36, including 8b, 20b, 20c) plus the Task-31 projects registry, and wired to the backend behind a fixture-fallback pattern. Against the full Layer 12 architectural vision it now scores ~95/100. All routes are TypeScript-clean (`npx tsc --noEmit`), ESLint-clean (0 errors), and `next build` passes.
+The frontend is a Next.js 16 / React 19 / Tailwind v4 app (`frontend/`) with **all 36 plan tasks implemented** (Tasks 1–36, including 8b, 20b, 20c) plus the Task-31 projects registry, and wired live to the backend — fixture fallbacks were removed; fetchers throw and the UI shows real data, a skeleton, or error+retry. Against the full Layer 12 architectural vision it now scores ~95/100. All routes are TypeScript-clean (`npx tsc --noEmit`), ESLint-clean (0 errors), and `next build` passes.
 
-**Browser verification is COMPLETE** (2026-07-11). Every desktop route was verified against the golden dataset with admin/engineer sessions, and all field routes (8–12) with a real `field_worker` session at mobile width (FieldBottomTabs confirmed). Seven live-data crashes were found and fixed during the sweep — all frontend-type-vs-backend-contract mismatches (`compliance/dashboard.total_gaps`, SLA report, circuit breaker, model-gate validation corpus, blast radius, P&ID topology, offboarding list) — plus a production-only service-worker refresh-loop fix and a new `/field/voice` index page (the "Voice" bottom tab was a dead link). Details in `AGENTS.md` "Known Pitfalls" and `docs/FRONTEND.md` §6.
+**Browser verification is COMPLETE** (2026-07-11). Every desktop route was verified against the golden dataset with admin/engineer sessions, and all field routes (8–12) with a real `field_worker` session at mobile width (the bottom tab bar was later removed — mobile navigates via the hamburger sidebar). Seven live-data crashes were found and fixed during the sweep — all frontend-type-vs-backend-contract mismatches (`compliance/dashboard.total_gaps`, SLA report, circuit breaker, model-gate validation corpus, blast radius, P&ID topology, offboarding list) — plus a production-only service-worker refresh-loop fix and a new `/field/voice` index page (the "Voice" bottom tab was a dead link). Details in `AGENTS.md` "Known Pitfalls" and `docs/FRONTEND.md` §6.
 
-**Built (live + fixture fallback):** login, briefs inbox + detail (ack/feedback/PTW dual-sign), copilot (phase-gated + voice), assets list + detail + bootstrap + MDM, RCA, compliance cockpit + audit-pack + non-conformance, governance conflicts + quarantine + MoC + SLA + circuit-breaker + model-gate, documents list + detail + ingestion + comparison + topology (P&ID), knowledge graph (React Flow), time-travel timeline, blast-radius panel, annotation panel, elicitation + offboarding, voice capture, deviation flag, offline shell + sync queue, audit trail, management overview + cross-site + plant-state, events list + detail, audit trail.
+**Built (live-only):** login, briefs inbox + detail (ack/feedback/PTW dual-sign), copilot (phase-gated + voice), assets list + detail + bootstrap + MDM, RCA, compliance cockpit + audit-pack + non-conformance, governance conflicts + quarantine + MoC + SLA + circuit-breaker + model-gate, documents list + detail + ingestion + comparison + topology (P&ID), knowledge graph (React Flow), time-travel timeline, blast-radius panel, annotation panel, elicitation + offboarding, voice capture, deviation flag, offline shell + sync queue, audit trail, management overview + cross-site + plant-state, events list + detail, audit trail.
 
 **Reusable foundation already in place — build on it, never duplicate:**
 - `src/lib/api.ts` — SSR-aware `API_BASE`, `getJson`/`postJson`, live→fixture fetchers returning `{ data, source }`.
@@ -53,11 +53,11 @@ The frontend is a Next.js 16 / React 19 / Tailwind v4 app (`frontend/`) with **a
 
 | Layer 12 persona | Routes | Task group |
 |---|---|---|
-| Field / point-of-action | `/briefs`, `/briefs/[id]`, `/elicitation/*`, `/field/*`, voice, offline | B |
+| Field / point-of-action | `/briefs`, `/briefs/[id]`, `/field/elicitation/[workOrderId]`, `/field/*`, voice, offline | B |
 | Copilot (all users) | `/copilot`, inline annotation | C |
 | Engineer & reliability desktop | `/assets/[id]`, `/assets/bootstrap`, `/graph`, `/rca`, `/documents/[id]`, `/documents/ingest`, `/offboarding`, `/governance/*`, `/audit` | D |
 | Quality & compliance cockpit | `/compliance`, `/compliance/audit-pack`, `/compliance/nonconformance` | E |
-| Governance operations | `/governance/moc`, `/governance/sla`, `/governance/circuit-breaker`, `/governance/model-gate` | F |
+| Governance operations | `/governance/moc`, `/governance/sla`, `/governance/timestamp-drift`, `/governance/push-volume-gate`, `/governance/circuit-breaker`, `/governance/model-gate` | F |
 | Project & procurement | `/projects`, `/documents` (registry mode) | G |
 | Management & cross-functional | `/management`, `/management/cross-site`, `/management/plant-state` | H |
 | Operational events | `/events/*` | I |
@@ -623,7 +623,7 @@ This is the largest gap and the architectural heart of KAIROS: knowledge deliver
 | Offline (Task 11) | App shell + recent briefs/assets + write queue | Full corpus offline, background differential sync |
 | P&ID topology (Task 17) | Renders topology JSON from the cloud vision model (Path B); demo-fixture fallback flagged by `topology_source` | Path A: custom YOLOv9+LayoutLMv3 (local GPU) + in-canvas element sign-off |
 | MoC (Task 27) | Manual approval stand-in | Signed MoC webhook round-trip |
-| Cross-site (Task 33) | Mock advisories + redaction note | Live control-plane cross-site pattern feed |
+| Cross-site (Task 33) | Honest "no data in a single-site deployment" state — no mock advisories | Live control-plane cross-site pattern feed |
 | Audit-pack export (Task 25) | Browser print-to-PDF | Server-generated, signed evidence package |
 | Document compare (Task 20) | Metadata + extracted-fact diff | Full visual PDF diff |
 | Voice search (Task 12) | Web Speech API / record→transcribe | Always-on hands-free field querying |
@@ -632,8 +632,8 @@ This is the largest gap and the architectural heart of KAIROS: knowledge deliver
 | MDM bootstrap (Task 20c) | Admin confirmation list | Full MDM editor + federated live-query (PuppyGraph) |
 | Quarantine "request more info" (Task 22) | Reviewer note + elicitation re-trigger | Dedicated `request_info` backend action |
 | Outcome-attribution (Task 32) | Summary counts from audit log | Per-recommendation attribution drill-down (Layer 10 analytics) |
-| Timestamp-drift review (Task 23) | Filtered audit view | Accept/adjust normalization workflow |
-| Instrumentation coverage (Task 15) | Read-only indicator from `/ot/coverage` | Full coverage-map management surface |
+| Timestamp-drift review (Task 23) | Dedicated report page `/governance/timestamp-drift` (report-only) | Accept/adjust normalization workflow |
+| Instrumentation coverage (Task 15) | Read-only, from verified topology via `GET /assets/{id}/ot-coverage` (the Go `/ot/coverage` route was deleted) | Full coverage-map management surface |
 
 Every cut above is an explicit decision matching the architecture's own "what to mock" guidance and single-site MVP scope — not a silent omission. Each names its upgrade path.
 

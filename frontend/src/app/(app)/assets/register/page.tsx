@@ -11,7 +11,7 @@ import { getMe } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 import { Button, PageHeader } from "@/components/ui";
 import { PageSkeleton } from "@/components/skeleton";
-import { REGISTER_ROLES } from "../identity-action";
+import { MDM_ROLES } from "../identity-action";
 
 type Criticality = AssetImportRow["criticality"];
 
@@ -255,7 +255,7 @@ export default function RegisterAssetPage() {
   }, []);
 
   if (!ready) return <PageSkeleton />;
-  const allowed = role !== null && REGISTER_ROLES.includes(role);
+  const allowed = role !== null && MDM_ROLES.includes(role);
 
   return (
     <div data-testid="register-workspace" className="mx-auto max-w-5xl">

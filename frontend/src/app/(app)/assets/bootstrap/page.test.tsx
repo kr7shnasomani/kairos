@@ -95,4 +95,28 @@ describe("BootstrapPage", () => {
     await waitFor(() => expect(mocks.rejectAlias).toHaveBeenCalledWith("EQ-101", "FSL-2240A"));
     expect(mocks.confirmAlias).not.toHaveBeenCalled();
   });
+
+  // The API allows engineers to confirm identities and aliases; the page used to be admin-only.
+  it("lets an engineer confirm, as the API does", async () => {
+    mocks.getMe.mockResolvedValue({ user_id: "eng-7", role: "engineer", site_id: "SITE-A" });
+    mocks.getProvisionalAssets.mockImplementation(() => live([provisional]));
+    mocks.getAliasCandidates.mockImplementation(() => live([]));
+    mocks.confirmAssetIdentity.mockResolvedValue({});
+
+    render(<BootstrapPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm identity" }));
+    await waitFor(() => expect(mocks.confirmAssetIdentity).toHaveBeenCalledWith(expect.objectContaining({ confirmed_by_user_id: "eng-7" })));
+  });
+
+  it("tells a role the API would refuse that it cannot confirm, instead of offering the queues", async () => {
+    mocks.getMe.mockResolvedValue({ user_id: "rel-1", role: "reliability", site_id: "SITE-A" });
+    mocks.getProvisionalAssets.mockImplementation(() => live([provisional]));
+    mocks.getAliasCandidates.mockImplementation(() => live([alias]));
+
+    render(<BootstrapPage />);
+
+    expect(await screen.findByText(/requires the/)).toHaveTextContent("requires the engineer or admin role");
+    expect(screen.queryByRole("button", { name: "Confirm identity" })).not.toBeInTheDocument();
+  });
 });
