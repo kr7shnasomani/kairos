@@ -89,7 +89,7 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 | Purpose | Path |
 |---|---|
 | **Open work · pitfalls · benchmarks · conformance · CI detail** | **`docs/implementation/status.md`** |
-| Problem statement · 13-layer architecture | `docs/PROBLEM_STATEMENT.md` · `ARCHITECTURE.md` |
+| Problem statements (one per hackathon) · 13-layer architecture | `docs/problem_statement/` · `ARCHITECTURE.md` |
 | REST API reference · backend services/workers/config | `docs/API.md` · `BACKEND.md` |
 | Infra (ports, stores, dev cmds) · Docker build & run modes | `docs/INFRA.md` · `DOCKER.md` |
 | Database schemas · frontend routes & wiring | `docs/DATABASE.md` · `FRONTEND.md` |

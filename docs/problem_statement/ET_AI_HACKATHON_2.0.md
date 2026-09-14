@@ -49,3 +49,13 @@ These areas are illustrative, not exhaustive.
 ## Success Measures
 
 Entity extraction accuracy across document types, query answer quality on domain-expert benchmark questions, knowledge graph linkage completeness, time-to-answer versus traditional search, compliance gap detection accuracy, and demonstrated improvement in cross-functional knowledge discovery — ideally validated with real industrial document samples.
+
+## Judging Criteria
+
+| Criteria               | Weight |
+|------------------------|--------|
+| Innovation             | 25%    |
+| Business Impact        | 25%    |
+| Technical Excellence   | 20%    |
+| Scalability            | 15%    |
+| User Experience        | 15%    |
