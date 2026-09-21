@@ -12,6 +12,10 @@ import pytest
 
 from api.config import settings
 from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService
+from api.services.model_providers import Provider
+
+STUB_PROVIDER = Provider(name="nim", base_url="https://stub.test/v1", api_key="k",
+                         model="stub-model", timeout=5.0)
 
 AUTHORITATIVE_EVIDENCE = [
     {"document_id": "OEM-1", "text": "MAWP is 16.2 bar", "authority_level": 2, "asset_id": "HE-301"},
@@ -36,7 +40,8 @@ async def test_safety_critical_categories_never_emit_answer_text(category, monke
 
     monkeypatch.setattr(llm, "_synthesize_cascade", _fake_cascade)
     # If this were ever streamed, the stub would make it obvious.
-    monkeypatch.setattr(llm, "_stream_nim", lambda p: (_ for _ in ()).throw(AssertionError("streamed a safety answer")))
+    monkeypatch.setattr(llm, "_stream",
+                        lambda pr, p: (_ for _ in ()).throw(AssertionError("streamed a safety answer")))
 
     events = await _collect(
         llm, query="max allowable pressure for HE-301",
@@ -87,7 +92,7 @@ async def test_evidence_gate_refuses_before_any_provider_call(monkeypatch):
         raise AssertionError("provider called despite an evidence-gate refusal")
 
     monkeypatch.setattr(llm, "_synthesize_cascade", _boom)
-    monkeypatch.setattr(llm, "_stream_nim", _boom)
+    monkeypatch.setattr(llm, "_stream", _boom)
 
     events = await _collect(
         llm, query="max allowable pressure for HE-301",
@@ -105,12 +110,12 @@ async def test_evidence_gate_refuses_before_any_provider_call(monkeypatch):
 async def test_ordinary_query_streams_text(monkeypatch):
     llm = LLMService(settings)
 
-    async def _fake_stream(prompt):
+    async def _fake_stream(provider, prompt):
         for piece in ("ANSWER: the pump ", "was replaced ", "in June."):
             yield piece
 
-    monkeypatch.setattr(llm, "_stream_nim", _fake_stream)
-    monkeypatch.setattr(type(llm), "nim_available", property(lambda self: True))
+    monkeypatch.setattr(llm, "_stream", _fake_stream)
+    monkeypatch.setattr(type(llm), "providers", property(lambda self: [STUB_PROVIDER]))
 
     events = await _collect(
         llm, query="when was the pump replaced?",
@@ -128,14 +133,19 @@ async def test_stream_failure_falls_back_and_tells_the_client_to_discard(monkeyp
     partial text, or it would concatenate two different answers into one that no model produced."""
     llm = LLMService(settings)
 
-    async def _broken_stream(prompt):
+    async def _broken_stream(provider, prompt):
         yield "ANSWER: partial"
         raise RuntimeError("connection reset")
 
-    monkeypatch.setattr(llm, "_stream_nim", _broken_stream)
-    monkeypatch.setattr(type(llm), "nim_available", property(lambda self: True))
-    monkeypatch.setattr(llm, "_synthesize_cascade",
-                        lambda p, c: _async({"answer": "ANSWER: complete answer", "sources": c}))
+    monkeypatch.setattr(llm, "_stream", _broken_stream)
+    monkeypatch.setattr(type(llm), "providers", property(lambda self: [STUB_PROVIDER]))
+    skipped = []
+
+    def _cascade(p, c, skip=None):
+        skipped.append(skip)
+        return _async({"answer": "ANSWER: complete answer", "sources": c})
+
+    monkeypatch.setattr(llm, "_synthesize_cascade", _cascade)
 
     events = await _collect(
         llm, query="when was the pump replaced?",
@@ -145,6 +155,9 @@ async def test_stream_failure_falls_back_and_tells_the_client_to_discard(monkeyp
     assert [e for e, _ in events if e == "restart"], "client must be told to discard partial text"
     assert events[-1][0] == "done"
     assert events[-1][1]["answer"] == "ANSWER: complete answer"
+    # The tier whose stream just failed is not asked again: a hung tier 1 would otherwise cost a
+    # second full timeout and push the answer past the frontend's 90 s budget.
+    assert skipped == [STUB_PROVIDER.name]
 
 
 async def test_empty_context_terminates_without_calling_a_provider(monkeypatch):

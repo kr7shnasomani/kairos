@@ -21,6 +21,8 @@ from api.dependencies import (
     require_role,
 )
 from api.services.http import shared_client
+from api.services.model_providers import all_tiers
+from api.services.supply_chain import verify_served_model
 
 log = structlog.get_logger(__name__)
 
@@ -134,7 +136,7 @@ async def model_health_check(
     settings: SettingsDep,
     _user: dict = Depends(require_role("admin")),
 ) -> dict:
-    """Minimal liveness probe for a rate-limited model provider (NIM / Gemini / Jina / Groq).
+    """Minimal liveness probe for a rate-limited model provider (any synthesis tier / Jina / Groq).
 
     Admin-only and NOT polled by default — each call spends real provider quota. The System Health
     page fires it at most once/minute per provider, and only when that provider's toggle is on.
@@ -148,18 +150,24 @@ async def model_health_check(
             return await c.post(url, headers={"Authorization": f"Bearer {key}"}, json=body)
 
     try:
-        if provider == "nim":
-            if not settings.NVIDIA_NIM_API_KEY:
+        # Synthesis tiers come from the one registry the cascade uses, so a tier added there is
+        # probeable here with no edit. Jina and Groq are not chat endpoints and stay special cases.
+        synthesis = next((p for p in all_tiers(settings) if p.name == provider), None)
+        served: str | None = None
+        mismatch: dict | None = None
+        if synthesis is not None:
+            if not synthesis.api_key:
                 return {"provider": provider, "ok": False, "detail": "not configured"}
-            r = await _post(f"{settings.NVIDIA_NIM_BASE_URL}/chat/completions", settings.NVIDIA_NIM_API_KEY,
-                            {"model": settings.NVIDIA_NIM_MODEL, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1})
-            model = settings.NVIDIA_NIM_MODEL
-        elif provider == "gemini":
-            if not settings.GEMINI_API_KEY:
-                return {"provider": provider, "ok": False, "detail": "not configured"}
-            r = await _post(f"{settings.GEMINI_BASE_URL}/chat/completions", settings.GEMINI_API_KEY,
-                            {"model": settings.GEMINI_MODEL, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1})
-            model = settings.GEMINI_MODEL
+            # Sends the tier's own extra_body, so a provider that rejects the thinking flag fails
+            # here, visibly, instead of 400ing every real answer and silently falling through.
+            r = await _post(synthesis.chat_url, synthesis.api_key,
+                            {"model": synthesis.model, "messages": [{"role": "user", "content": "ping"}],
+                             "max_tokens": 1, **synthesis.extra_body})
+            model = synthesis.model
+            if r.status_code < 300:
+                body = r.json()
+                served = body.get("model")
+                mismatch = verify_served_model(synthesis.model, body)
         elif provider == "jina":
             if not settings.JINA_API_KEY:
                 return {"provider": provider, "ok": False, "detail": "not configured"}
@@ -178,7 +186,8 @@ async def model_health_check(
 
         latency_ms = (time.perf_counter() - t0) * 1000
         return {"provider": provider, "ok": r.status_code < 300, "status": r.status_code,
-                "model": model, "latency_ms": round(latency_ms), "detail": None if r.status_code < 300 else r.text[:120]}
+                "model": model, "served_model": served, "model_mismatch": mismatch,
+                "latency_ms": round(latency_ms), "detail": None if r.status_code < 300 else r.text[:120]}
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 — a probe failure is a status, not a 500

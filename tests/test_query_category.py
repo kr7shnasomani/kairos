@@ -7,6 +7,7 @@ query_category, so SAFETY_CRITICAL_CATEGORIES never fired. Pure logic, no servic
 import pytest
 
 from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService
+from api.services.model_providers import Provider
 
 classify = LLMService.classify_query_category
 
@@ -97,6 +98,13 @@ async def _answer(payload):
     return payload
 
 
+# Stand-in cascade for the tests below: three tiers, no keys that could reach a real endpoint.
+RATE_LIMITED_TIERS = [
+    Provider(name=name, base_url="https://stub.test/v1", api_key="k", model=f"{name}-model", timeout=5.0)
+    for name in ("nim", "openrouter", "gemini")
+]
+
+
 # --- Provider cascade: exhausted quota must not look like a wrong answer ------------
 # Repeated benchmark runs exhausted the Gemini free tier; every NIM timeout then became a
 # silent no-answer, dragging measured answer quality from 24/25 to 13/25. A 429 is an
@@ -106,24 +114,18 @@ async def test_all_providers_rate_limited_reports_the_reason(monkeypatch):
     from api.config import settings
 
     llm = LLMService(settings)
-    monkeypatch.setattr(LLMService, "nim_available", property(lambda self: True))
-    monkeypatch.setattr(LLMService, "openrouter_available", property(lambda self: True))
-    monkeypatch.setattr(LLMService, "gemini_available", property(lambda self: True))
+    # The provider list is stubbed wholesale, so no tier can reach the network whatever keys the
+    # environment happens to carry. Before the registry existed this test stubbed each tier by
+    # name, and adding OpenRouter silently let a real key through: the cascade made a live call,
+    # which both failed the assertion and put a network round-trip inside the service-free suite.
+    monkeypatch.setattr(LLMService, "providers", property(lambda self: RATE_LIMITED_TIERS))
     monkeypatch.setattr(LLMService, "ollama_available", property(lambda self: False))
 
-    def limited(provider):
-        async def _fn(prompt, context):
-            return {"answer": None, "error": "429", "sources": context,
-                    "rate_limited": True, "failed_provider": provider}
-        return _fn
+    async def limited(provider, prompt, context):
+        return {"answer": None, "error": "429", "sources": context,
+                "rate_limited": True, "failed_provider": provider.name}
 
-    monkeypatch.setattr(llm, "_synthesize_nim", limited("nim"))
-    # Every configured tier must be stubbed. When OpenRouter was added this test still passed a
-    # real key through `openrouter_available`, so the cascade made a live call and got an answer —
-    # failing the assertion *and* putting a network round-trip inside the service-free suite, which
-    # is specified to run with no secrets and no network. Add a stub here for any new tier.
-    monkeypatch.setattr(llm, "_synthesize_openrouter", limited("openrouter"))
-    monkeypatch.setattr(llm, "_synthesize_gemini", limited("gemini"))
+    monkeypatch.setattr(llm, "_synthesize_provider", limited)
 
     result = await llm.synthesize(query="seal part number for EQ-101", retrieved_context=[
         {"document_id": "OEM-1", "text": "P/N MS-4471-B", "authority_level": 3}
@@ -141,19 +143,17 @@ async def test_ordinary_failure_is_not_reported_as_rate_limited(monkeypatch):
     from api.config import settings
 
     llm = LLMService(settings)
-    monkeypatch.setattr(LLMService, "nim_available", property(lambda self: True))
-    # Disabled explicitly: a real OPENROUTER_API_KEY in the environment would otherwise make this
-    # reach the network. It would still pass (an answer sets neither flag), which is worse — a
-    # silently network-dependent test in the suite that is meant to have none.
-    monkeypatch.setattr(LLMService, "openrouter_available", property(lambda self: False))
-    monkeypatch.setattr(LLMService, "gemini_available", property(lambda self: False))
+    # One tier only, and stubbed: a real key in the environment would otherwise reach the network.
+    # It would still pass (an answer sets neither flag), which is worse — a silently
+    # network-dependent test in the suite that is meant to have none.
+    monkeypatch.setattr(LLMService, "providers", property(lambda self: RATE_LIMITED_TIERS[:1]))
     monkeypatch.setattr(LLMService, "ollama_available", property(lambda self: False))
 
-    async def timed_out(prompt, context):
+    async def timed_out(provider, prompt, context):
         return {"answer": None, "error": "ReadTimeout", "sources": context,
-                "rate_limited": False, "failed_provider": "nim"}
+                "rate_limited": False, "failed_provider": provider.name}
 
-    monkeypatch.setattr(llm, "_synthesize_nim", timed_out)
+    monkeypatch.setattr(llm, "_synthesize_provider", timed_out)
     result = await llm.synthesize(query="seal part number", retrieved_context=[
         {"document_id": "OEM-1", "text": "x", "authority_level": 3}
     ])

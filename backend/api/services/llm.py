@@ -1,5 +1,6 @@
 """
-LLM service — synthesis (Layer 11). Provider cascade: NVIDIA NIM → OpenRouter → Gemini → Ollama.
+LLM service — synthesis (Layer 11). Provider cascade: Nebius Token Factory → NVIDIA NIM →
+OpenRouter → Gemini → Ollama, built from `services/model_providers.py`.
 Implements the synthesis layer with mandatory source citation enforcement
 and explicit refusal for safety-critical parameter queries.
 """
@@ -16,11 +17,12 @@ import structlog
 
 from api.config import Settings
 from api.services.http import shared_client
+from api.services.model_providers import Provider, synthesis_cascade
 from api.services.supply_chain import verify_served_model
 
-# Transient NIM gateway errors worth one retry before the cascade hands the answer to another model.
-_NIM_RETRYABLE_STATUS = frozenset({502, 503, 504})
-_NIM_RETRY_DELAY_S = 1.5
+# Transient gateway errors worth one retry before the cascade hands the answer to another model.
+_RETRYABLE_STATUS = frozenset({502, 503, 504})
+_RETRY_DELAY_S = 1.5
 
 log = structlog.get_logger(__name__)
 
@@ -265,20 +267,14 @@ class LLMService:
         return None
 
     @property
-    def nim_available(self) -> bool:
-        return bool(self.settings.NVIDIA_NIM_API_KEY)
+    def providers(self) -> list[Provider]:
+        """Configured OpenAI-compatible tiers, in cascade order. Read per access, not cached in
+        __init__, because tests and the settings reload path mutate keys after construction."""
+        return synthesis_cascade(self.settings)
 
     @property
     def ollama_available(self) -> bool:
         return bool(self.settings.OLLAMA_BASE_URL)
-
-    @property
-    def gemini_available(self) -> bool:
-        return bool(self.settings.GEMINI_API_KEY)
-
-    @property
-    def openrouter_available(self) -> bool:
-        return bool(self.settings.OPENROUTER_API_KEY)
 
     async def synthesize(
         self,
@@ -396,23 +392,29 @@ class LLMService:
             return
 
         # Stream tier 1 only. A mid-stream provider failure falls back to the ordinary cascade
-        # and is delivered as a single `done` — reimplementing streaming for all four providers
+        # and is delivered as a single `done` — reimplementing streaming for every tier
         # would fork the cascade's "which model answered" guarantee for no user-visible gain.
         streamed = ""
         stream_failed = False
-        if self.nim_available:
+        failed_tier: str | None = None
+        provider = next(iter(self.providers), None)
+        if provider is not None:
             try:
-                async for delta in self._stream_nim(prompt):
+                async for delta in self._stream(provider, prompt):
                     streamed += delta
                     yield "delta", {"text": delta}
             except Exception as exc:  # noqa: BLE001 — fall back, never fail the request
-                log.warning("synthesis.stream_failed", error=str(exc), exc_type=type(exc).__name__)
+                log.warning("synthesis.stream_failed", provider=provider.name, error=str(exc),
+                            exc_type=type(exc).__name__)
                 stream_failed = True
+                # Do not ask the tier that just failed again: a hung tier 1 would otherwise cost a
+                # second full timeout before the next tier, and 2 x 60 s overruns the frontend's 90 s.
+                failed_tier = provider.name
         else:
             stream_failed = True
 
         if stream_failed or not streamed.strip():
-            result = await self._synthesize_cascade(prompt, retrieved_context)
+            result = await self._synthesize_cascade(prompt, retrieved_context, skip=failed_tier)
             # `restart` tells the client to discard any deltas already painted: the fallback answer
             # came from a different call and concatenating the two would fabricate a hybrid answer.
             yield "restart", {"reason": "stream unavailable — answer re-synthesized via the provider cascade"}
@@ -423,10 +425,10 @@ class LLMService:
         result = {
             "answer": streamed,
             "sources": retrieved_context,
-            # Provider key, like every cascade tier returns ("nim", "openrouter", …) — the UI renders it
-            # as the "answered by" badge, and the raw model id here printed a 34-character string there.
-            "model": "nim",
-            "served_model": self.settings.NVIDIA_NIM_MODEL,
+            # Provider key, like every cascade tier returns ("tokenfactory", "nim", …) — the UI renders
+            # it as the "answered by" badge, and the raw model id here printed a 34-character string there.
+            "model": provider.name,
+            "served_model": provider.model,
         }
         # Runs even for non-safety categories: `result_gate` no-ops unless the category is
         # safety-critical, and calling it unconditionally means a category added to
@@ -434,18 +436,18 @@ class LLMService:
         post = self.result_gate(result, retrieved_context, query_category, confidence_threshold)
         yield "done", post if post is not None else result
 
-    async def _stream_nim(self, prompt: str) -> AsyncIterator[str]:
-        """Yields text deltas from NIM's OpenAI-compatible SSE stream."""
-        client = shared_client(self.settings.NVIDIA_NIM_TIMEOUT)
+    async def _stream(self, provider: Provider, prompt: str) -> AsyncIterator[str]:
+        """Yields text deltas from a tier's OpenAI-compatible SSE stream."""
+        client = shared_client(provider.timeout)
         async with client.stream(
             "POST",
-            f"{self.settings.NVIDIA_NIM_BASE_URL}/chat/completions",
+            provider.chat_url,
             headers={
-                "Authorization": f"Bearer {self.settings.NVIDIA_NIM_API_KEY}",
+                "Authorization": f"Bearer {provider.api_key}",
                 "Content-Type": "application/json",
             },
-            json={**self._nim_payload(prompt), "stream": True},
-            timeout=self.settings.NVIDIA_NIM_TIMEOUT,
+            json={**self._payload(provider, prompt), "stream": True},
+            timeout=provider.timeout,
         ) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
@@ -604,42 +606,46 @@ CONFIDENCE: [0.0-1.0]
 UNCERTAINTY: [anything you are not certain about]
 SOURCES_USED: [comma-separated source numbers]"""
 
-    def _nim_payload(self, prompt: str) -> dict[str, Any]:
-        """Chat-completions body shared by the blocking and streaming NIM calls."""
-        body: dict[str, Any] = {
-            "model": self.settings.NVIDIA_NIM_MODEL,
+    def _payload(self, provider: Provider, prompt: str) -> dict[str, Any]:
+        """Chat-completions body shared by the blocking and streaming calls of every tier.
+
+        max_tokens and temperature stay on the NVIDIA_NIM_* settings: they are synthesis-wide
+        knobs that every tier has always shared, and splitting them per provider would mean four
+        places to change one answer-shaping decision."""
+        return {
+            "model": provider.model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": self.settings.NVIDIA_NIM_MAX_TOKENS,
             "temperature": self.settings.NVIDIA_NIM_TEMPERATURE,
+            **provider.extra_body,
         }
-        if self.settings.NVIDIA_NIM_DISABLE_THINKING:
-            body["chat_template_kwargs"] = {"enable_thinking": False}
-        return body
 
-    async def _synthesize_nim(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
-        """Calls NVIDIA NIM (OpenAI-compatible API).
+    async def _synthesize_provider(
+        self, provider: Provider, prompt: str, context: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Calls one OpenAI-compatible tier (Token Factory, NIM, OpenRouter, Gemini).
 
-        A 502/503/504 is retried once. The hosted endpoint returns short bursts of 503 under load
-        (five in 13 minutes on 2026-09-13), and falling straight through hands the answer to a
-        *different model* — the user sees a Llama answer, and a benchmark run turns SUSPECT. A
-        timeout is not retried: a second full `NVIDIA_NIM_TIMEOUT` would overrun the frontend's
-        90 s synthesis budget.
+        A 502/503/504 is retried once. Hosted endpoints return short bursts of 503 under load
+        (five in 13 minutes on NIM, 2026-09-13), and falling straight through hands the answer to a
+        *different model*: the user sees another provider's answer and a benchmark run turns
+        SUSPECT. A timeout is not retried, because a second full timeout would overrun the
+        frontend's 90 s synthesis budget.
         """
         try:
-            client = shared_client(self.settings.NVIDIA_NIM_TIMEOUT)
+            client = shared_client(provider.timeout)
             for attempt in (1, 2):
                 response = await client.post(
-                    f"{self.settings.NVIDIA_NIM_BASE_URL}/chat/completions",
+                    provider.chat_url,
                     headers={
-                        "Authorization": f"Bearer {self.settings.NVIDIA_NIM_API_KEY}",
+                        "Authorization": f"Bearer {provider.api_key}",
                         "Content-Type": "application/json",
                     },
-                    json=self._nim_payload(prompt),
-                    timeout=self.settings.NVIDIA_NIM_TIMEOUT,
+                    json=self._payload(provider, prompt),
+                    timeout=provider.timeout,
                 )
-                if attempt == 1 and response.status_code in _NIM_RETRYABLE_STATUS:
-                    log.warning("nim.synthesis_retry", status=response.status_code)
-                    await asyncio.sleep(_NIM_RETRY_DELAY_S)
+                if attempt == 1 and response.status_code in _RETRYABLE_STATUS:
+                    log.warning("synthesis.retry", provider=provider.name, status=response.status_code)
+                    await asyncio.sleep(_RETRY_DELAY_S)
                     continue
                 break
             response.raise_for_status()
@@ -649,19 +655,21 @@ SOURCES_USED: [comma-separated source numbers]"""
             # the provider ran the model that was pinned. Nothing checked this before, yet every
             # benchmark figure is attributed to a named model and status.md's "a fallthrough does
             # not change which model answered" rests on it being true.
-            mismatch = verify_served_model(self.settings.NVIDIA_NIM_MODEL, data)
+            mismatch = verify_served_model(provider.model, data)
             return {
                 "answer": answer_text,
                 "sources": context,
-                "model": "nim",
+                "model": provider.name,
                 "served_model": data.get("model"),
                 "model_mismatch": mismatch,
                 "raw": data,
             }
         except Exception as e:
             rate_limited = isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429
-            log.error("nim.synthesis_failed", error=str(e), exc_type=type(e).__name__, rate_limited=rate_limited)
-            return {"answer": None, "error": str(e), "sources": context, "rate_limited": rate_limited, "failed_provider": "nim"}
+            log.error("synthesis.provider_failed", provider=provider.name, error=str(e),
+                      exc_type=type(e).__name__, rate_limited=rate_limited)
+            return {"answer": None, "error": str(e), "sources": context,
+                    "rate_limited": rate_limited, "failed_provider": provider.name}
 
     async def _synthesize_ollama(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
         """Calls local Ollama (fallback for offline/air-gapped deployments)."""
@@ -680,25 +688,25 @@ SOURCES_USED: [comma-separated source numbers]"""
             log.error("ollama.synthesis_failed", error=str(e), rate_limited=rate_limited)
             return {"answer": None, "error": str(e), "sources": context, "rate_limited": rate_limited, "failed_provider": "ollama"}
 
-    async def _synthesize_cascade(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
-        """Provider cascade: NIM → OpenRouter → Gemini → Ollama. Each tier is tried only if
-        configured; on failure (answer is None) it falls through to the next. With
-        only NVIDIA_NIM_API_KEY set, this is NIM-only — same behaviour as before.
+    async def _synthesize_cascade(
+        self, prompt: str, context: list[dict[str, Any]], skip: str | None = None
+    ) -> dict[str, Any]:
+        """Tries each configured tier in order, then Ollama. A tier with no API key is not in the
+        list at all (see `model_providers.synthesis_cascade`), so with only NVIDIA_NIM_API_KEY set
+        this is NIM-only, exactly as before. `skip` names a tier that has already failed this
+        request (the streaming path), so it is not retried.
 
-        Every tier below NIM serves a different model from the pinned NIM one (tier 1 moved to
-        Nemotron when NVIDIA retired llama-3.1-70b), so any fallthrough makes a run's
-        answer-quality figure a blend of models — the benchmark flags that as SUSPECT."""
+        Every tier below the first serves a different model, so any fallthrough makes a run's
+        answer-quality figure a blend of models. The benchmark flags that as SUSPECT."""
         result: dict[str, Any] | None = None
         attempts: dict[str, dict[str, Any]] = {}
-        if self.nim_available:
-            result = await self._synthesize_nim(prompt, context)
-            attempts["nim"] = result
-        if (result is None or result.get("answer") is None) and self.openrouter_available:
-            result = await self._synthesize_openrouter(prompt, context)
-            attempts["openrouter"] = result
-        if (result is None or result.get("answer") is None) and self.gemini_available:
-            result = await self._synthesize_gemini(prompt, context)
-            attempts["gemini"] = result
+        for provider in self.providers:
+            if result is not None and result.get("answer") is not None:
+                break
+            if provider.name == skip:
+                continue
+            result = await self._synthesize_provider(provider, prompt, context)
+            attempts[provider.name] = result
         if (result is None or result.get("answer") is None) and self.ollama_available:
             result = await self._synthesize_ollama(prompt, context)
             attempts["ollama"] = result
@@ -707,8 +715,8 @@ SOURCES_USED: [comma-separated source numbers]"""
                 "answer": None,
                 "sources": context,
                 "confidence": None,
-                "message": ("No LLM configured. Set NVIDIA_NIM_API_KEY, OPENROUTER_API_KEY, "
-                            "GEMINI_API_KEY, or OLLAMA_BASE_URL."),
+                "message": ("No LLM configured. Set NEBIUS_TOKEN_FACTORY_API_KEY, NVIDIA_NIM_API_KEY, "
+                            "OPENROUTER_API_KEY, GEMINI_API_KEY, or OLLAMA_BASE_URL."),
             }
 
         # Every tier failed. Say *why* — a provider that returned 429 is an exhausted quota,
@@ -716,8 +724,7 @@ SOURCES_USED: [comma-separated source numbers]"""
         # unlabelled these are indistinguishable: the benchmark scores both as a miss and the
         # UI shows both as "no answer", so a dead free tier looks like poor answer quality.
         if result.get("answer") is None:
-            limited = [p for p in ("nim", "openrouter", "gemini", "ollama")
-                       if attempts.get(p, {}).get("rate_limited")]
+            limited = [name for name, attempt in attempts.items() if attempt.get("rate_limited")]
             if limited:
                 result["rate_limited"] = True
                 result["message"] = (
@@ -726,64 +733,6 @@ SOURCES_USED: [comma-separated source numbers]"""
                 )
                 log.warning("synthesis.all_providers_rate_limited", providers=limited)
         return result
-
-    async def _synthesize_openrouter(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
-        """
-        Calls OpenRouter — tier 2, tried before Gemini. Serves meta-llama/llama-3.1-70b-instruct,
-        which is not the tier-1 model, so an answer from here counts as a fallback.
-        """
-        try:
-            client = shared_client(self.settings.OPENROUTER_TIMEOUT)
-            response = await client.post(
-                f"{self.settings.OPENROUTER_BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.settings.OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.settings.OPENROUTER_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": self.settings.NVIDIA_NIM_MAX_TOKENS,
-                    "temperature": self.settings.NVIDIA_NIM_TEMPERATURE,
-                },
-                timeout=self.settings.OPENROUTER_TIMEOUT,
-            )
-            response.raise_for_status()
-            data = response.json()
-            answer_text = data["choices"][0]["message"]["content"]
-            return {"answer": answer_text, "sources": context, "model": "openrouter", "raw": data}
-        except Exception as e:
-            rate_limited = isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429
-            log.error("openrouter.synthesis_failed", error=str(e), exc_type=type(e).__name__, rate_limited=rate_limited)
-            return {"answer": None, "error": str(e), "sources": context, "rate_limited": rate_limited,
-                    "failed_provider": "openrouter"}
-
-    async def _synthesize_gemini(self, prompt: str, context: list[dict[str, Any]]) -> dict[str, Any]:
-        """Calls Gemini via Google's OpenAI-compatible endpoint — fallback when NIM fails."""
-        try:
-            client = shared_client(90.0)
-            response = await client.post(
-                f"{self.settings.GEMINI_BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.settings.GEMINI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.settings.GEMINI_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": self.settings.NVIDIA_NIM_MAX_TOKENS,
-                    "temperature": self.settings.NVIDIA_NIM_TEMPERATURE,
-                },
-                timeout=90.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            answer_text = data["choices"][0]["message"]["content"]
-            return {"answer": answer_text, "sources": context, "model": "gemini", "raw": data}
-        except Exception as e:
-            rate_limited = isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429
-            log.error("gemini.synthesis_failed", error=str(e), exc_type=type(e).__name__, rate_limited=rate_limited)
-            return {"answer": None, "error": str(e), "sources": context, "rate_limited": rate_limited, "failed_provider": "gemini"}
 
     @staticmethod
     def parse_synthesis_response(text: str) -> dict[str, Any]:

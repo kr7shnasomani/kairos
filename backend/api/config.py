@@ -119,6 +119,26 @@ class Settings(BaseSettings):
     NVIDIA_NIM_VISION_MODEL: str = "meta/llama-3.2-11b-vision-instruct"
 
     # -------------------------------------------------------------------------
+    # Nebius Token Factory — tier 1 when configured, ahead of NIM.
+    #
+    # OpenAI-compatible, and it serves the same NVIDIA Nemotron builds as NIM, so promoting it does
+    # not change which model answers — only who serves it. Empty key = tier skipped, which is the
+    # default, so an unconfigured deployment behaves exactly as it did before this tier existed.
+    # -------------------------------------------------------------------------
+    NEBIUS_TOKEN_FACTORY_API_KEY: str = ""
+    NEBIUS_TOKEN_FACTORY_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"
+    NEBIUS_TOKEN_FACTORY_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
+    # Same reason as NVIDIA_NIM_DISABLE_THINKING, but its own switch: if Token Factory rejects
+    # `chat_template_kwargs` (a 400 on every call, which silently drops to NIM), set this False
+    # without touching the NIM tier, which is known to accept it.
+    NEBIUS_TOKEN_FACTORY_DISABLE_THINKING: bool = True
+    # Must leave headroom under the frontend's 90 s budget for POST /search/synthesize, because a
+    # fallthrough costs this cap plus the next tier's: 25 s + NIM's 60 s = 85 s. At 60 s a hung
+    # Token Factory plus a slow NIM reached 120 s. NIM answers in ~1.5 s at p50 (9.8 s p95), so 25 s
+    # only cuts off a Token Factory call that is failing anyway.
+    NEBIUS_TOKEN_FACTORY_TIMEOUT: float = 25.0
+
+    # -------------------------------------------------------------------------
     # OpenRouter — tier 2, ahead of Gemini ON PURPOSE.
     #
     # It served the same llama-3.1-70b as tier 1 until NVIDIA retired that model (2026-09-13); tier 1

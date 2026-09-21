@@ -18,6 +18,13 @@ def test_matching_model_is_not_a_mismatch():
     assert verify_served_model(PIN, {"model": PIN}) is None
 
 
+def test_a_casing_difference_is_the_same_model():
+    """Nebius's catalog capitalises the pin ("Nemotron-3-Super-120b-a12b"); warning on that would
+    fire on every Token Factory answer and get the check ignored."""
+    assert verify_served_model("nvidia/nemotron-3-super-120b-a12b",
+                               {"model": "nvidia/Nemotron-3-Super-120b-a12b"}) is None
+
+
 def test_a_different_model_is_flagged_as_substitution():
     """The supply-chain risk for a hosted model: the provider quietly serves something else."""
     m = verify_served_model(PIN, {"model": "mistralai/mixtral-8x7b"})

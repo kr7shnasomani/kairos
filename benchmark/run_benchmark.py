@@ -402,7 +402,8 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
 
 
 def _provider_mix(via: "Counter[str]") -> str:
-    """Which tier served each answer, most common first. `nim` is the production model."""
+    """Which tier served each answer, most common first. `nim` and `tokenfactory` are the
+    production model; the rest are fallbacks."""
     return " · ".join(f"{k} {v}" for k, v in via.most_common()) or "(none)"
 
 
@@ -426,10 +427,12 @@ def _validity(via: "Counter[str]", graded: int, total: int, aborted: bool) -> st
     if via.get("-"):
         return (f"INVALID — {via['-']} question(s) returned no answer from any provider "
                 "(infrastructure, not model quality). Do not quote.")
-    # Only `nim` serves the pinned model. `openrouter` (llama-3.1-70b) and `gemini` are both a
-    # different model since NVIDIA retired llama-3.1-70b and tier 1 moved to Nemotron (2026-09-13),
-    # so either one confounds the score.
-    same_model = via.get("nim", 0)
+    # `nim` and `tokenfactory` both serve the pinned Nemotron build — NVIDIA's own endpoint and
+    # Nebius's, same model id — so an answer from either measures the production model. Point a
+    # tier at a different model and this count stops meaning that. `openrouter` (llama-3.1-70b)
+    # and `gemini` are a different model since NVIDIA retired llama-3.1-70b and tier 1 moved to
+    # Nemotron (2026-09-13), so either one confounds the score.
+    same_model = via.get("nim", 0) + via.get("tokenfactory", 0)
     # A stray fallback or two is noise; beyond ~10% the headline number is partly measuring
     # a different model, which is exactly the confound RESULTS.md warns about.
     fallback = via.get("gemini", 0) + via.get("openrouter", 0)
@@ -438,7 +441,7 @@ def _validity(via: "Counter[str]", graded: int, total: int, aborted: bool) -> st
                 "which is a different model. Re-run paced (--delay) before quoting.")
     if via.get("timeout"):
         return f"SUSPECT — {via['timeout']} question(s) timed out client-side. Re-run before quoting."
-    return f"VALID — {same_model}/{graded} answered by the pinned NIM model."
+    return f"VALID — {same_model}/{graded} answered by the pinned Nemotron model."
 
 
 async def _kg_completeness() -> str:

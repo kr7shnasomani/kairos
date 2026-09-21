@@ -51,7 +51,10 @@ def verify_served_model(configured: str, response: dict[str, Any] | None) -> dic
     served = (response or {}).get("model")
     if not served or not configured:
         return None
-    if served == configured:
+    # Catalogs capitalise ids inconsistently (Nebius lists "Nemotron-3-Super-120b-a12b" for the pin
+    # "nvidia/nemotron-3-super-120b-a12b"), and model ids are case-insensitive in practice. A pure
+    # casing difference is the same model; flagging it would warn on every answer.
+    if served.lower() == configured.lower():
         return None
 
     # Providers routinely qualify a pin: "meta/llama-3.1-70b-instruct" served as
