@@ -55,6 +55,37 @@ log = structlog.get_logger(__name__)
 # it reached the Documents list and EQ-101's knowledge panel before being added here.
 _TEST_FILENAME = re.compile(r"^(ann_test_|dbtest_|test_|e2e_|kairos_|probe|tmp|linked-doc-|# Kairos)", re.I)
 
+# Assets registered by the test suite and by hand during QA sweeps, matched as a PREFIX on
+# `asset_id`. The `ASSET-*` entries are the ids the integration suite mints — the same list
+# `scripts/purge_test_data.py` holds, kept separate on purpose, because that script DELETES and
+# this module only hides. `QA-TEST-` was added 2026-09-22 for the asset a manual QA sweep
+# registered through the UI (`QA-TEST-155635`, "QA test pump"): verified to match 1 of the 11
+# live assets and 0 of the 10 in `dataset/01_Structured_Backbone/asset_registry.csv`.
+# Same evidence bar as `_TEST_FILENAME`: hiding a real asset is the failure this must not have.
+TEST_ASSET_PREFIXES = ("QA-TEST-", "ASSET-TEST-", "ASSET-DEDUP-", "ASSET-EV-", "ASSET-ACK-", "ASSET-FRESH-")
+
+# Cypher guard for any query that lists assets bound as `a`. Filtering happens in the query, never
+# after it: a Python filter on a paginated or aggregated result breaks `count` and `range`.
+# ponytail: inlined rather than passed as a parameter — the prefixes are constants, and inlining
+# leaves every call site's signature unchanged.
+REAL_ASSET_CYPHER = (
+    "NONE(p IN [" + ", ".join(f"'{p}'" for p in TEST_ASSET_PREFIXES) + "] WHERE a.asset_id STARTS WITH p)"
+)
+_TEST_ASSET_COUNT_CYPHER = (
+    f"MATCH (a:Asset) WHERE NOT {REAL_ASSET_CYPHER} AND ($site_id IS NULL OR a.site_id = $site_id) "
+    "RETURN count(a) AS n"
+)
+
+
+async def excluded_test_asset_count(session, site_id: str | None = None) -> int:
+    """How many assets `REAL_ASSET_CYPHER` hides, for a caller to report beside its own result.
+
+    Every endpoint that applies the guard returns this as `excluded_test_assets` (see NEVER
+    SILENTLY above). `site_id=None` counts across sites, matching the queries that do the same.
+    """
+    record = await (await session.run(_TEST_ASSET_COUNT_CYPHER, site_id=site_id)).single()
+    return record["n"] if record else 0
+
 # Supabase/PostgREST puts every `.in_()` value in the URL, so a huge list becomes an over-long
 # query string. Asset knowledge graphs are bounded (60 edges on the largest corpus asset), but
 # chunking keeps this safe for any caller.

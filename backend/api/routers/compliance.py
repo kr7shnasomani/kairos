@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 
 from api.config import settings
 from api.dependencies import CurrentUserDep, Neo4jDep, SupabaseDep, site_scope
-from api.services.corpus import document_rows
+from api.services.corpus import REAL_ASSET_CYPHER, document_rows, excluded_test_asset_count
 
 router = APIRouter()
 
@@ -65,6 +65,7 @@ MATCH (reg:Concept {{type: 'Regulation'}})
 WHERE ($framework IS NULL OR reg.framework = $framework)
 MATCH (a:Asset)
 {_APPLICABILITY}
+  AND {REAL_ASSET_CYPHER}
   AND ($asset_id IS NULL OR a.asset_id = $asset_id)
   AND ($site_id IS NULL OR a.site_id = $site_id)
 CALL {{
@@ -100,6 +101,7 @@ _DASHBOARD_CYPHER = f"""
 MATCH (reg:Concept {{type: 'Regulation'}})
 MATCH (a:Asset)
 {_APPLICABILITY}
+  AND {REAL_ASSET_CYPHER}
   AND ($site_id IS NULL OR a.site_id = $site_id)
 CALL {{
   WITH reg, a
@@ -118,26 +120,27 @@ ORDER BY authority_level ASC
 # Audit evidence per clause. Evidence must be of the type the clause requires and must sit
 # on an asset the clause actually applies to — previously any document on any applicable
 # asset counted as evidence for every clause, so the pack could not be wrong.
-_AUDIT_CYPHER = """
-MATCH (reg:Concept {type: 'Regulation', framework: $framework})
+_AUDIT_CYPHER = f"""
+MATCH (reg:Concept {{type: 'Regulation', framework: $framework}})
 WHERE ($clauses IS NULL OR reg.clause_id IN $clauses)
 OPTIONAL MATCH (a:Asset)
-WHERE reg.applies_to_equipment_class IS NULL
+WHERE (reg.applies_to_equipment_class IS NULL
     OR a.equipment_class = reg.applies_to_equipment_class
     OR a.equipment_class CONTAINS reg.applies_to_equipment_class
-    OR reg.applies_to_equipment_class CONTAINS a.equipment_class
+    OR reg.applies_to_equipment_class CONTAINS a.equipment_class)
+  AND {REAL_ASSET_CYPHER}
 OPTIONAL MATCH (a)-[r:KNOWLEDGE_EDGE]->(d:Document)
 WHERE (r.valid_to IS NULL OR datetime(r.valid_to) > datetime())
   AND r.verification_status <> 'superseded'
   AND (reg.requires_document_type IS NULL
        OR d.document_type IN reg.requires_document_type)
-WITH reg, collect(DISTINCT CASE WHEN d IS NOT NULL THEN {
+WITH reg, collect(DISTINCT CASE WHEN d IS NOT NULL THEN {{
     document_id: d.document_id,
     document_type: d.document_type,
     asset_id: a.asset_id,
     confidence: r.confidence,
     verification_status: r.verification_status
-} END) AS raw_evidence
+}} END) AS raw_evidence
 RETURN reg.clause_id AS clause_id,
        reg.requirement_text AS requirement_text,
        reg.applies_to_equipment_class AS applies_to,
@@ -195,15 +198,17 @@ async def list_compliance_gaps(
     specific clause requirement, so a cleared clause is genuinely cleared.
     Never auto-clears safety-critical.
     """
+    scope = site_scope(current_user, site_id)
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
         result = await session.run(
             _GAP_CYPHER,
             framework=framework,
             asset_id=asset_id,
-            site_id=site_scope(current_user, site_id),
+            site_id=scope,
             limit=limit,
         )
         rows = [dict(r) async for r in result]
+        excluded = await excluded_test_asset_count(session, scope)
 
     items = [
         {**r, "severity": _severity(r["authority_level"])}
@@ -221,6 +226,7 @@ async def list_compliance_gaps(
         "offset": offset,
         "framework": framework,
         "last_scan": "realtime",
+        "excluded_test_assets": excluded,
     }
 
 
@@ -238,6 +244,7 @@ async def compliance_dashboard(
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
         result = await session.run(_DASHBOARD_CYPHER, site_id=site_id)
         rows = [dict(r) async for r in result]
+        excluded = await excluded_test_asset_count(session, site_id)
 
     totals = {"critical": 0, "major": 0, "minor": 0}
     unverified_totals = {"critical": 0, "major": 0, "minor": 0}
@@ -272,6 +279,7 @@ async def compliance_dashboard(
         "by_framework": by_framework,
         "by_asset_class": by_asset_class,
         "last_updated": "realtime",
+        "excluded_test_assets": excluded,
     }
 
 
@@ -291,6 +299,7 @@ async def generate_audit_pack(
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
         result = await session.run(_AUDIT_CYPHER, framework=framework, clauses=clauses)
         rows = [dict(r) async for r in result]
+        excluded = await excluded_test_asset_count(session)
     for r in rows:
         r["evidence"] = _dedupe_evidence(r.get("evidence") or [])
 
@@ -337,6 +346,7 @@ async def generate_audit_pack(
         "human_review_required": human_review_required,
         "note": "Human sign-off required for all clearances. This package is audit-preparation only.",
         "status": "draft",
+        "excluded_test_assets": excluded,
     }
 
 

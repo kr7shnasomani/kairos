@@ -325,7 +325,7 @@ async def create_asset(
     return {"asset_id": asset_id, "tag_number": payload.tag_number, "status": "created"}
 
 
-async def _issue_counts(supabase, asset_ids: list[str]) -> dict[str, dict[str, int]]:
+async def _issue_counts(supabase, asset_ids: list[str]) -> dict[str, dict[str, int | None]]:
     """Open work orders + open compliance gaps for a page of assets, in two queries total.
 
     The obvious implementation — the detail handler's two `count="exact"` queries, per asset —
@@ -341,8 +341,9 @@ async def _issue_counts(supabase, asset_ids: list[str]) -> dict[str, dict[str, i
     disagree about the same number. Note `open_work_orders_count` counts `work_order_created`
     events, which is what the detail endpoint has always returned.
 
-    Degrades the way `get_asset` does — a failed lookup yields 0 and a warning, never a 500 on
-    the list. Absent assets get 0, never null, so the column is always numeric.
+    Degrades the way `get_asset` does — a failed lookup yields null ("unknown", rendered "—") and
+    a warning, never a 500 on the list and never a 0 that reads as a clean record. An asset with
+    no rows is a real 0.
     """
     blank = {"open_work_orders_count": 0, "compliance_gap_count": 0}
     if not asset_ids:
@@ -364,10 +365,12 @@ async def _issue_counts(supabase, asset_ids: list[str]) -> dict[str, dict[str, i
     )
     wo_result, gap_result = await asyncio.gather(wo_future, gap_future, return_exceptions=True)
 
-    counts: dict[str, dict[str, int]] = {aid: dict(blank) for aid in asset_ids}
+    counts: dict[str, dict[str, int | None]] = {aid: dict(blank) for aid in asset_ids}
     for field, result in (("open_work_orders_count", wo_result), ("compliance_gap_count", gap_result)):
         if isinstance(result, BaseException):
             log.warning("asset.list_counts_failed", field=field, error=str(result))
+            for aid in asset_ids:
+                counts[aid][field] = None
             continue
         rows = result.data or []
         # PostgREST caps rows server-side (`db-max-rows`). A silent cap would undercount every
@@ -412,7 +415,8 @@ async def list_assets(
         {**a, **counts.get(a.get("asset_id"), {"open_work_orders_count": 0, "compliance_gap_count": 0})}
         for a in assets
     ]
-    return {"items": items, "total": result["total"], "limit": limit, "offset": offset}
+    return {"items": items, "total": result["total"], "limit": limit, "offset": offset,
+            "excluded_test_assets": result["excluded_test_assets"]}
 
 
 # NOTE: must stay ABOVE "/{asset_id}" — FastAPI matches in declaration order, so a later
@@ -433,7 +437,7 @@ async def asset_coverage(
     """
     svc = CoverageService(driver, settings.NEO4J_DATABASE, supabase)
     items = await svc.asset_coverage()
-    return {"items": items, "total": len(items)}
+    return {"items": items, "total": len(items), "excluded_test_assets": await svc.excluded_test_assets()}
 
 
 @router.get("/provisional", summary="Assets awaiting human identity confirmation (Layer 1)")
@@ -577,8 +581,10 @@ async def get_asset(
 
     return {
         **asset,
-        "open_work_orders_count": 0 if isinstance(wo_result, BaseException) else (wo_result.count or 0),
-        "compliance_gap_count": 0 if isinstance(gap_result, BaseException) else (gap_result.count or 0),
+        # A failed lookup is null ("unknown"), never 0: rendered as "0 compliance gaps" it would be
+        # good news that may not be true. The frontend shows null as "—".
+        "open_work_orders_count": None if isinstance(wo_result, BaseException) else (wo_result.count or 0),
+        "compliance_gap_count": None if isinstance(gap_result, BaseException) else (gap_result.count or 0),
         "last_inspection_date": None if isinstance(last_inspection, BaseException) else last_inspection,
         # Graph node wins on the boolean (it is the canonical MDM record); Supabase supplies the
         # attribution the node does not carry.

@@ -80,7 +80,10 @@ async def test_list_assets(admin_client, shared_asset_id):
     assert "total" in body
     assert isinstance(body["items"], list)
     ids = [a["asset_id"] for a in body["items"]]
-    assert shared_asset_id in ids
+    # The shared fixture is an `ASSET-TEST-` id, so it is hidden from the list and counted instead
+    # (services/corpus.py). Seeing it here would mean the test-asset filter is broken.
+    assert shared_asset_id not in ids
+    assert body["excluded_test_assets"] >= 1
 
 
 async def test_list_assets_filter_site(admin_client, shared_asset_id):

@@ -14,6 +14,8 @@ from typing import Any
 
 import structlog
 
+from api.services.corpus import REAL_ASSET_CYPHER, excluded_test_asset_count
+
 log = structlog.get_logger(__name__)
 
 # Authority levels 1-3 are regulatory / engineering / OEM. An asset whose knowledge is entirely
@@ -57,11 +59,16 @@ class CoverageService:
             })
         return out
 
+    async def excluded_test_assets(self) -> int:
+        """Test assets the coverage matrix leaves out, reported beside it."""
+        async with self._driver.session(database=self._database) as session:
+            return await excluded_test_asset_count(session)
+
     async def _graph_counts(self) -> list[dict[str, Any]]:
         # collect(DISTINCT k.edge_id) would lose the properties needed for the authority/verified
         # splits, so collect the relationships and de-duplicate on edge_id in the projection.
-        cypher = """
-        MATCH (a:Asset)
+        cypher = f"""
+        MATCH (a:Asset) WHERE {REAL_ASSET_CYPHER}
         OPTIONAL MATCH (a)-[k:KNOWLEDGE_EDGE]-()
         WITH a, [x IN collect(DISTINCT k) WHERE x IS NOT NULL] AS ks
         RETURN a.asset_id           AS asset_id,

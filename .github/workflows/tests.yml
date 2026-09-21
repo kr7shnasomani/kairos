@@ -106,6 +106,7 @@ jobs:
               tests/test_authz_boundary.py \
               tests/test_brief_paging.py \
               tests/test_asset_bulk_import.py \
+              tests/test_asset_counts.py \
               tests/test_quarantine_item_id.py \
               tests/test_purge_safety.py \
               tests/test_synthesis_stream.py \

@@ -9,6 +9,8 @@ from typing import Any
 import structlog
 from neo4j import AsyncDriver
 
+from api.services.corpus import REAL_ASSET_CYPHER
+
 log = structlog.get_logger(__name__)
 
 
@@ -218,24 +220,32 @@ class GraphService:
             params["equipment_class"] = equipment_class
 
         where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        list_where = "WHERE " + " AND ".join([*where_clauses, REAL_ASSET_CYPHER])
 
         list_cypher = f"""
-        MATCH (a:Asset) {where}
+        MATCH (a:Asset) {list_where}
         RETURN a
         ORDER BY a.created_at DESC
         SKIP $skip LIMIT $limit
         """
-        count_cypher = f"MATCH (a:Asset) {where} RETURN count(a) AS total"
+        # One pass counts both sides, so the response can say how many test assets it hid
+        # (services/corpus.py: a filter that hides its own effect is how numbers go wrong).
+        count_cypher = f"""
+        MATCH (a:Asset) {where}
+        RETURN count(CASE WHEN {REAL_ASSET_CYPHER} THEN 1 END) AS total,
+               count(CASE WHEN NOT {REAL_ASSET_CYPHER} THEN 1 END) AS excluded
+        """
 
         async with self.driver.session(database=self.database) as session:
             count_result = await session.run(count_cypher, **{k: v for k, v in params.items() if k not in ("skip", "limit")})
             count_record = await count_result.single()
             total = count_record["total"] if count_record else 0
+            excluded = count_record["excluded"] if count_record else 0
 
             list_result = await session.run(list_cypher, **params)
             assets = [dict(record["a"]) async for record in list_result]
 
-        return {"assets": assets, "total": total}
+        return {"assets": assets, "total": total, "excluded_test_assets": excluded}
 
     async def get_asset_hierarchy(self, asset_id: str) -> dict[str, Any] | None:
         """
