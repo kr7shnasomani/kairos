@@ -188,11 +188,11 @@ export interface AssetSummary {
   /**
    * Issue counts, now returned by `GET /assets/` as well as `GET /assets/{id}` — the list
    * previously omitted them, which blocked two columns the design review asked for.
-   * Always numeric, never null: an asset with no rows is `0`. A backend lookup failure also
-   * yields `0` (logged server-side), so these are "best known", not guaranteed-live.
+   * An asset with no rows is `0`. A backend lookup failure is `null` (logged server-side) and
+   * renders as "—": a failed lookup must never read as a clean record.
    */
-  open_work_orders_count: number;
-  compliance_gap_count: number;
+  open_work_orders_count: number | null;
+  compliance_gap_count: number | null;
 }
 
 export interface AssetsResponse {

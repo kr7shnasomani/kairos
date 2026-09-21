@@ -60,7 +60,7 @@ export default function TimestampDriftPage() {
                 <EmptyState
                   message={report?.compound_events_checked
                     ? `No drift beyond ${report.tolerance_minutes} minutes across ${report.compound_events_checked} compound events.`
-                    : "No compound events recorded yet — drift needs two systems reporting the same event."}
+                    : "Nothing to compare yet. Drift is measured when two systems report the same real event, such as a permit issued in the PTW system and confirmed in the DCS. No event on this deployment has been reported by more than one system."}
                   action={{ label: "Open events", href: "/events" }}
                 />
               }

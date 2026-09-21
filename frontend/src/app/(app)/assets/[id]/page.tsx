@@ -18,7 +18,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const stats = [
     { label: "Open work orders", value: a.open_work_orders ?? "—" },
     { label: "Compliance gaps", value: a.compliance_gaps ?? "—" },
-    { label: "Last inspection", value: a.last_inspection ?? "—" },
+    // Read from the INSPECTION_RECORD edge written by an inspection-complete event, not from linked
+    // documents, so an asset can show an inspection report under Knowledge and still have no date here.
+    { label: "Last inspection", value: a.last_inspection ?? "—", note: a.last_inspection ? null : "No inspection-complete event found" },
   ];
 
   return (
@@ -51,6 +53,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             <div key={s.label} className="px-4 py-3.5 sm:px-5">
               <p className="text-micro font-semibold uppercase tracking-[0.1em] text-muted">{s.label}</p>
               <p className="tabular mt-1.5 text-title font-semibold leading-none text-ink">{s.value}</p>
+              {"note" in s && s.note ? <p className="mt-1.5 text-caption text-muted">{s.note}</p> : null}
             </div>
           ))}
         </div>

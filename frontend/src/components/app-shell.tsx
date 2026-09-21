@@ -242,7 +242,9 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false }: 
                 aria-expanded={isOpen}
                 aria-controls={`nav-${section.group}`}
                 onClick={() => setCollapsed((c) => ({ ...c, [section.group]: !c[section.group] }))}
-                className="rail-group-header flex w-full items-center gap-1 rounded px-2 pb-1.5 text-micro font-bold uppercase tracking-[0.1em] text-muted transition-colors hover:text-ink"
+                // min-h-6: a 24px target (WCAG 2.5.8). At 19-21px the header sat within 12px of the
+                // first link below it, which the spacing exception does not cover.
+                className="rail-group-header flex min-h-6 w-full items-center gap-1 rounded px-2 pb-1.5 text-micro font-bold uppercase tracking-[0.1em] text-muted transition-colors hover:text-ink"
               >
                 <Icon
                   name="chevron"

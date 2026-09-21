@@ -176,6 +176,11 @@ function BlastRadiusPanelInner({ documentId }: { documentId: string }) {
         </span>
       </div>
 
+      <p className="mt-1.5 text-caption text-pretty text-muted">
+        Everything that relies on this source document. If the document is superseded or disputed,
+        each item here is flagged for review, so outdated knowledge cannot spread unnoticed.
+      </p>
+
       <div className="mt-3 space-y-4">
 
           {report.items.length === 0 ? (

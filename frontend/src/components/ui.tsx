@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { AuthorityLevel, AuditLogEntry, BriefSource } from "@/lib/types";
 import { getHealthDetailed } from "@/lib/api";
-import { authorityLabel, cn } from "@/lib/utils";
+import { authorityDescription, authorityLabel, cn } from "@/lib/utils";
 import { fmtRelTime } from "@/lib/format";
 import { useCountUp } from "@/lib/motion";
 import { MetricCardSkeleton, TableSkeleton } from "@/components/skeleton";
@@ -139,7 +139,7 @@ export function KpiGroup({
 
 const TONE_STYLE: Record<Tone, string> = {
   danger: "text-danger bg-[color-mix(in_srgb,var(--danger)_14%,transparent)]",
-  caution: "text-caution bg-[color-mix(in_srgb,var(--caution)_16%,transparent)]",
+  caution: "text-caution-ink bg-[color-mix(in_srgb,var(--caution)_16%,transparent)]",
   verified: "text-verified bg-[color-mix(in_srgb,var(--verified)_15%,transparent)]",
   info: "text-info bg-[color-mix(in_srgb,var(--info)_14%,transparent)]",
   validation: "text-validation bg-[color-mix(in_srgb,var(--validation)_14%,transparent)]",
@@ -176,8 +176,13 @@ export function StatusBadge({
 
 /** Neutral mono chip carrying the authority level of a source. */
 export function AuthorityBadge({ level }: { level: AuthorityLevel }) {
+  // `title` is supplementary: the visible label already names the source class ("OEM"); the hover
+  // text adds which way the scale runs, which the label cannot fit.
   return (
-    <span className="tabular inline-flex h-[22px] items-center rounded-md border border-line bg-surface-2 px-2 text-label font-medium text-ink">
+    <span
+      title={authorityDescription(level)}
+      className="tabular inline-flex h-[22px] items-center rounded-md border border-line bg-surface-2 px-2 text-label font-medium text-ink"
+    >
       {authorityLabel(level)}
     </span>
   );

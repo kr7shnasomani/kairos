@@ -73,8 +73,40 @@ const AUTHORITY_NAMES: Record<AuthorityLevel, string> = {
   5: "Field",
 };
 
+// Display names for the provider keys the backend returns as `model` on every answer and uses as
+// `/health/model?provider=` (backend: services/model_providers.py). One map, so the Copilot badge and
+// System Health cannot name the same provider two ways. An unknown key is shown as-is.
+const PROVIDER_NAMES: Record<string, string> = {
+  tokenfactory: "Nebius Token Factory",
+  nim: "NVIDIA NIM",
+  openrouter: "OpenRouter",
+  gemini: "Google Gemini",
+  ollama: "Ollama (local)",
+  jina: "Jina",
+  groq: "Groq",
+};
+
+export function providerName(key: string): string {
+  return PROVIDER_NAMES[key] ?? key;
+}
+
 export function authorityLabel(level: AuthorityLevel): string {
   return `L${level} · ${AUTHORITY_NAMES[level]}`;
+}
+
+// The five-level hierarchy from ARCHITECTURE.md (Layer 4). The short names above fit a badge; these
+// say what each level actually is, for the badge's hover text.
+const AUTHORITY_MEANINGS: Record<AuthorityLevel, string> = {
+  1: "a regulatory requirement",
+  2: "an engineering standard or site-specific policy",
+  3: "an OEM manual or approved technical specification",
+  4: "a site operating procedure or maintenance standard",
+  5: "a field observation, informal note or unverified report",
+};
+
+/** One sentence explaining a level, including which way the scale runs. */
+export function authorityDescription(level: AuthorityLevel): string {
+  return `Authority level ${level} of 5, where 1 is highest: ${AUTHORITY_MEANINGS[level]}. When sources conflict, higher authority ranks first.`;
 }
 
 /** Criticality display — accepts both fixture (high/medium/low) and live

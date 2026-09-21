@@ -32,6 +32,10 @@ import { SystemTabs } from "@/components/system-tabs";
 
 const f3 = (v: number) => v.toFixed(3);
 
+// Shown by both gate charts when nothing is recorded. Says why the chart is empty and where the
+// last number lives, rather than leaving a judge at a dead end.
+const NO_RUNS = "No model-gate run recorded on this deployment yet. The last offline measurement is under Harness metrics below.";
+
 /** Severity → reserved status tone. Status colours never double as series colours. */
 const SEVERITY_TONE = { critical: "danger", major: "caution", minor: "neutral" } as const;
 
@@ -127,7 +131,7 @@ export default function SystemBenchmarksPage() {
           loading={gate.status === "loading"}
           error={gate.status === "error" ? gate.error.message : false}
           onRetry={gate.status === "error" ? gate.retry : undefined}
-          empty={runs.length === 0 ? "No model-gate runs recorded yet." : false}
+          empty={runs.length === 0 ? NO_RUNS : false}
         >
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={runs} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
@@ -154,7 +158,7 @@ export default function SystemBenchmarksPage() {
           loading={gate.status === "loading"}
           error={gate.status === "error" ? gate.error.message : false}
           onRetry={gate.status === "error" ? gate.retry : undefined}
-          empty={entityBars.length === 0 ? "The latest run recorded no per-type breakdown." : false}
+          empty={runs.length === 0 ? NO_RUNS : entityBars.length === 0 ? "The latest run recorded no per-type breakdown." : false}
         >
           <BarList data={entityBars} height={260} valueFormat={(v) => Number(v).toFixed(3)} />
         </ChartCard>
@@ -212,7 +216,10 @@ export default function SystemBenchmarksPage() {
       <section aria-label="Model-gate run history" className="mt-4">
         <h2 className="mb-2 text-body font-semibold text-ink">Model-gate run history</h2>
         {runs.length === 0 ? (
-          <EmptyState message="No model-gate runs recorded yet. Trigger one from Governance → Model gate." />
+          <EmptyState
+            message="No model-gate runs recorded on this deployment yet."
+            action={{ label: "Run the model gate", href: "/governance/model-gate" }}
+          />
         ) : (
           <DataTable<GateRow>
             rows={history}
@@ -269,6 +276,10 @@ export default function SystemBenchmarksPage() {
           <strong className="text-ink">VALID</strong>) · provenance <strong className="text-ink">46/46</strong>{" "}
           · compliance gap F1 <strong className="text-ink">0.912</strong> · load{" "}
           <strong className="text-ink">0% errors to 50 VU</strong>.
+        </p>
+        <p className="mt-2 text-caption text-muted">
+          Entity-extraction F1 from the last offline model-gate run: <strong className="text-ink">0.805</strong>{" "}
+          on 40 labelled entities, run validity <strong className="text-ink">VALID</strong> (<code>benchmark/RESULTS.md</code> §3).
         </p>
         <p className="mt-2 text-caption text-muted">
           Compliance fell from 0.986 because a human promoted a quarantined procedure onto EQ-101 after

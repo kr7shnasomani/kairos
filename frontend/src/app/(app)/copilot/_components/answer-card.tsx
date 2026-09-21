@@ -4,7 +4,7 @@ import { useState } from "react";
 import { getArtifactUrl, submitAnswerFeedback } from "@/lib/api";
 import { META_MODEL, type CopilotAnswer } from "@/lib/copilot";
 import { AuthorityBadge, SourceChip, StatusBadge, ConfidenceMeter } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { cn, providerName } from "@/lib/utils";
 import { EntityAnnotations } from "./entity-annotations";
 
 // Phase 1 = retrieval only (no synthesized prose); 2+ = full synthesis.
@@ -344,7 +344,7 @@ export function Answer({ data, query = "", streaming }: {
           <ConfidenceMeter value={data.confidence} />
           <div className="flex items-center gap-3 text-label text-muted">
             {data.model && (
-              <span className="max-w-[200px] truncate tabular">{data.model}</span>
+              <span className="max-w-[200px] truncate" title={`Answered by ${providerName(data.model)}`}>{providerName(data.model)}</span>
             )}
             <div className="ml-auto flex items-center gap-1.5">
               {feedbackFailed && (

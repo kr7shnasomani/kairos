@@ -398,7 +398,7 @@ export async function probeEndpoint(path: string, timeoutMs = 8000): Promise<Pro
   }
 }
 
-// Opt-in liveness probe for a rate-limited model provider (nim/gemini/jina/groq). Each call spends
+// Opt-in liveness probe for a rate-limited model provider (any synthesis tier, jina, groq). Each call spends
 // real quota, so the System Health page only fires this when the provider's toggle is on. Never throws.
 export type ModelProbe = { provider: string; ok: boolean; status?: number; model?: string; latencyMs?: number; detail?: string | null };
 export async function probeModel(provider: string): Promise<ModelProbe> {

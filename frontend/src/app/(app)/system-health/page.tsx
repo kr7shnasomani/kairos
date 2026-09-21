@@ -8,7 +8,7 @@ import { ADMIN_ROLES } from "@/components/use-role";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { SystemTabs } from "@/components/system-tabs";
 import { Skeleton } from "@/components/skeleton";
-import { capitalize, cn } from "@/lib/utils";
+import { capitalize, cn, providerName } from "@/lib/utils";
 import { fmtRelTime } from "@/lib/format";
 import type { HealthDetailed, ServiceHealth } from "@/lib/types";
 
@@ -35,11 +35,13 @@ const API_GROUPS: { group: string; layer: string; endpoint: string; probe: strin
 ];
 
 // Rate-limited external model providers — opt-in monitoring only.
-const MODELS: { key: string; name: string; sub: string }[] = [
-  { key: "nim", name: "NVIDIA NIM", sub: "LLM synthesis · nemotron-3-super-120b" },
-  { key: "gemini", name: "Google Gemini", sub: "LLM fallback · gemini-2.5-flash-lite" },
-  { key: "jina", name: "Jina", sub: "Embeddings · powers Search & RAG" },
-  { key: "groq", name: "Groq", sub: "Whisper STT · voice notes" },
+// Display names come from providerName(), the one map the Copilot badge uses too.
+const MODELS: { key: string; sub: string }[] = [
+  { key: "tokenfactory", sub: "LLM synthesis · nemotron-3-super-120b" },
+  { key: "nim", sub: "LLM synthesis fallback · nemotron-3-super-120b" },
+  { key: "gemini", sub: "LLM fallback · gemini-2.5-flash-lite" },
+  { key: "jina", sub: "Embeddings · powers Search & RAG" },
+  { key: "groq", sub: "Whisper STT · voice notes" },
 ];
 
 const TONE = { healthy: "verified", degraded: "caution", down: "danger" } as const;
@@ -372,12 +374,13 @@ export default function SystemHealthPage() {
             const on = !!enabled[m.key];
             const res = modelResults[m.key];
             const busy = !!modelBusy[m.key];
+            const name = providerName(m.key);
             return (
               <div key={m.key} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <StatusDot tone={!on ? "idle" : res?.ok ? "healthy" : busy ? "degraded" : "down"} />
                   <div className="min-w-0">
-                    <p className="truncate text-body font-medium text-ink">{m.name}</p>
+                    <p className="truncate text-body font-medium text-ink">{name}</p>
                     <p className="truncate text-label text-muted">{m.sub}</p>
                   </div>
                 </div>
@@ -393,7 +396,7 @@ export default function SystemHealthPage() {
                         : <span className="text-caption text-muted">—</span>
                   )}
                   {!on && <span className="text-caption text-muted">Monitoring off</span>}
-                  <Toggle on={on} onClick={() => toggleModel(m.key)} label={`Monitor ${m.name}`} />
+                  <Toggle on={on} onClick={() => toggleModel(m.key)} label={`Monitor ${name}`} />
                 </div>
               </div>
             );

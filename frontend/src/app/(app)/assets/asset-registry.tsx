@@ -41,11 +41,14 @@ const COLUMNS: TableColumn<AssetRow>[] = [
   // out; a gap is a compliance finding, so it takes the danger tone rather than the accent.
   {
     key: "open_work_orders_count", label: "Open WOs", align: "right", sortable: true,
-    render: (r) => <span className={`tabular ${r.open_work_orders_count ? "font-semibold text-ink" : "text-muted"}`}>{r.open_work_orders_count}</span>,
+    // Unknown (a failed lookup) sorts below every real count, including 0.
+    sortValue: (r) => r.open_work_orders_count ?? -1,
+    render: (r) => <span className={`tabular ${r.open_work_orders_count ? "font-semibold text-ink" : "text-muted"}`}>{r.open_work_orders_count ?? "—"}</span>,
   },
   {
     key: "compliance_gap_count", label: "Compliance gaps", align: "right", sortable: true,
-    render: (r) => <span className={`tabular ${r.compliance_gap_count ? "font-semibold text-danger" : "text-muted"}`}>{r.compliance_gap_count}</span>,
+    sortValue: (r) => r.compliance_gap_count ?? -1,
+    render: (r) => <span className={`tabular ${r.compliance_gap_count ? "font-semibold text-danger" : "text-muted"}`}>{r.compliance_gap_count ?? "—"}</span>,
   },
 ];
 

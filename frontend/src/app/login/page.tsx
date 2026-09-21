@@ -124,13 +124,9 @@ export default function LoginPage() {
           </button>
           <button type="button" onClick={tryDemo} disabled={busy}
             className="min-h-11 rounded-lg border border-line bg-surface text-sm font-semibold text-ink transition-colors hover:bg-surface-2 disabled:opacity-60">
-            Try demo · signs in as admin
+            Explore the live demo
           </button>
         </form>
-
-        <p className="mt-5 text-center text-label text-muted">
-          Seeded users: admin · engineer · field_worker.
-        </p>
       </div>
         </section>
       </div>
