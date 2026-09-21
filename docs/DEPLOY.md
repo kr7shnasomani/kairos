@@ -37,7 +37,7 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 | Running | the 11 services started by `make prod`; memory about 2.8 GiB of 7.6 GiB |
 | Account | AWS Free plan, $100 credit, about $2.63 a day while running |
 
-**Accepted risk:** the login page's "Try demo · signs in as admin" button, and the seeded passwords in the
+**Accepted risk:** the login page's "Explore the live demo" button (it signs in as admin), and the seeded passwords in the
 repository, let anyone act as admin on the live data. Replace them with a read-only demo account before
 wider sharing.
 
@@ -150,7 +150,7 @@ Prices are AWS on-demand rates for **Asia Pacific (Mumbai)**, checked on 14 Sept
 - This repository with a working `.env` on your Mac
 
 **Decide before going public: the demo login.** The login page has a
-**"Try demo · signs in as admin"** button.
+**"Explore the live demo"** button (signs in as admin).
 
 - **The risk:** on a public deployment, any visitor becomes admin. They can sign permits, promote quarantined
   items and supersede documents in the real Supabase, Neo4j Aura and Qdrant data, and that data has no backup.
@@ -332,7 +332,8 @@ KAIROS_DOMAIN=kairos-deterium.duckdns.org
 | `RATE_LIMIT_PER_MINUTE=600` | The limit is enforced only in production and applies per client IP. Vercel server-side renders reach the API from a few shared IPs, so the default 120 is too tight. 600 still stops a script from draining model quotas. |
 | `KAIROS_DOMAIN` | Read by the `kairos-caddy` service for the certificate |
 
-Leave every other value unchanged.
+Leave every other value unchanged. To turn on Nebius Token Factory later, follow
+[`BACKEND.md` › Turning on Nebius Token Factory](./BACKEND.md#turning-on-nebius-token-factory).
 
 ---
 

@@ -32,9 +32,9 @@ judging 16 to 20 September) as release
 Hackathon 2.0 submission is [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0)
 (`b81ed1f`). **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
 **https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
-494/494 service-free backend tests, 271/271 frontend tests, `tsc` clean, `eslint` 0 errors, end-to-end
-flows 46/46, CI green. What is still open is listed under
-[Pending — as of 2026-09-15](#pending--as-of-2026-09-15).
+519/519 service-free backend tests, 270/271 frontend tests (one pre-existing failure, P11), `tsc`
+clean, `eslint` 0 errors, end-to-end flows 46/46 (2026-09-14). What is still open is listed under
+[Pending — as of 2026-09-22](#pending--as-of-2026-09-22).
 
 **All 13 architecture layers are implemented.** Architecture conformance is **~91.5%** — the mean of
 the 13 per-layer scores in [Conformance](#architecture--implementation-conformance).
@@ -384,7 +384,7 @@ invisible in the graph. The denylist stays, and widening it needs the same evide
 
 **Caution on the FastAPI upgrade specifically.** It is code-only, but it carries real breakage risk
 across every router *and* there is **no current full-suite pass count** to catch a regression (D4) —
-the 494-test service-free tier is the only backstop, and it cannot exercise queries or routing. Do
+the service-free tier is the only backstop, and it cannot exercise queries or routing. Do
 not start it casually. `ecdsa` has no released fix regardless, so it closes 7 of 8 advisories, not 8.
 
 **What is already done and must not be re-opened:** the OCR parse and size-ceiling defects (fixed and
@@ -504,20 +504,26 @@ a new PS criterion arrives without a harness.
 
 ## Pending
 
-### Pending — as of 2026-09-15
+### Pending — as of 2026-09-22
+
+Hackathon-specific work (Nebius x NVIDIA) is planned in [`nebius-prep.md`](./nebius-prep.md). That file
+holds the submission plan only; general project debt found while doing it is recorded here, not there.
 
 Safety class as in [Next actions](#next-actions--in-order-with-their-safety-class): 🟢 repo only ·
 🟡 provider quota or account settings · 🔴 writes to a cloud store (needs an explicit ask).
 
 | # | Item | Class | Notes |
 |---|---|---|---|
-| P1 | **Public demo login is admin.** The login page's "Try demo · signs in as admin" button and the seeded persona passwords (in this repo and the public `deterium-kairos` copy) let anyone act as admin on the live data. | 🔴 | Accepted for the judging window (user decision 2026-09-15). Fix: a read-only `demo` role (one write-blocking check in the backend, admin-equivalent reads, the button pointed at it), then rotate the seeded passwords in Supabase Auth |
+| P1 | **Public demo login is admin.** The login page's "Explore the live demo" button (it signs in as admin) and the seeded persona passwords (in this repo and the public `deterium-kairos` copy) let anyone act as admin on the live data. | 🔴 | Accepted for the judging window (user decision 2026-09-15). Fix: a read-only `demo` role (one write-blocking check in the backend, admin-equivalent reads, the button pointed at it), then rotate the seeded passwords in Supabase Auth |
 | P2 | **Vercel preview deployments are public.** Protection was turned off entirely with the CLI; production must be public, previews need not be | 🟡 | Vercel → `kairos` → Settings → Deployment Protection → Vercel Authentication → *Only Preview Deployments* |
 | P3 | **Regenerate the DuckDNS token** — it was shown in a screenshot during setup | 🟡 | duckdns.org; nothing in the repo uses it |
 | P4 | **Stop the EC2 instance after the results** (about 2026-09-25) and follow *Pause between events* in [`DEPLOY.md`](../DEPLOY.md); check the AWS Free plan end date before restarting | 🟡 | Running costs about $2.63/day of credit, stopped about $0.21/day |
 | P5 | **Five open Dependabot PRs** — #52 (npm, 17 updates), #46 (vitest 5, major), #41 (docker), #40 (python, 37 updates), #23 (go). Held back to keep the submission tree unchanged during judging | 🟢 | Review and merge after judging; vitest 5 and the Python group need a full service-free and frontend run |
 | P6 | **Server Elasticsearch snapshot is from 2026-09-13** (18 documents / 10 assets vs 20 / 11 locally — the QA test document and asset are missing) | 🟢 | Harmless: both are test data. Re-export with `make export-search-index` if the corpus changes |
 | P7 | **Stale measurements** — `run_retrieval_baseline.py` (predates the 2026-08-24 `/search` fix), `run_safety_eval.py` (not re-run since 2026-08-17), `run_cross_functional.py` (measured at n=37) | 🟡 | Re-run after judging, not during it (provider quota) |
+| P10 | **Two quarantine items from a QA sweep**: an elicitation response "QA: scoring on the seal face…" (engineer persona) and a voice note whose transcript is "." (field_worker persona). Deliberately **not** filtered: a "QA:" prefix can be a real quality-assurance note, and hiding an item from a review queue means it is never reviewed | 🔴 | Dispute or archive both through the quarantine review queue, which also exercises the governance flow. A write, so the user's call |
+| P11 | **`offboarding/page.test.tsx` fails** ("keeps identifiers honest and makes retirement timing explicit"). Pre-existing: fails with the 2026-09-22 changes stashed | 🟢 | Frontend-only; the other 270 vitest tests pass |
+| P12 | **`ARCHITECTURE.md` still lists the cascade as NIM → OpenRouter → Gemini → Ollama.** Left on purpose until the Nebius Token Factory tier's role is decided; every other doc describes the registry | 🟢 | Update §6 when the tier is keyed and promoted |
 | P8 | Backlog carry-overs: synthesis verdict (#8), form-parsing layout pass (#6), FastAPI major upgrade (#2), D3 `COMPONENT` labels, 7 eslint unused-var warnings | 🟢 | Unchanged; see [Next actions](#next-actions--in-order-with-their-safety-class) and the [Backlog](#improvement-backlog) |
 
 ### Reported UI/wiring issues — triaged and fixed 2026-08-23
@@ -992,14 +998,21 @@ recorded above.
   from the Vercel origin, and a signed-in read through the public site verified; only 22, 80 and 443
   reachable from the internet. See [`DEPLOY.md`](../DEPLOY.md).
 - **End-to-end flows:** `tools/e2e_flows.sh --mutate` **46/46** (2026-09-14).
+- **Accessibility audit (2026-09-22)**, WCAG 2.2 AA, measured in the browser on Overview, Copilot,
+  Briefs, Asset detail, Quarantine and RCA, in light, dark and high-contrast modes. Two failures found
+  and fixed: nav group headers were 19-21px targets within 12px of the next link (2.5.8, now 24px), and
+  the light-mode amber status badge was 4.35:1 (1.4.3, now 5.16:1 via `--caution-ink`). Clean: accessible
+  names, form labels, alt text, heading order, duplicate ids, page language, skip link, visible focus
+  ring, reduced motion. Contrast must be measured on a **fresh page load** per theme: switching theme
+  in place and measuring immediately reads stale colours and reports false failures.
 - **Backend test suite:** **576 collected** across 50 files (2026-08-23). The last full green run was
   **412 passed · 0 failed** (2026-08-22); 164 tests have landed since, so **no current pass count
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **494 passed** across **44 files** (re-run 2026-09-15) — no stack / secrets / network.
-  This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md` and
-  `.github/workflows/tests.yml` and **all three must be updated together** (they have drifted twice).
+- **Service-free tier:** **519 passed** across **45 files** (re-run 2026-09-22) — no stack / secrets / network.
+  This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md`, `docs/INFRA.md` and
+  `.github/workflows/tests.yml` and **all four must be updated together** (they have drifted twice).
 - **Frontend:** **271 passed across 75 files — fully green** (re-run 2026-09-15), `tsc` clean, `eslint`
   0 errors / 7 unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
@@ -1105,7 +1118,7 @@ recorded above.
 | Area | Fix |
 |---|---|
 | **Neo4j + Qdrant are CLOUD** (Aura + Qdrant Cloud, via `.env`) | Local `kairos-neo4j`/`kairos-qdrant` containers are **profile-gated** — they do NOT start by default; `docker compose --profile local-stores up` brings them back for offline dev/tests. Cloud creds live in `.env` only (never in compose). Aura DB is named after the instance (e.g. `2016aa75`), **not** `neo4j` — always open sessions with `database=settings.NEO4J_DATABASE` (GraphService defaults to it). Cloud Qdrant **requires payload indexes** on any filter field (`asset_id`, `document_id`, `is_quarantine`) — `init_qdrant.py` creates them; without them filtered searches 400. Every Qdrant client must pass `api_key=settings.QDRANT_API_KEY` or it 403s. |
-| **Never run the write-heavy test suite against cloud** | `pytest tests/` creates + purges test entities; the teardown purge is unreliable against cloud Supabase (transient Cloudflare 500s) and **pollutes the golden data**. **There is no fully-local option.** `--profile local-stores` covers Neo4j and Qdrant only — the suite writes to Supabase heavily and there is **no local Supabase** in `docker-compose.yml` (the one postgres there is Temporal's), so Supabase is always a hosted project. The only safe full-suite run is against a **throwaway Supabase project** via CI's `integration` tier, and that tier is **deliberately left disabled** (2026-08-23 decision): `CI_SUPABASE_*` is unset, so the job gates off and exits 0 and no provider quota is spent per push. **Consequence accepted, not a defect: there is no current full-suite pass count**, and the service-free tier (374) is the only enforced backstop. To restore clean golden data: truncate Supabase operational tables + wipe Neo4j/Qdrant/ES, then `init-all → seed → load-dataset`. **Measured extent, 2026-08-23** (the accepted consequence, quantified): `offboarding_sessions` 17 rows of which **16 are test-minted** (`resp_`/`qtest_`/`detail_`/`retiring_` + uid, from `test_elicitation.py`) leaving one real seed programme (`EXPERT-RKUMAR`); 96 of 101 `offboarding_session_items`; 4 `quarantine_items`; 68 of 86 Supabase `assets` carry `eam_source` `test`/`integration_test`; 95 of 137 `operational_events` belong to test assets; `audit_log.performed_by` includes `test-runner` and `e2e-sweep`. `scripts/purge_test_data.py` does **not** cover the off-boarding family — `SUPABASE_TARGETS` has no entry for either table, which is why that family accumulates while `ASSET-TEST-*` does not. Demo-visible on `/offboarding` and `/management`. Cleanup is **deliberately not automated**: the purge runs as an autouse session fixture (`conftest.py`), so adding the off-boarding tables there arms an irreversible delete against cloud data on the next unguarded suite run. See Pending. |
+| **Never run the write-heavy test suite against cloud** | `pytest tests/` creates + purges test entities; the teardown purge is unreliable against cloud Supabase (transient Cloudflare 500s) and **pollutes the golden data**. **There is no fully-local option.** `--profile local-stores` covers Neo4j and Qdrant only — the suite writes to Supabase heavily and there is **no local Supabase** in `docker-compose.yml` (the one postgres there is Temporal's), so Supabase is always a hosted project. The only safe full-suite run is against a **throwaway Supabase project** via CI's `integration` tier, and that tier is **deliberately left disabled** (2026-08-23 decision): `CI_SUPABASE_*` is unset, so the job gates off and exits 0 and no provider quota is spent per push. **Consequence accepted, not a defect: there is no current full-suite pass count**, and the service-free tier is the only enforced backstop (current count in the Verification snapshot). To restore clean golden data: truncate Supabase operational tables + wipe Neo4j/Qdrant/ES, then `init-all → seed → load-dataset`. **Measured extent, 2026-08-23** (the accepted consequence, quantified): `offboarding_sessions` 17 rows of which **16 are test-minted** (`resp_`/`qtest_`/`detail_`/`retiring_` + uid, from `test_elicitation.py`) leaving one real seed programme (`EXPERT-RKUMAR`); 96 of 101 `offboarding_session_items`; 4 `quarantine_items`; 68 of 86 Supabase `assets` carry `eam_source` `test`/`integration_test`; 95 of 137 `operational_events` belong to test assets; `audit_log.performed_by` includes `test-runner` and `e2e-sweep`. `scripts/purge_test_data.py` does **not** cover the off-boarding family — `SUPABASE_TARGETS` has no entry for either table, which is why that family accumulates while `ASSET-TEST-*` does not. Demo-visible on `/offboarding` and `/management`. Cleanup is **deliberately not automated**: the purge runs as an autouse session fixture (`conftest.py`), so adding the off-boarding tables there arms an irreversible delete against cloud data on the next unguarded suite run. See Pending. |
 | **Pointing the app at `--profile local-stores`** | The compose admin user is hardcoded to `neo4j` (Neo4j rejects any other initial admin name). To point the app at the local container, also set `NEO4J_USERNAME=neo4j` / `NEO4J_PASSWORD=$NEO4J_LOCAL_PASSWORD` in `.env`. |
 | **What the benchmark writes** | `run_benchmark.py` + `verify_layers.py` write **only `audit_log` rows** (one per synthesis, ~37 per full sweep) — append-only, no golden data touched, no schema change. `run_compliance_eval.py` and `run_load_test.py` are read-only; `run_model_validation.py` writes one `model_gate_result` row (`--no-persist` to skip). Safe to run against cloud; it does spend NIM/Jina quota. |
 | **Benchmark checkpoints must live on a mounted path** | `run_benchmark.py --checkpoint` writes each graded question as it lands so a crash costs the remainder, not the run — but `/tmp` is **container-local**, and a rebuild mid-run wipes it. Use `/app/.benchmark_runs/` (bind-mounted to `backend/.benchmark_runs/` by `docker-compose.override.yml`). Launch detached with `docker exec -d` and write logs there too. |
@@ -1126,7 +1139,7 @@ recorded above.
 | System Health page | `/system-health` (admin). Probes 11 cheap read-only API GETs + `/health/detailed` every 30s. Search is **excluded** from the always-on set (it embeds via Jina = rate-limited). Opt-in "AI models" section toggles NIM/Gemini/Jina/Groq via `GET /health/model?provider=…` (admin-only, once/min, off by default, `localStorage`-persisted). Never poll model probes by default — they spend provider quota. |
 | Roles & personas | Five roles in `infra/policies/kairos.rego`; the frontend `Role` type now includes **`compliance`** (read-only auditor). `/compliance` + `/audit` use `STAFF_AND_COMPLIANCE`, everything else staff-only, and `roleHome("compliance") = /compliance` — the default `/management` is staff-only and would redirect-loop. Seeded users: admin · engineer · field_worker · **reliability** · **compliance**. Only `reliability`/`admin` may `promote_quarantine` (engineers resolve conflicts but do **not** promote — verified against live OPA). **OPA gates writes *and* sensitive reads** (2026-08-17): `GET`/`HEAD` on `/audit-log`, `/compliance`, `/governance`, `/documents`, `/events` are policy-checked, so a `field_worker` gets **403** rather than 200. `read_nonconformance` is deliberately narrower than `read_governance` — the compliance auditor's non-conformance view reads conflicts + quarantine without reaching the model gate or MoC. `/events/plant-state` is exempt (every persona's shell renders it). Backend grants mirror `use-role.ts`; verify with `tools/verify_authz_policy.sh`. |
 | Custom OTEL metrics are per-process | `services/metrics.py` instruments are silent no-ops without a MeterProvider, so **every process that records a metric must call `setup_telemetry()`** — not just the API. Celery does it on `worker_process_init` (per forked child — an exporter thread does not survive a fork); `setup_telemetry(app=None)` skips the FastAPI-only instrumentor. Add a metric to a new process without this and it exports nothing, under any amount of traffic, with no error. |
-| Sidebar footer | System information (all roles) · System health (admin) · **System settings** (renamed from "Settings"; route stays `/settings`). Help removed. Login has a "Try demo" → admin button. Tab titles = `Kairos: <page>`. |
+| Sidebar footer | System information (all roles) · System health (admin) · **System settings** (renamed from "Settings"; route stays `/settings`). Help removed. Login has an "Explore the live demo" button that signs in as admin. Tab titles = `Kairos: <page>`. |
 
 ---
 

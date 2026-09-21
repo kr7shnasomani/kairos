@@ -186,15 +186,17 @@ Opt-in liveness probe for a **rate-limited model provider**. Makes the smallest 
 
 **Auth required:** Yes — `admin` only. **Not** polled by default (each call spends provider quota).
 
-**Query params:** `provider` — one of `nim | gemini | jina | groq`.
+**Query params:** `provider` — any synthesis tier (`tokenfactory | nim | openrouter | gemini`, read from the same registry as the cascade, `services/model_providers.py`) or `jina | groq`.
 
 **Response `200`:**
 ```json
-{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-super-120b-a12b", "latency_ms": 2603, "detail": null }
+{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-super-120b-a12b", "served_model": "nvidia/nemotron-3-super-120b-a12b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
 ```
 
+For a synthesis tier the probe sends the tier's own provider-specific body keys (Nemotron's thinking-off flag), so a provider that rejects them fails here rather than on every real answer. `served_model` is the model the provider says it ran; `model_mismatch` is `null` when it matches the pin (casing ignored) and a record otherwise. Both are `null` for Jina and Groq.
+
 `ok: false` with `detail: "not configured"` when the provider's API key is unset; `detail` carries the
-error text when the upstream call fails. `400` for an unknown provider.
+error text when the upstream call fails. A known tier with no key is `not configured`, not an error; `400` only for a name outside the list.
 
 ---
 
@@ -342,8 +344,12 @@ List all registered assets.
 |-------|------|---------|-------------|
 | `site_id` | string | — | Filter by site |
 | `equipment_class` | string | — | Filter by class (pump, vessel, …) |
-| `skip` | int | `0` | Pagination offset |
-| `limit` | int | `50` | Page size (max 200) |
+| `offset` | int | `0` | Pagination offset |
+| `limit` | int | `50` | Page size (max 500) |
+
+Test assets (`QA-TEST-*` and the integration suite's `ASSET-*` ids, see `services/corpus.py`) are
+excluded **in the query**, so `total` counts real assets only; the response reports how many were
+hidden as `excluded_test_assets`.
 
 **Response `200`:**
 ```json
@@ -371,9 +377,9 @@ List all registered assets.
 > `operational_events` of type `work_order_created`, and `knowledge_conflicts` with
 > `status = "open"` — so the list and the detail page can never disagree about the same number.
 >
-> **Always numeric, never null**: an asset with no rows is `0`. A failed Supabase lookup is also
-> `0`, logged as `asset.list_counts_failed`; treat these as "best known" rather than
-> guaranteed-live.
+> **`0` means no rows; `null` means unknown.** A failed Supabase lookup returns `null` for that
+> field on every row of the page, logged as `asset.list_counts_failed`, and the UI renders it as
+> "—". It was `0` until 2026-09-22, which made a failed lookup read as "0 compliance gaps".
 >
 > Cost is **two queries per page regardless of page size** — the counts are fetched in bulk for
 > the page's asset ids and tallied in the router, not queried per asset. Do not "simplify" this
@@ -434,7 +440,7 @@ Get a single asset by its canonical ID. Enriched with 3-parallel live counts.
 }
 ```
 
-`open_work_orders_count`, `compliance_gap_count`, and `last_inspection_date` are fetched in parallel from Supabase. **`404`** if not found.
+`open_work_orders_count`, `compliance_gap_count`, and `last_inspection_date` are fetched in parallel. Each is `null` when its lookup fails (never a `0` that reads as a clean record); `last_inspection_date` is also `null` when no inspection-complete event exists. **`404`** if not found.
 
 ---
 
@@ -2442,6 +2448,12 @@ Regulatory gap detection against 12 seeded frameworks (OISD-117, ISO 45001, and 
 ---
 
 ### `GET /compliance/gaps`
+
+> **Test assets are excluded, and the count is reported.** This endpoint, `GET /compliance/dashboard`,
+> `GET /compliance/audit-pack` and `GET /assets/coverage` skip assets whose id starts with a test
+> prefix (`QA-TEST-` and the integration suite's `ASSET-*`, see `services/corpus.py`) inside the
+> query, and each response carries `excluded_test_assets`: how many were hidden (site-scoped where
+> the query is).
 
 Evaluates every applicable (clause × asset) pair and returns the ones that are not
 cleared. A clause is **covered** for an asset when the asset has an active, non-superseded

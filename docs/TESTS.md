@@ -22,20 +22,23 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
 you will reset, never on the dataset you are about to demo or benchmark.
 
-### Tier 1 — service-free (494 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (519 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push.
 
 ```bash
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \
-  pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,\
-model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,\
-ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,\
-superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,\
-alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence}.py
+  pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,\
+config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,\
+timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,\
+attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,\
+quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
+form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
+ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
+document_extraction_view,image_utils,ocr_review_release,supabase_http}.py
 ```
 
-All **44** files, **494 tests** (2026-09-14). The seven newest:
+All **45** files, **519 tests** (2026-09-22). The seven newest:
 `test_alias_expansion.py` — a query naming a confirmed alias (P-101) also searches its canonical asset.
 `test_ner_fallback.py` — NIM NER calls are capped at 4 concurrent; a timeout or 5xx is retried but a 4xx
 is not; a long document is extracted in chunks and merged, and a failed chunk keeps the others while
@@ -45,8 +48,11 @@ alias candidates or quarantine items, and "HE-301 Shell and Tube Heat Exchanger"
 `test_linked_document_scope.py` — an asset-scoped search also matches documents the graph links to the
 asset, the asset's own documents rank first within an authority level, and a graph outage degrades to
 the primary-asset scope.
-`test_nim_retry.py` — a NIM 502/503/504 is retried once before the cascade hands the answer to a
-different model; a client error is never retried.
+`test_nim_retry.py` — the shared provider call path and the registry behind it: a 502/503/504 is
+retried once before the cascade hands the answer to a different model, a client error is never
+retried, each tier posts its own model id and only its own `extra_body` keys, an unkeyed tier is
+absent from the cascade entirely, Token Factory takes tier 1 when keyed, and a tier that already failed this request (a broken stream) is skipped rather than retried. Filename kept because
+CI's service-free job lists test files by name.
 `test_rca_timeline.py` — the RCA timeline shows an event recorded in both Supabase and Neo4j once, orders
 mixed UTC offsets by instant, and reads a naive timestamp as UTC.
 `test_supabase_http.py` — Supabase REST reads survive a dropped pooled HTTP/2 connection: a GET/HEAD that hits a
@@ -135,7 +141,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 494 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 519 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud
@@ -156,7 +162,7 @@ gh secret set GROQ_API_KEY
 
 > **Recommended: leave the integration job disabled.** Enabling it costs **~20 provider calls
 > per push** — every `/search` embeds the query via Jina, `/search/synthesize` walks the
-> NIM → OpenRouter → Gemini cascade, and elicitation calls the LLM. Gemini's free tier is a few hundred requests/day and
+> Token Factory → NIM → OpenRouter → Gemini cascade, and elicitation calls the LLM. Gemini's free tier is a few hundred requests/day and
 > is shared with the benchmark harnesses, so a busy day of pushes exhausts it; once it 429s,
 > synthesis silently returns no answer and *measured answer quality collapses* (observed:
 > 24/25 → 13/25). Tier-1 gives 415 green tests with **zero** provider calls, which is the
@@ -215,6 +221,7 @@ tests/                        ← project root (NOT inside backend/)
   test_authz_boundary.py      ← policy enforcement, fail-closed, token-derived site scope
   test_brief_paging.py        ← Layer 8 inbox paging: limit after filtering, trim before push
   test_asset_bulk_import.py   ← Layer 1 golden-record import partitioning + tenancy boundary
+  test_asset_counts.py        ← a failed asset issue-count lookup is null ("unknown"), never a clean 0
   test_quarantine_item_id.py  ← Layer 6 quarantine id guard: malformed id 404s, never 500s
   test_purge_safety.py        ← purge matchers can never reach real ids (the DOC-X incident)
   test_synthesis_stream.py    ← SSE synthesis: safety-critical categories never stream text
@@ -224,7 +231,7 @@ tests/                        ← project root (NOT inside backend/)
   test_form_extraction.py     ← form fields reach quarantine ONLY; never a KNOWLEDGE_EDGE
   test_cross_functional.py    ← the function mapping is complete; an unmapped type inflates the result
   test_offboarding_session_id.py ← UUID path params 404 rather than 500 (`maybe_single`, not `single`)
-  test_corpus_filter.py       ← test-artifact predicate: every real corpus name pinned against over-matching
+  test_corpus_filter.py       ← test-artifact predicate: every real corpus name and golden asset id pinned against over-matching; the guard sits inside the asset-list and compliance Cypher
 pytest.ini                    ← project root
 ```
 

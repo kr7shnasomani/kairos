@@ -165,7 +165,7 @@ Active route highlighted with `bg-accent-soft text-accent`. User chip at the bot
 
 - **`/system-information`** — static visual architecture explainer (pipeline, 13 layers, stack). Open to all.
 - **`/system-health`** — admin-only live dashboard: probes all 11 cheap API surfaces + 5 datastores every 30s, plus an opt-in "AI models" section (NIM/Gemini/Jina/Groq) that probes `GET /health/model?provider=…` once/minute **only when toggled on** (each probe spends provider quota; off by default, persisted in `localStorage`).
-- **Login** (`/login`) has a **"Try demo"** button that signs straight into the seeded admin account.
+- **Login** (`/login`) has an **"Explore the live demo"** button that signs straight into the seeded admin account.
 
 **Browser tab titles** — `Kairos: <page>` on every app route (landing/`/login` = `Kairos`). Resolved
 server-side by `generateMetadata` in `(app)/layout.tsx`, which reads an `x-pathname` request header set by
@@ -428,7 +428,7 @@ Key types:
 
 | Component | Props | Renders |
 |-----------|-------|---------|
-| `AuthorityBadge` | `level: AuthorityLevel` | Coloured badge: L1=verified green → L5=unverified orange |
+| `AuthorityBadge` | `level: AuthorityLevel` | Neutral badge reading `L{n} · {name}` (e.g. `L3 · OEM`). Hover text from `authorityDescription()` says what the level is and that 1 is highest |
 | `StatusBadge` | `tone: "verified" \| "caution" \| "danger" \| "neutral"` | Pill badge |
 | `SourceChip` | `quarantine?: boolean` | Document ID chip; orange ring if quarantine |
 | `Modal` | `open, onClose, title, children` | Overlay modal for promote/dispute actions |
@@ -504,6 +504,7 @@ Defined in `globals.css` as CSS custom properties, available to all Tailwind uti
 | `--on-accent` | Text on accent backgrounds |
 | `--verified` | Green (authority verified) |
 | `--caution` | Amber (unverified / warning) |
+| `--caution-ink` | Amber text on a caution tint (`StatusBadge`). Darker than `--caution` in light mode so an 11px badge clears AA 4.5:1; same as `--caution` in dark |
 | `--danger` | Red (refused / critical) |
 
 Light and dark values are set via `[data-theme=light]` / `[data-theme=dark]` on `<html>`. Theme is persisted in `localStorage` under `kairos-theme`.

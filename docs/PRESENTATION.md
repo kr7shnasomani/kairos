@@ -105,7 +105,7 @@ sidebar, they are seeing role-based access control without you claiming anything
 | **9** | `/compliance` | `compliance@kairos.local` | Gap dashboard. `/compliance/audit-pack` one click away | Beat 9 |
 | **10** | `/field/voice` in a **390 px wide window** | `field_worker@kairos.local` | Recorder screen | Beat 10 |
 
-Use **Try demo** on `/login` for the admin tabs. Log Tab 9 and Tab 10 in by hand with their own
+Use **Explore the live demo** on `/login` for the admin tabs. Log Tab 9 and Tab 10 in by hand with their own
 accounts.
 
 > Tab 6 needs a second browser profile (or an incognito window) so it holds its own Copilot session.
@@ -629,7 +629,7 @@ are easy to say by accident when you are nervous.
 | **"How do you know your own retrieval works?"** | Because our own baseline harness caught it failing. It measured vector search at **0 out of 37** one day — that is how we found a filter on an unindexed field silently erroring, which had quietly degraded the whole system to keyword search only. No unit test caught that. The benchmark did. |
 | **"Does it scale?"** | 2,275 requests with 0% errors, and the knee at 50 concurrent users. A 60-minute soak on cloud stores with no leak signal and 0.11% errors across 37,842 requests. What that does **not** prove is a ten-thousand-asset plant, and we say so on the page. |
 | **"Have you actually measured everything the problem statement asks for?"** | Yes — **thirteen** harnesses, one per criterion — **twelve in `benchmark/`, plus `run_model_validation.py` under `backend/scripts/`.** Say it that way: a judge who lists `benchmark/` counts twelve. They include the three that landed last: OCR recall by document type, knowledge-graph linkage completeness, and cross-functional discovery measured as a counterfactual against single-function retrieval. |
-| **"What if the AI provider goes down?"** | Answers fall through NIM → OpenRouter → Gemini → local. Every answer records which provider produced it, and the benchmark marks a run invalid if anything but the pinned NIM model answered. |
+| **"What if the AI provider goes down?"** | Answers fall through Nebius Token Factory → NIM → OpenRouter → Gemini → local; the tiers live in one registry, so a provider is added or reordered without touching the call path. Every answer records which provider produced it, and the benchmark marks a run invalid if anything but the pinned Nemotron model answered. |
 | **"What if the vision model can't read our drawings?"** | It says so. A P&ID it cannot parse falls back to a placeholder that the screen labels as a placeholder — it never invents a valve tag. And even a good parse stays **candidate** until an engineer checks it element by element. |
 | **"Does it work offline?"** | Field capture does. Voice notes and deviation flags queue on the device and sync when signal comes back. |
 | **"Who can change what?"** | Five roles, enforced at the API and not just hidden in the UI. An engineer can resolve conflicts but is **refused** when they try to promote quarantined knowledge — only reliability and admin can. And a permit brief needs two different signatures, where the second signer cannot be the person the brief was sent to. |

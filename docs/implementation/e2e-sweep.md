@@ -46,7 +46,7 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 | # | Route | What "working" means | Status |
 |---|---|---|---|
 | 1 | `/` (landing) | Renders, nav anchors scroll, CTA → login | ✅ renders, 0 console errors |
-| 2 | `/login` | Real login for all 5 personas; "Try demo" → admin | ✅ all 5 personas — ✅ **API-verified 2026-08-17**: engineer/compliance/reliability login 200 and the **token's** role matches the persona (asserted, not assumed) |
+| 2 | `/login` | Real login for all 5 personas; "Explore the live demo" → admin | ✅ all 5 personas — ✅ **API-verified 2026-08-17**: engineer/compliance/reliability login 200 and the **token's** role matches the persona (asserted, not assumed) |
 | 3 | `/briefs` | Inbox lists live briefs; governor state shown; empty state honest | ✅ **API-verified 2026-08-17** — envelope carries `governor_state` (5/6, `normal`), `total_pending`, `suppressed_count` |
 | 4 | `/briefs/[id]` | Evidence lineage; ack; **PTW dual sign-off** | ✅ full two-user flow |
 | 5 | `/copilot` | Query returns a cited answer; refusal card on safety-critical | ✅ **FIXED + verified live** — the query that previously hedged now renders **"Safety-critical query — refused"** via the new **post-gate** (`self-reported confidence 0.0, 0 sources cited`). Scaffolding leak gone. This is the first live exercise of the post-gate; the benchmark's refusals were all pre-gate. |

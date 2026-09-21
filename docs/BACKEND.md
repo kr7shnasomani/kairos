@@ -338,8 +338,8 @@ Qdrant treats a missing key as non-matching, so requiring `active` would silentl
 
 LLM synthesis + embedding. Never originates knowledge — only assembles retrieved context.
 
-- `synthesize(query, context, query_category)` — NIM `nvidia/nemotron-3-super-120b-a12b`, falling through
-  the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
+- `synthesize(query, context, query_category)` — `nvidia/nemotron-3-super-120b-a12b` on the first
+  configured tier (NIM by default), falling through the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
   result after it (an honest "not specified in the sources" must not render as a hedged answer).
 - `evidence_gate(...)` / `result_gate(...)` — those two gates, as separate methods returning a
   refusal dict or `None`. Extracted so `synthesize()` and `synthesize_stream()` call the **same**
@@ -348,8 +348,9 @@ LLM synthesis + embedding. Never originates knowledge — only assembles retriev
   `POST /search/synthesize/stream`. **Safety-critical categories emit no answer text at all**:
   `CONFIDENCE:` arrives after `ANSWER:`, and `result_gate` can convert a finished answer into a
   refusal, so streaming it would show text the gate is about to retract. Everything else streams
-  `ANSWER:` as it arrives. Streams tier 1 only; a mid-stream failure falls back to the full cascade
-  and emits `restart` so the client discards the partial text.
+  `ANSWER:` as it arrives. Streams tier 1 only; a mid-stream failure falls back to the cascade,
+  **skipping the tier whose stream just failed** (retrying it would cost a second full timeout and
+  overrun the frontend's 90 s budget), and emits `restart` so the client discards the partial text.
 - `rca_synthesize(query, context)` — RCA-specific prompt, returns timeline + hypotheses
 - `embed(text, task)` — Jina `jina-embeddings-v3` (1024-dim), **bounded LRU cached** (`_LRU`,
   512 entries, keyed on `(task, text)`). Every search embeds its query before touching Qdrant,
@@ -370,12 +371,44 @@ LLM synthesis + embedding. Never originates knowledge — only assembles retriev
 > working — configure Ollama as a genuine third tier, move Gemini to paid, or drop the cascade
 > so a NIM failure surfaces as an honest error.
 >
-> **Provider cascade (`_synthesize_cascade`): NIM → OpenRouter → Gemini → Ollama.** Each tier is tried only if
-> configured and falls through to the next on failure (a NIM timeout counts as failure → auto-falls to
-> Gemini). Defaults ship with **only `NVIDIA_NIM_API_KEY` set, so it is NIM-only** — identical to before.
-> Fill `GEMINI_API_KEY` (Google's OpenAI-compatible endpoint, `_synthesize_gemini`) to add a generous
-> free-tier cloud fallback; set `OLLAMA_BASE_URL` to add the local air-gapped tier (intentionally empty by
-> default — an accidental local Ollama once consumed ~6 GB RAM). Embeddings stay Jina → Ollama.
+> **Provider cascade (`_synthesize_cascade`): Nebius Token Factory → NIM → OpenRouter → Gemini → Ollama.**
+> The order and the per-tier settings live in one place, `services/model_providers.py`
+> (`Provider`, `all_tiers`, `synthesis_cascade`). `all_tiers` is every tier, keyed or not, and is
+> what the `/health/model` probe looks names up in; `synthesis_cascade` is the keyed subset that
+> `_synthesize_cascade` iterates. **A tier with no API key is not in the list at all**, so defaults ship with only
+> `NVIDIA_NIM_API_KEY` set and the cascade is NIM-only, identical to before the registry existed.
+> Every OpenAI-compatible tier goes through one call path, `_synthesize_provider(provider, …)`:
+> same retry on 502/503/504, same `verify_served_model` check, same failure shape. Ollama keeps its
+> own method because `/api/generate` is a different wire format, not a different URL.
+>
+> **Token Factory is wired but unkeyed**, so it is inert until `NEBIUS_TOKEN_FACTORY_API_KEY` is set.
+> It serves the same Nemotron build as NIM, so promoting it changes who serves the model rather than
+> which model answers, and the benchmark counts `tokenfactory` and `nim` alike as the pinned model.
+> Fill `GEMINI_API_KEY` (Google's OpenAI-compatible endpoint) to add a generous free-tier cloud
+> fallback; set `OLLAMA_BASE_URL` to add the local air-gapped tier (intentionally empty by
+> default, because an accidental local Ollama once consumed ~6 GB RAM). Embeddings stay Jina → Ollama.
+>
+> **Adding a provider** is one entry in `all_tiers()` plus its settings. `extra_body` carries
+> provider-specific keys (Nemotron's `enable_thinking: false`), so a key meant for one vendor never
+> reaches another that would reject it.
+
+#### Turning on Nebius Token Factory
+
+Everything is built; only the key is missing. Steps, locally or on the server:
+
+1. Set `NEBIUS_TOKEN_FACTORY_API_KEY` in `.env`.
+2. Recreate every container that calls a model, because env changes are read at start:
+   `docker compose up -d --force-recreate kairos-backend-api kairos-celery-worker kairos-temporal-activity-worker kairos-elicitation-worker`
+3. System Health → *AI models* → turn on **Nebius Token Factory**. The probe sends exactly what a real
+   answer sends, including the thinking-off flag, and reports the model Token Factory says it served.
+   - **OK** and no model mismatch: done.
+   - **400 mentioning `chat_template_kwargs`**: Token Factory rejects the flag. Set
+     `NEBIUS_TOKEN_FACTORY_DISABLE_THINKING=false`, repeat step 2. NIM keeps its own switch.
+4. Ask the Copilot an ordinary question. The line under the answer should read **Nebius Token Factory**.
+   If it reads NVIDIA NIM, Token Factory failed and the cascade fell through; the API log names why
+   (`synthesis.provider_failed`, `provider=tokenfactory`).
+5. Re-run `benchmark/run_benchmark.py` before quoting any quality figure, because the published one was
+   measured through NIM. A run answered by `tokenfactory` counts as the pinned model.
 
 **Safety-critical categories:**
 `max_allowable_pressure`, `isolation_interlock_sequence`, `torque_specification`, `electrical_rating`, `pressure_relief_setting`, `safety_shutdown_setpoint`
@@ -559,6 +592,14 @@ documents without excluding them reports test hygiene rather than the plant.
   (chunked at 200). **Read-only.** Fails *open*: on a lookup error it returns an empty set, so a
   Supabase blip shows extra noise rather than blanking a real graph.
 - `partition_test_artifacts(rows)` — pure, for callers that already hold `documents` rows.
+- `TEST_ASSET_PREFIXES` / `REAL_ASSET_CYPHER` — the same idea for **assets**. Prefixes: `QA-TEST-`
+  (a manual QA sweep's `QA-TEST-155635`, matched 1 of 11 live assets and 0 of the 10 golden ones)
+  plus the integration suite's `ASSET-TEST-`, `ASSET-DEDUP-`, `ASSET-EV-`, `ASSET-ACK-`,
+  `ASSET-FRESH-`. The guard is a Cypher fragment over `a`, placed **inside** the asset-list, compliance
+  (gaps, dashboard, audit pack) and coverage queries, because filtering a paginated or aggregated
+  result in Python breaks `total`. `GET /assets/` reports what it hid as `excluded_test_assets`. The
+  list is deliberately separate from `scripts/purge_test_data.py`'s: that script deletes, this one
+  only hides, and sharing a list would let a display tweak arm a cloud delete.
 
 Two rules that matter:
 - **An id absent from `documents` is never an artifact.** `PROMOTED-<uuid>` ids are minted by
@@ -946,7 +987,12 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `JINA_EMBED_MODEL` | `jina-embeddings-v3` | 1024-dim output, primary embeddings |
 | `GROQ_API_KEY` | `""` | Required for voice transcription |
 | `GROQ_WHISPER_MODEL` | `whisper-large-v3` | STT via Groq API |
-| `OPENROUTER_API_KEY` | `""` | **Tier 2 of the cascade.** Empty ⇒ skipped. |
+| `NEBIUS_TOKEN_FACTORY_API_KEY` | `""` | **Tier 1 of the cascade when set**, ahead of NIM. Empty ⇒ skipped, which is the shipped default. |
+| `NEBIUS_TOKEN_FACTORY_BASE_URL` | `https://api.tokenfactory.nebius.com/v1` | OpenAI-compatible endpoint |
+| `NEBIUS_TOKEN_FACTORY_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | The same Nemotron build NIM serves, so a Token Factory answer is not a fallback |
+| `NEBIUS_TOKEN_FACTORY_DISABLE_THINKING` | `true` | Sends Nemotron's thinking-off flag to Token Factory. Its own switch, separate from NIM's, so a 400 there is fixed without touching NIM |
+| `NEBIUS_TOKEN_FACTORY_TIMEOUT` | `25.0` | A fallthrough costs this cap plus NIM's, so 25 + 60 = 85 s stays inside the frontend's 90 s synthesis budget. NIM answers in ~1.5 s at p50, so 25 s only cuts off a Token Factory call that is already failing |
+| `OPENROUTER_API_KEY` | `""` | **Tier 3 of the cascade** (tier 2 while Token Factory is unkeyed). Empty ⇒ skipped. |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
 | `OPENROUTER_MODEL` | `meta-llama/llama-3.1-70b-instruct` | A different model from tier 1 since NVIDIA retired `llama-3.1-70b`; an answer from here counts as a fallback in the benchmark verdict. Gemini (tier 3) is a different family and does. |
 | `OPENROUTER_TIMEOUT` | `60.0` | Its own cap rather than reusing `NVIDIA_NIM_TIMEOUT`, so tuning NVIDIA's ceiling cannot silently retime a different vendor. |
