@@ -8,6 +8,7 @@ import { relativeTime } from "@/lib/utils";
 import { Button, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 
+import { Icon } from "@/components/icon";
 type NcSource = "conflict" | "inspection" | "dispute";
 
 interface Nc extends Record<string, unknown> {
@@ -132,15 +133,13 @@ export default function NonConformancePage() {
   return (
     <div data-testid="nonconformance-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/compliance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Compliance
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 7 · Quality"
+        eyebrow="Assure · Non-conformances"
         title="Non-conformance tracking"
         lede="Open non-conformances composed from unresolved conflicts, failed inspections, and disputed field inputs. Each links to its root-cause workspace and originating record."
       />

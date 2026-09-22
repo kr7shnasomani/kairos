@@ -14,7 +14,7 @@ function progressBar(done: number, total: number) {
       </div>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
         <div
-          className="h-full rounded-full bg-accent transition-all"
+          className="h-full bg-accent transition-[width] duration-300 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -79,7 +79,7 @@ export default async function OffboardingPage() {
   const activeProgrammes = programmes.length - completedProgrammes;
 
   return (
-    <div data-testid="offboarding-workspace" className="mx-auto max-w-[1200px]">
+    <div data-testid="offboarding-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         eyebrow="Knowledge transfer"
         title="Expert handovers"
@@ -88,7 +88,7 @@ export default async function OffboardingPage() {
 
       <div data-testid="offboarding-summary" className="mt-6 grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(130px,0.55fr))]">
         <div className="relative bg-[linear-gradient(120deg,color-mix(in_srgb,var(--info)_7%,var(--surface)),var(--surface))] px-5 py-5 sm:col-span-2 lg:col-span-1">
-          <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 w-[3px] rounded-full bg-info" />
+          <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 w-[3px] bg-info" />
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-label font-semibold uppercase tracking-[0.1em] text-muted">Handover coverage</p>
           </div>
@@ -121,7 +121,7 @@ export default async function OffboardingPage() {
                 key={p.id}
                 data-testid={`offboarding-programme-${p.id}`}
                 href={`/offboarding/${p.id}`}
-                className="group flex min-w-0 flex-col rounded-xl border border-line bg-surface p-5 shadow-sm transition-[border-color,transform] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))]"
+                className="lp-card group flex min-w-0 flex-col border border-line bg-surface p-5"
               >
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
@@ -131,7 +131,7 @@ export default async function OffboardingPage() {
                   <StatusBadge tone={programmeTone(p.status)}>{label(p.status)}</StatusBadge>
                 </div>
                 {progressBar(done, total)}
-                <span className="mt-4 text-caption font-semibold text-accent group-hover:underline">Open handover →</span>
+                <span className="mt-4 text-caption font-semibold text-accent group-hover:underline">Open handover ›</span>
               </Link>
             );
           })}

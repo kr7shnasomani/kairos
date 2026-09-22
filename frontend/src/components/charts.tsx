@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { ResponsiveContainer } from "recharts";
 
+import { Icon } from "@/components/icon";
 /** Shared axis defaults — recessive ticks, no axis/tick lines. Spread onto XAxis/YAxis. */
 export const AXIS = {
   tick: { fontSize: 11, fill: "var(--muted)" },
@@ -30,10 +31,11 @@ export const TOOLTIP = {
   contentStyle: {
     background: "var(--surface)",
     border: "1px solid var(--line)",
-    borderRadius: 8,
+    borderRadius: 0,
     fontSize: 12,
     color: "var(--ink)",
-    boxShadow: "0 4px 12px rgb(0 0 0 / 0.08)",
+    // Strong enough to lift the tooltip off a dark canvas too, where a 0.08 wash is invisible.
+    boxShadow: "0 8px 24px rgb(0 0 0 / 0.35)",
   },
   labelStyle: { color: "var(--muted)", fontWeight: 600 },
   cursor: { stroke: "var(--line)" },
@@ -123,9 +125,7 @@ export function ChartCard({
               aria-label={open ? `Collapse ${title}` : `Expand ${title}`}
               className="grid size-7 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={cn("transition-transform", !open && "-rotate-90")}>
-                <path d="M6 9l6 6 6-6" />
-              </svg>
+              <Icon name="caret-down" size={12} className={cn("transition-transform", !open && "-rotate-90")} />
             </button>
           )}
         </div>

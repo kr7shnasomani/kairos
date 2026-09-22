@@ -10,6 +10,7 @@ import { fmtPct } from "@/lib/format";
 import { Button, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 
+import { Icon } from "@/components/icon";
 // `key` must match the framework value stored on Neo4j regulation nodes (underscored);
 // `label` is the human-facing display. Only frameworks actually seeded in the graph are
 // listed — see GET /compliance/frameworks → configured_frameworks (OISD_117, ISO_45001).
@@ -91,9 +92,7 @@ export default function AuditPackPage() {
     <div data-testid="audit-pack-workspace" className="mx-auto max-w-[1400px] print:max-w-none">
       <div className="print:hidden">
         <Link href="/compliance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <Icon name="caret-left" size={15} />
           Compliance
         </Link>
       </div>
@@ -101,7 +100,7 @@ export default function AuditPackPage() {
       <PageHeader
         compact
         className="mt-4"
-        eyebrow="Layer 11 · Audit preparation"
+        eyebrow="Assure · Audit preparation"
         title="Audit-pack assembly"
         lede="Evidence organised by regulatory clause. This accelerates audit preparation; it is not automated compliance. Clauses below the confidence threshold are blocked and require human sign-off."
         actions={

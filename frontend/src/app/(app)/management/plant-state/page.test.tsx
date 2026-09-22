@@ -15,7 +15,7 @@ describe("PlantStatePage", () => {
     render(<PlantStatePage />);
     await waitFor(() => expect(screen.getAllByText("Full operations. All ingestion, briefs, and governors active.").length).toBeGreaterThan(0));
 
-    expect(screen.getByTestId("plant-state-workspace")).toHaveClass("max-w-[1200px]");
+    expect(screen.getByTestId("plant-state-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("plant-state-layout")).toHaveClass("lg:grid-cols-[minmax(0,1fr)_300px]");
     expect(screen.getByTestId("plant-state-control")).toHaveTextContent("Transition to");
     expect(screen.getByTestId("plant-state-context")).toHaveTextContent("SITE-A");

@@ -27,7 +27,7 @@ describe("OffboardingSessionPage", () => {
     render(<OffboardingSessionPage />);
 
     await waitFor(() => expect(screen.getByTestId("offboarding-session-workspace")).toBeInTheDocument());
-    expect(screen.getByTestId("offboarding-session-workspace")).toHaveClass("max-w-[1200px]");
+    expect(screen.getByTestId("offboarding-session-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("offboarding-profile-header")).toHaveTextContent("PS");
     expect(screen.getByTestId("offboarding-profile-header")).toHaveTextContent(/1\s*of 3 sessions/);
     expect(screen.getByTestId("offboarding-session-navigation")).toHaveTextContent("Control valves");

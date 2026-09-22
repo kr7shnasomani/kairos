@@ -7,6 +7,14 @@
 > `reliability`/`admin` (not `admin`/`engineer`). See `docs/FRONTEND.md §6` and `docs/FIXTURES.md §3` for
 > the current behavior. The rest of each task (routes, layouts, API calls) still holds.
 
+> ⚠️ **Superseded on visual design (2026-09-22/23).** The workspace was rebuilt to the landing
+> page's language: square chrome, Instrument display type, hairline `.mesh` grids, Phosphor icons
+> from `components/icon.tsx`, and a **sidebar-first shell** with no desktop top bar. Historical
+> here: `frontend/DESIGN.md` (never existed in this repo — tokens live in `app/globals.css`,
+> primitives in `components/ui.tsx`), `PhaseBadge` and the "Phase 1 / Phase 2" composer gate
+> wording (badge deleted, messages rephrased), and `/system-information` + `/system-benchmarks`
+> (routes removed). See [`ui-overhaul.md`](./ui-overhaul.md) and `docs/FRONTEND.md`.
+
 > The contract for the point-of-action interface layer (ARCHITECTURE.md Layer 12). This document is to the frontend what `docs/implementation/BE.md` is to the backend: a fully-scoped, task-by-task build plan traceable to the architecture. Every task names the files it touches, the API calls it makes, the architecture layer it serves, and a verification step. Nothing in the architecture's interface surface is left unscoped.
 
 ---

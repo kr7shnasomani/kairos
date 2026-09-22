@@ -25,6 +25,27 @@ process (skill dispatch, tests, keeping `status.md` current).
 
 ---
 
+## State as of 2026-09-23
+
+**Shipped and pushed to `main`** (`ca2f16b`, `c7fc783`, `bdf1436`, `42b1e02`): the provider registry
+with the Token Factory tier, the test-asset read filter with reported exclusions, nullable issue
+counts, the demo-polish and accessibility fixes, and the docs for all of it. CI green on Tests, Linting, Docker and Frontend CI.
+
+**Credits.** Nebius Builder Program joined 2026-09-22: $25 Token Factory credit applied (balance
+$29.50 plus a $1 trial), $25 Tavily credit available to claim. LangSmith, Toloka and Tandem credits
+were assessed and declined (see *Decisions still open*).
+
+**The Token Factory key is in the local `.env` and no call has been made with it.** The user paused
+spending on 2026-09-22, so N2, N3 and N4 wait for an explicit go-ahead. Note that the key being
+present is enough: whenever the stack runs, Token Factory is tier 1 and every answer spends credits.
+Commenting the key line out reverts the cascade to NIM with no code change.
+
+**Two sessions, one working tree.** A parallel session owns the UI overhaul (section 5, uncommitted
+at the time of writing: 103 files, two routes removed). Backend and plan work is owned here. Anything
+in section 5 is theirs; do not edit frontend files from this plan without checking with them first.
+
+---
+
 ## 0. Eligibility, and where each item now stands
 
 Decisions taken 21 Sep 2026: this repo stays **proprietary**; the open-licensed copy lives in a
@@ -104,7 +125,7 @@ one call path, everything else unchanged.
 | # | Item | Effort | Why |
 |---|---|---|---|
 | N1 | **Done 21 Sep 2026.** Provider registry (`services/model_providers.py`); Token Factory is tier 1 when `NEBIUS_TOKEN_FACTORY_API_KEY` is set, NIM stays behind it on the same model. Only the key is outstanding. How it works: `docs/BACKEND.md`, provider cascade. | done | Satisfies E2 once keyed |
-| N2 | Once the key arrives, check two things: `verify_served_model` (`services/llm.py:652`) against Token Factory's model id spelling, and whether `chat_template_kwargs.enable_thinking` is honoured there (`llm.py:615`). | 2 h | A mismatch flags every answer |
+| N2 | **Prepared 2026-09-22, paused by the user 2026-09-22 (no calls until they say so).** Once cleared, check two things: `verify_served_model` (`services/llm.py:652`) against Token Factory's model id spelling, and whether `chat_template_kwargs.enable_thinking` is honoured there (`llm.py:615`). | 2 h | A mismatch flags every answer |
 | N3 | NER to Nemotron Nano, P&ID vision to Nemotron Nano V2 12B. Re-check extraction F1 after. | 1 to 2 d | Makes NVIDIA models load-bearing rather than incidental |
 | N4 | Re-run the benchmarks against Token Factory. | 0.5 d + credits | The 41/46 was measured through NIM |
 | N5 | Model size routing, Nano for extraction, Super for the copilot, Ultra for RCA, with the answering model shown in the UI. | 1 to 2 d | The track brief asks for exactly this |
@@ -121,7 +142,7 @@ Done 21 Sep 2026. The design and the rules for adding a provider are documented 
 | # | Item | Effort | Notes |
 |---|---|---|---|
 | Q1 | **Done for assets, 22 Sep 2026; quarantine left to review.** **Hide QA test data from live screens.** `QA-TEST-155635` appears in compliance; "QA: scoring..." and a voice note whose transcript is "." appear in quarantine. | 1 to 2 h | Two different problems. The id prefix extends the read-time predicate in `services/corpus.py:56`. The "." note is degenerate *content*, so it needs its own rule (hide or label quarantine items below a minimum content length). Widening the filename denylist carries the D8 evidence bar: it must not swallow a plausible real document. Read-time filter only, nothing deleted |
-| Q2 | **Done 22 Sep 2026.** **Fix the empty screens**, with honest empty states rather than imported numbers. | 2 to 3 h | `system-benchmarks/page.tsx` is deliberately live-only (its header comment says the numbers a judge sees are read from the running system). Do **not** render `RESULTS.md` figures into it: that is a fixture wearing a results page and it breaks the live-only rule. Make empty states say why they are empty and when the last recorded run was. Same treatment for Timestamp Drift and zero-count asset pages |
+| Q2 | **Done 22 Sep 2026.** **Fix the empty screens**, with honest empty states rather than imported numbers. | 2 to 3 h | `system-benchmarks/page.tsx` (page removed 2026-09-22) was deliberately live-only (its header comment says the numbers a judge sees are read from the running system). Do **not** render `RESULTS.md` figures into it: that is a fixture wearing a results page and it breaks the live-only rule. Make empty states say why they are empty and when the last recorded run was. Same treatment for Timestamp Drift and zero-count asset pages |
 | Q3 | **Overview's "last 14 days" chart is flat at zero** on the demo data, whose events sit in July story time. Production-correct fix: when the window is empty, say so and show when the last event was ("No events in the last 14 days. Last event: 15 Jul"). Do **not** anchor the window to the dataset's dates: in production that would hide a genuinely quiet plant. | 1 to 2 h | Computed from the events the page already fetches, so no database change |
 | Q4 | **Done 22 Sep 2026.** **Login page cleanup.** Drop "Seeded users: admin, engineer, field_worker" (`app/login/page.tsx:132`) and relabel the demo button (`:127`). | 20 min | Stops the first screen reading as a dev build |
 | Q6 | **Done 22 Sep 2026.** **Explain Kairos's own concepts in place**: authority levels L1 to L5 on `AuthorityBadge`, blast radius, quarantine, candidate versus verified topology. Not industry terms like PTW or MoC, which plant users already know. | 1 to 2 h | A real need: these are this product's vocabulary, and the compliance and management personas are not engineers |
@@ -156,13 +177,64 @@ Done 21 Sep 2026. The design and the rules for adding a provider are documented 
 
 ---
 
-## 5. UI and UX
+### T1 in detail: what "agentic" means here
+
+Today RCA is a fixed pipeline: retrieve, then summarise. As an agent it plans its own investigation
+and calls tools for each step: failure history for the asset, the same failure mode on sibling assets,
+the OEM position, whether the recommended action was actually executed, the historian's pre-failure
+signature, then ranked hypotheses with citations.
+
+What makes it Kairos's rather than a generic agent, and what must not be dropped while building it:
+
+- **Read-only tools**, authorised through OPA **as the acting user**, so the agent can never surface
+  what that person cannot see.
+- **No promotion.** It cannot move anything out of quarantine or write a canonical edge.
+- **The safety gate still applies** to its conclusion, so it refuses rather than guesses on a
+  safety-critical parameter.
+- **Every tool call is logged** to the audit trail, so a reviewer can see how a hypothesis was reached.
+  An auditable agent is the differentiator; an unlogged one is a demo.
+
+**What is deliberately not an agent:** ingestion, compliance mapping, proactive briefs and the
+Temporal workflows. The first two are deterministic and auditable as they stand, and an agent would
+only add a way to be wrong. The last two are automation with fixed steps, and the pitch should say so
+plainly rather than claim them as agentic.
+
+### T2 in detail: how Tavily is used, and where it is not
+
+**Tavily is an ingestion path, never a retrieval path.** It does not participate in Copilot answers.
+Every claim the Copilot makes cites a governed vault document with an authority level and a
+verification status; a web result has none of those, so admitting one into synthesis would break the
+guarantee the whole system is built on.
+
+The flow, which is the one `ARCHITECTURE.md` already describes for external industry sources:
+
+1. A scheduled watcher queries Tavily for material tied to the asset registry: regulatory amendments
+   (OISD, PESO, CPCB), OEM safety bulletins for the equipment classes in use, and public incident
+   reports such as CSB findings.
+2. Each hit becomes a **quarantine item** (`quarantine_items`) at **authority level 5**, linked to an
+   equipment **class**, not to a tag. An external advisory is evidence about a class of pump, never
+   about your EQ-101, and collapsing that distinction is the failure mode to avoid.
+3. It surfaces where quarantine already surfaces: the review queue and the asset page, labelled
+   unverified.
+4. A human promotes it. Only then can the Copilot cite it, and it still carries its authority level.
+
+Two practical constraints: there is **no Celery beat schedule** in this project, so the watcher runs
+on Temporal's cron (Temporal is already in the stack); and writing quarantine rows is a **cloud
+write**, so the first real run needs an explicit go-ahead.
+
+---
+
+## 5. UI and UX (owned by the parallel UI session since 2026-09-22)
 
 **Where it stands.** A good foundation, so this is polish and information architecture, not a rebuild:
 about 150 design tokens with light and dark palettes, 21 shared primitives in `components/ui.tsx`,
 68 of 86 page files using them, 75 frontend test files, no hardcoded colours. The catch is scale:
 **48 routes, ~14k lines in pages, 2,234 `className` uses in page code**, so layout changes are
 page-by-page work.
+
+> These figures are a **2026-09-22 snapshot, taken before the overhaul began**, and the overhaul is
+> changing them (46 routes at the time of writing, two removed). Re-measure before quoting them; the
+> owning session's notes are in `ui-overhaul.md`.
 
 | Scope | Covers | Effort |
 |---|---|---|
@@ -188,54 +260,49 @@ page-by-page work.
 
 ## Totals and sequencing
 
-| Block | Effort |
-|---|---|
-| 0. Eligibility (E2 only; E1, E4 to E6 deferred or done) | 0.5 to 1 d |
-| 1. Nebius and model plane (N2 to N5) | 2.5 to 6 d |
-| 2. Quick wins (remaining: Q3, Q6, Q8) | 0.5 to 1 d |
-| 3. Impact and credibility (without I3) | 1 d |
-| 4. Technical (T1 to T3) | 8 to 12 d |
-| 5. UI, Tier 2 | 8 to 12 d |
-| **Build total, remaining** | **~20 to 32 d** |
+| Block | Remaining effort | Owner |
+|---|---|---|
+| 0. Eligibility (E2 needs only the go-ahead; E1, E4 to E6 are end-of-cycle) | 0.5 to 1 d | this session |
+| 1. Nebius and model plane (N2, N3, N4) | 2 to 4 d | this session, paused |
+| 2. Quick wins (Q3 parked; Q1's quarantine half is P10) | 1 to 2 h | user decision first |
+| 3. Impact and credibility (I1, I4 pitch; I2 calendar; I3 optional) | 1 d | user, with this session |
+| 4. Technical (T1 agent, T2 Tavily; T3 was already solved) | 7 to 11 d | this session |
+| 5. UI and UX, including N5's display half | in progress | parallel UI session |
+| **Remaining here, excluding section 5 and the pitch** | **~10 to 16 d** | |
 
-Available: roughly 27 working days between 22 Sep and 30 Oct. Done so far: N1, Q1 (assets), Q2,
-Q4, Q6, Q7, Q8. Remaining build order, with licence, video, README and hosting handled outside this list:
+Available: roughly 27 working days between 23 Sep and 30 Oct.
 
-Ordered light to heavy by decision (22 Sep 2026). Blocked items slot in when their key arrives.
+### The work list, by owner (2026-09-23)
 
-**Light (hours each):**
-1. ~~**T3**: Elasticsearch readiness after a reboot.~~ **Already solved**, found 22 Sep 2026: the API
-   depends on Elasticsearch with `condition: service_healthy`, and Elasticsearch has a health check.
-   An earlier note here said otherwise; it had read the frontend's `service_started` by mistake.
-2. **U1**: role-based nav, advanced groups collapsed by default. **Recommended to drop**: role
-   filtering already hides pages a persona cannot use, the clipping it was meant to relieve is fixed
-   (Q7), and collapsing groups by default costs discoverability. A customer would not ask for it.
-3. **U2**: **done 22 Sep 2026.** Measured audit of the six core screens in light, dark and
-   high-contrast modes found two real WCAG AA failures, both fixed (nav header target size, amber
-   badge contrast). Details and method: `status.md` § Verification snapshot.
-4. **N2**: **prepared 22 Sep 2026**, needs only the key. Casing-tolerant served-model check, a
-   Token Factory thinking switch separate from NIM's, a health probe that sends what real answers
-   send and reports the served model, and readable provider names under Copilot answers. Turning it
-   on is five steps in `docs/BACKEND.md` › Turning on Nebius Token Factory.
+**The user decides or acts (minutes each):**
 
-**Medium (1 to 3 days each):**
-5. **N5**: show which model answered, and route by model size. The display can be built now; the
-   routing to Nano or Ultra **needs the key**.
-6. **N3, N4**: NER and vision onto Nemotron, then re-measure. **Needs the key.** Keep a swap only if
-   the re-measured F1 is equal or better.
-7. **T2**: Tavily. Needs a Tavily API key; cut first if the schedule slips.
+| | Item | Why it is theirs |
+|---|---|---|
+| 1 | Leave the Token Factory key active, or comment it out | Every stack start spends credits while it is set |
+| 2 | Decide U1 (recommendation: drop) | Product judgement |
+| 3 | Resolve P10: dispute or archive the two QA quarantine items | Cloud write |
+| 4 | Pull and restart the AWS server | Backend changes are not live until then |
+| 5 | Claim the Tavily credit and add the key when T2 starts | Account action |
 
-**Heavy (last):**
-8. **T1**: the governed RCA agent.
-9. **Tier 2 UI polish** on the core screens. After T1, because the agent adds a reasoning-trail view
-   to the RCA screen and polishing it first would mean doing it twice.
+**The parallel UI session:** section 5 in full, plus N5's display half (showing which model answered).
 
-**Parked:** Q3, the empty Overview window, until the end by decision.
-**Pitch, alongside the video:** D1, I1, I4.
+**This session, unblocked, backend only:**
 
-Running in parallel on calendar time rather than effort: **I2** (find a plant engineer to talk to).
+| | Item | Effort |
+|---|---|---|
+| 7 | **T1** governed RCA agent: tools, agent loop, API, audit-trail logging. The view is the UI session's | 5 to 8 d |
+| 8 | **T2** Tavily watcher into quarantine (needs the Tavily key) | 2 to 3 d |
 
-Cut if the schedule slips: T2, U3, I3, and all of Tier 3 UI.
+**Paused until the user allows Token Factory calls:** N2 (2 h), N3 (1.5 to 2.5 d), N4 (0.5 d).
+
+**Parked:** Q3 (Overview empty window, by user decision), P11 (failing offboarding test), P12
+(`ARCHITECTURE.md` cascade section).
+
+**End of cycle, in this order:** E1 licence on the mirror repo, E4 video recut under 3 minutes, E5
+README section, E6 hosting through 15 Dec, then the pitch items D1, I1, I4. I2 (talk to a plant
+engineer) runs on calendar time and should start whenever possible.
+
+**Cut if the schedule slips:** T2, U3, I3, and anything in section 5 beyond the overhaul in progress.
 
 ### Removed by the product test
 
@@ -246,15 +313,15 @@ Cut if the schedule slips: T2, U3, I3, and all of Tier 3 UI.
 | Q3 as first written (anchor the chart window to the dataset's dates) | Would hide a genuinely quiet period in production. Replaced by the honest empty-window message |
 
 Project debt found while doing this work (not hackathon-specific) is recorded in
-[`status.md` § Pending](./status.md#pending--as-of-2026-09-22), P10 to P12 (P9 is fixed), not repeated here.
+[`status.md` § Pending](./status.md#pending--as-of-2026-09-23), P10 to P14 (P9 is fixed), not repeated here.
 
 ## Decisions still open
 
 | | Decision | Blocks |
 |---|---|---|
-| 1 | Builder Program credits, or pay per token | N1, N4. Nothing else moves until a Token Factory key exists |
+| 1 | Whether the Token Factory key stays active in `.env` (spends credits on every answer) or is commented out until the work resumes | N2, N3, N4 |
 | 2 | Whether to grow the corpus with public documents, and accept the cloud write plus the answer-key work | I3, T4 |
-| 3 | Whether this work happens on a branch until AI Builders results are out (~25 Sep) | sequencing only |
+| 3 | U1: collapse nav groups by default. Recommendation is to drop it | nothing; closes an item |
 
 ## Settled
 
@@ -263,3 +330,11 @@ Project debt found while doing this work (not hackathon-specific) is recorded in
 | This repo stays proprietary; the submission mirror carries MPL 2.0 or Apache 2.0 | 21 Sep 2026 |
 | Demo video exists, needs a recut to under 3 minutes plus Token Factory and Nemotron narration | 21 Sep 2026 |
 | README and deployment are end-of-cycle work | 21 Sep 2026 |
+| Build order runs light to heavy; the heavy items (T1, UI) come last | 22 Sep 2026 |
+| Nebius Builder Program joined; $25 Token Factory credit applied, balance $29.50 plus $1 trial | 22 Sep 2026 |
+| **No Token Factory calls** until the user says so, credits being the concern | 22 Sep 2026 |
+| Partner credits assessed: **claim Tavily** ($25, the only one tied to planned work, T2). **Decline LangSmith** ($100: tracing and evaluation for LangChain apps, duplicating OTEL to Grafana and the deterministic benchmarks), **Toloka** ($50: human labelling, but ground truth comes from the canon dataset) and **Tandem** ($50: no use here) | 23 Sep 2026 |
+| `.env` and `.env.example` are kept in sync, same names and order; 19 variables were missing locally and were added with the example's defaults, all existing values preserved byte-for-byte | 23 Sep 2026 |
+| Tavily is an **ingestion** path into quarantine, never a Copilot retrieval path (see T2 in detail) | 23 Sep 2026 |
+| The one agentic feature is the **governed RCA agent** (T1); briefs, ingestion, compliance mapping and Temporal workflows stay deterministic and are described as automation, not agents | 23 Sep 2026 |
+| Section 5 (UI and UX) handed to the parallel UI-overhaul session | 22 Sep 2026 |

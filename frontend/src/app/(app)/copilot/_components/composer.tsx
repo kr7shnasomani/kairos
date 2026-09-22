@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
+import { Icon } from "@/components/icon";
 // Web Speech API — not available in all browsers; typed as any to avoid lib conflicts.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpeechRecogAny = any;
@@ -117,20 +118,7 @@ export function Composer({
               : "text-muted hover:bg-surface-2 hover:text-ink"
           )}
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
+          <Icon name="clock-counter-clockwise" size={16} />
         </button>
 
         {hasSpeech && (
@@ -146,19 +134,7 @@ export function Composer({
                 : "text-muted hover:bg-surface-2 hover:text-ink"
             )}
           >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M12 1a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z" />
-              <path d="M19 11a7 7 0 0 1-14 0M12 18v3M9 21h6" />
-            </svg>
+            <Icon name="microphone" size={17} />
           </button>
         )}
 
@@ -168,19 +144,7 @@ export function Composer({
           aria-label="Send"
           className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-on-accent transition-opacity disabled:opacity-40"
         >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
-          </svg>
+          <Icon name="paper-plane-right" size={17} />
         </button>
       </form>
     </div>

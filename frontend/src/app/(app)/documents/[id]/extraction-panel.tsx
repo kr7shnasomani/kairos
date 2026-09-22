@@ -66,7 +66,7 @@ export function ExtractionPanel({ documentId }: { documentId: string }) {
                   <ul className="mt-1.5 space-y-1 text-muted">
                     {x.review_items.slice(0, 5).map((r) => <li key={r.item_id}>{r.content}</li>)}
                   </ul>
-                  <Link href="/governance/quarantine" className="mt-2 inline-block font-semibold text-accent hover:underline">Review in quarantine →</Link>
+                  <Link href="/governance/quarantine" className="mt-2 inline-block font-semibold text-accent hover:underline">Review in quarantine ›</Link>
                 </div>
               )}
             </>

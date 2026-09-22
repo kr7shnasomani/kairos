@@ -16,6 +16,7 @@ import { relativeTime, triggerLabel } from "@/lib/utils";
 import { label } from "@/lib/labels";
 import { EmitPanel } from "./_components/emit-panel";
 
+import { Icon } from "@/components/icon";
 /** OperationalEvent re-mapped so it satisfies DataTable's Record constraint. */
 type EventRow = Pick<OperationalEvent, keyof OperationalEvent>;
 
@@ -139,7 +140,7 @@ export default function EventsPage() {
   return (
     <div data-testid="events-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Layer 8 · Event subscription"
+        eyebrow="Operate · Live events"
         title="Operational events"
         lede="Monitor the event sources that trigger proactive briefs and compound operational context."
         actions={canEmit && <Button variant="primary" className="h-11 sm:h-9" onClick={() => setShowEmitter((open) => !open)}>{showEmitter ? "Close emitter" : "Emit event"}</Button>}
@@ -167,9 +168,7 @@ export default function EventsPage() {
           onChange={setTypeFilter}
         />
         <label className="flex h-9 min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-line bg-surface px-3 focus-within:border-accent sm:max-w-[280px]">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="shrink-0 text-muted">
-            <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" />
-          </svg>
+          <Icon name="magnifying-glass" size={16} className="shrink-0 text-muted" />
           <input type="search" aria-label="Search events" placeholder="Search event, asset, or ID" value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-muted" />
         </label>
       </section>

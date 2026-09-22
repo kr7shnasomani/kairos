@@ -22,7 +22,7 @@ export default async function AssetsPage() {
   return (
     <div data-testid="assets-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Asset-centric truth"
+        eyebrow="Operate · Assets"
         title="Assets"
         lede="Every piece of knowledge orbits a canonical asset."
         actions={

@@ -26,6 +26,7 @@ import { AuthorityBadge, EmptyState, StatusBadge } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useCanvasTokens, arrowMarker, type CanvasTokens } from "@/lib/graph-theme";
 
+import { Icon } from "@/components/icon";
 // ── Color helpers ─────────────────────────────────────────────────────────────
 // Colors are resolved Paper design tokens (see lib/graph-theme.tsx), not hardcoded
 // hex — this canvas now recolors with the rest of the UI on theme/contrast toggle.
@@ -197,9 +198,7 @@ function SidePanel({ title, children, onClose }: { title: string; children: Reac
           aria-label="Close panel"
           className="nodrag grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
+          <Icon name="x" size={14} />
         </button>
       </div>
       <div className="p-4">{children}</div>
@@ -370,7 +369,7 @@ function KnowledgeGraphInner({
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="size-2 animate-bounce rounded-full bg-muted"
+              className="size-2 animate-pulse rounded-full bg-muted"
               style={{ animationDelay: `${i * 0.15}s` }}
             />
           ))}

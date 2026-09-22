@@ -5,6 +5,7 @@ import { useState } from "react";
 import { postDeviationFlag } from "@/lib/api";
 import { Button, PageHeader } from "@/components/ui";
 
+import { Icon } from "@/components/icon";
 type Stage = "form" | "submitting" | "done" | "error";
 
 export default function DeviationPage() {
@@ -35,20 +36,7 @@ export default function DeviationPage() {
     return (
       <div className="mx-auto max-w-xl rounded-2xl border border-line bg-surface px-5 py-8 text-center shadow-sm sm:px-8">
         <div className="mx-auto grid size-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--caution)_14%,transparent)]">
-          <svg
-            className="size-7 text-caution"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
+          <Icon name="warning" className="size-7 text-caution" />
         </div>
         <h1 className="mt-4 text-title font-semibold">Deviation flag raised</h1>
         {eventId && (
@@ -67,7 +55,7 @@ export default function DeviationPage() {
   }
 
   return (
-    <div data-testid="deviation-workspace" className="mx-auto max-w-[1100px]">
+    <div data-testid="deviation-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         compact
         className="mb-6"
@@ -146,7 +134,7 @@ export default function DeviationPage() {
         </div>
       </form>
 
-      <aside data-testid="deviation-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+      <aside data-testid="deviation-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
         <p className="text-label font-bold uppercase tracking-[0.1em] text-caution">What happens next</p>
         <ol className="mt-4 space-y-4 text-caption text-muted">
           <li><span className="font-semibold text-ink">Brief delivery freezes</span><br />New briefs for the tagged asset are held to prevent stale guidance.</li>

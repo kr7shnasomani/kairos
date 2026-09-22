@@ -50,7 +50,7 @@ describe("BootstrapPage", () => {
     render(<BootstrapPage />);
 
     expect(await screen.findByRole("heading", { name: "Asset identity confirmation" })).toBeInTheDocument();
-    expect(screen.getByTestId("identity-workspace")).toHaveClass("max-w-5xl");
+    expect(screen.getByTestId("identity-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("identity-guardrail")).toHaveClass("rounded-xl", "bg-surface");
     expect(screen.getByTestId("provisional-queue")).toHaveClass("rounded-xl", "bg-surface");
     expect(screen.getByTestId("alias-queue")).toHaveClass("rounded-xl", "bg-surface");

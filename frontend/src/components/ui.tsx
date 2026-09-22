@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import type { AuthorityLevel, AuditLogEntry, BriefSource } from "@/lib/types";
-import { getHealthDetailed } from "@/lib/api";
 import { authorityDescription, authorityLabel, cn } from "@/lib/utils";
 import { fmtRelTime } from "@/lib/format";
 import { useCountUp } from "@/lib/motion";
 import { MetricCardSkeleton, TableSkeleton } from "@/components/skeleton";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { Icon } from "@/components/icon";
 type Tone = "danger" | "caution" | "verified" | "info" | "validation" | "neutral";
 
 /**
@@ -115,10 +115,10 @@ export function KpiGroup({
   breakdownLabel?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-stretch overflow-hidden rounded-lg border border-line bg-surface">
+    <div className="flex flex-wrap items-stretch overflow-hidden border border-line bg-surface">
       <div data-testid="kpi-total" className="border-line px-5 py-4 sm:border-r">
         <div className="text-label uppercase tracking-wide text-muted">{total.label}</div>
-        <div className="tabular text-display font-semibold leading-none text-ink">{total.value}</div>
+        <div className="display mt-1 text-hero text-ink">{total.value}</div>
       </div>
       <div data-testid="kpi-breakdown" className="flex min-w-0 flex-1 flex-col px-5 py-4">
         {breakdownLabel && (
@@ -128,7 +128,7 @@ export function KpiGroup({
           {breakdown.map((b) => (
             <div key={b.label} className="min-w-0">
               <Truncate text={b.label} className="text-caption text-muted" />
-              <div className="tabular text-subtitle font-semibold text-ink">{b.value}</div>
+              <div className="display mt-0.5 text-title text-ink">{b.value}</div>
             </div>
           ))}
         </div>
@@ -164,7 +164,7 @@ export function StatusBadge({
       className={cn(
         // min-h (not fixed h) so a long label wraps *inside* the pill instead of
         // spilling out of it; single-line badges are unchanged at 22px.
-        "inline-flex min-h-[22px] items-center gap-1.5 rounded-full px-2 py-0.5 text-label font-semibold leading-tight",
+        "inline-flex min-h-[22px] items-center gap-1.5 px-2 py-0.5 text-label font-semibold leading-tight",
         TONE_STYLE[tone],
       )}
     >
@@ -299,9 +299,7 @@ export function Modal({
             aria-label="Close"
             className="grid size-7 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <Icon name="x" size={15} />
           </button>
         </div>
         <div className="mt-4">{children}</div>
@@ -320,52 +318,16 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3.5 text-body font-semibold transition duration-100 active:translate-y-px disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex h-9 items-center justify-center gap-2 px-3.5 text-body font-semibold transition-[transform,background-color,border-color,filter] duration-150 ease-out active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
         variant === "primary"
           ? "bg-accent text-on-accent hover:brightness-105 active:brightness-95"
           : variant === "danger"
-            ? "bg-danger text-white hover:brightness-105 active:brightness-95"
+            ? "bg-danger text-on-danger hover:brightness-105 active:brightness-95"
             : "border border-line text-ink hover:bg-surface-2 active:brightness-95",
         className,
       )}
       {...props}
     />
-  );
-}
-
-// ─── Phase badge (Task 3) ────────────────────────────────────────────────────
-
-const PHASE_LABELS: Record<string, string> = {
-  "1": "Phase 1 · Retrieval",
-  "2": "Phase 2 · Assisted",
-  "3": "Phase 3 · Proactive",
-};
-
-/**
- * Deployment phase pill.
- *
- * Reads the phase the backend is **actually enforcing** (`GET /health/detailed`), not a frontend
- * build-time constant. It previously read `NEXT_PUBLIC_KAIROS_PHASE` with a default of "3", so a
- * deployment running in Phase 1 would still have claimed Phase 3 — and nothing consulted the
- * value on either side. Renders nothing until the live phase is known, so it can never assert a
- * phase it has not confirmed.
- */
-export function PhaseBadge() {
-  const [phase, setPhase] = useState<number | null>(null);
-  useEffect(() => {
-    let alive = true;
-    getHealthDetailed()
-      .then(({ data }) => { if (alive && typeof data?.phase === "number") setPhase(data.phase); })
-      .catch(() => { /* health unreachable — say nothing rather than guess a phase */ });
-    return () => { alive = false; };
-  }, []);
-
-  if (phase === null) return null;
-  const label = PHASE_LABELS[String(phase)] ?? `Phase ${phase}`;
-  return (
-    <span className="inline-flex h-[20px] items-center rounded-full bg-[color-mix(in_srgb,var(--info)_14%,transparent)] px-2 text-micro font-semibold text-info">
-      {label}
-    </span>
   );
 }
 
@@ -381,9 +343,7 @@ export function TrendDelta({ value, invert = false }: { value: number; invert?: 
   const good = invert ? !up : up;
   return (
     <span className={cn("tabular inline-flex items-center gap-0.5 text-label font-semibold", good ? "text-verified" : "text-danger")}>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        {up ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}
-      </svg>
+      <Icon name={up ? "trend-up" : "trend-down"} size={12} />
       {up ? "+" : ""}{value}%
     </span>
   );
@@ -419,7 +379,7 @@ export function Sparkline({
 
 // ─── KpiCard (Task 4) ────────────────────────────────────────────────────────
 
-/** Executive KPI tile — mono numeral, label, optional threshold colour,
+/** Executive KPI tile — display numeral, label, optional threshold colour,
  *  optional trend delta + sparkline. Numeric values count up on change. */
 export function KpiCard({
   label,
@@ -452,12 +412,12 @@ export function KpiCard({
   /** Recent series for an inline sparkline. */
   spark?: number[];
 }) {
+  // One loud colour per row, as on the landing: the numeral stays ink unless the
+  // metric is the lead (accent) or an actual alarm (danger). Every other tone is
+  // carried by the square marker beside the label, in form as well as colour.
   const valueColor =
     tone === "accent" ? "text-accent" :
     tone === "danger" ? "text-danger" :
-    tone === "caution" ? "text-caution" :
-    tone === "verified" ? "text-verified" :
-    tone === "info" ? "text-info" :
     "text-ink";
   const markerStyle =
     tone === "accent" ? "bg-accent" :
@@ -466,13 +426,6 @@ export function KpiCard({
     tone === "verified" ? "bg-verified" :
     tone === "info" ? "bg-info" :
     "bg-line";
-  const surfaceStyle =
-    tone === "accent" ? "bg-[color-mix(in_srgb,var(--accent)_5%,var(--surface))]" :
-    tone === "danger" ? "bg-[color-mix(in_srgb,var(--danger)_5%,var(--surface))]" :
-    tone === "caution" ? "bg-[color-mix(in_srgb,var(--caution)_5%,var(--surface))]" :
-    tone === "verified" ? "bg-[color-mix(in_srgb,var(--verified)_4%,var(--surface))]" :
-    tone === "info" ? "bg-[color-mix(in_srgb,var(--info)_4%,var(--surface))]" :
-    "bg-surface";
 
   const numeric = typeof value === "number" ? value : null;
   const shown = useCountUp(numeric ?? 0);
@@ -482,13 +435,15 @@ export function KpiCard({
 
   const inner = (
     <>
-      <span data-testid="kpi-accent" className={cn("absolute bottom-2 left-2 top-2 w-[3px] rounded-full", markerStyle)} aria-hidden="true" />
-      <span className="flex items-start justify-between gap-3 pl-1">
-        <span className="text-label font-medium uppercase tracking-[0.1em] text-muted">{label}</span>
+      <span className="flex items-start justify-between gap-3">
+        <span className="flex items-center gap-2 text-label font-semibold uppercase tracking-[0.08em] text-muted">
+          <span data-testid="kpi-accent" className={cn("size-1.5 shrink-0", markerStyle)} aria-hidden="true" />
+          {label}
+        </span>
         {icon && <span className={cn("shrink-0", valueColor)} aria-hidden="true">{icon}</span>}
       </span>
       <span className="flex items-end justify-between gap-2">
-        <span className={cn("tabular pl-1 text-display font-semibold leading-none", valueColor)}>{display}</span>
+        <span className={cn("display mt-2 text-hero", valueColor)}>{display}</span>
         {spark && <Sparkline data={spark} className="text-accent opacity-70" />}
       </span>
       {(sub || delta !== undefined) && (
@@ -499,8 +454,9 @@ export function KpiCard({
       )}
     </>
   );
-  const base = cn("group relative flex min-h-[104px] w-full flex-col gap-1 overflow-hidden rounded-xl border border-line px-5 py-4 text-left transition-colors", surfaceStyle);
-  const interactive = "cursor-pointer transition-colors hover:border-accent/40 hover:bg-surface-2";
+  const base = "group relative flex min-h-[104px] w-full flex-col gap-1 overflow-hidden border border-line bg-surface px-5 py-4 text-left";
+  // lp-cell: the landing's accent top bar + wash, so tiles also work inside a .mesh.
+  const interactive = "lp-cell cursor-pointer";
 
   if (href) {
     return (
@@ -609,7 +565,7 @@ export function DataTable<T extends Record<string, unknown>>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-line">
+    <div className="overflow-x-auto border border-line">
       {toolbar && <div className="flex items-center gap-2 border-b border-line bg-surface px-3 py-2">{toolbar}</div>}
       <table className="w-full table-fixed text-body">
         <thead>
@@ -619,7 +575,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 key={col.key}
                 aria-sort={sort?.key === col.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                 className={cn(
-                  "sticky top-0 bg-surface-2 px-3 py-2.5 text-caption font-semibold text-muted overflow-hidden",
+                  "sticky top-0 bg-surface-2 px-3 py-2.5 text-label font-semibold uppercase tracking-[0.08em] text-muted overflow-hidden",
                   col.align === "right" ? "text-right" : "text-left",
                   col.className,
                 )}
@@ -635,13 +591,9 @@ export function DataTable<T extends Record<string, unknown>>({
                         "sorted ascending". Inactive columns get a neutral
                         two-way glyph; only the sorted one claims a direction. */}
                     {sort?.key === col.key ? (
-                      <svg data-sort-dir={sort.dir} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        {sort.dir === "desc" ? <path d="M6 9l6 6 6-6" /> : <path d="M6 15l6-6 6 6" />}
-                      </svg>
+                      <Icon data-sort-dir={sort.dir} name={sort.dir === "desc" ? "caret-down" : "caret-up"} size={11} />
                     ) : (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="opacity-25">
-                        <path d="M8 9l4-4 4 4" /><path d="M8 15l4 4 4-4" />
-                      </svg>
+                      <Icon name="caret-up-down" size={11} className="opacity-40" />
                     )}
                   </button>
                 ) : (
@@ -658,7 +610,7 @@ export function DataTable<T extends Record<string, unknown>>({
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={cn(
                 "border-b border-line/60 bg-surface last:border-0",
-                onRowClick && "cursor-pointer transition-colors hover:bg-surface-2",
+                onRowClick && "cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_5%,var(--surface))]",
               )}
             >
               {columns.map((col) => (
@@ -704,22 +656,22 @@ export function FilterTabs({
   return (
     // Mobile: single-row horizontal scroll (wrapping breaks the segmented look);
     // sm+: wrap as before.
-    <div role="group" aria-label="Filters" className="flex gap-1 overflow-x-auto rounded-lg border border-line bg-surface-2 p-1 sm:flex-wrap">
+    <div role="group" aria-label="Filters" className="flex w-fit max-w-full gap-px overflow-x-auto border border-line bg-line sm:flex-wrap">
       {tabs.map((tab) => (
         <button
           key={tab.key}
           aria-pressed={active === tab.key}
           onClick={() => onChange(tab.key)}
           className={cn(
-            "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-3 text-caption font-semibold transition-colors",
+            "flex h-8 shrink-0 items-center gap-1.5 px-3 text-caption font-semibold transition-colors",
             active === tab.key
-              ? "bg-surface text-ink shadow-sm"
-              : "text-muted hover:text-ink",
+              ? "bg-surface text-ink shadow-[inset_0_2px_0_var(--accent)]"
+              : "bg-surface-2 text-muted hover:text-ink",
           )}
         >
           {tab.label}
           {tab.count !== undefined && (
-            <span className="tabular rounded-full bg-surface-2 px-1.5 text-label text-muted">
+            <span className="tabular bg-canvas px-1.5 text-label text-muted">
               {tab.count}
             </span>
           )}
@@ -802,20 +754,7 @@ export function EvidenceLineage({
         className="flex w-full items-center justify-between px-3 py-2 font-semibold text-muted hover:text-ink"
       >
         <span>Evidence lineage · {total} item{total !== 1 ? "s" : ""}</span>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={cn("transition-transform", open && "rotate-180")}
-          aria-hidden="true"
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        <Icon name="caret-down" size={14} className={cn("transition-transform", open && "rotate-180")} />
       </button>
 
       {open && (
@@ -902,7 +841,7 @@ export function ConfidenceMeter({ value }: { value: number | null }) {
         aria-valuemax={100}
         aria-label={`Confidence ${pct}%`}
       >
-        <div className={cn("h-full rounded-full", tone)} style={{ width: `${pct}%` }} />
+        <div className={cn("h-full", tone)} style={{ width: `${pct}%` }} />
       </div>
       <span className="tabular text-label font-semibold text-muted">{pct}%</span>
       <StatusBadge tone={label} dot={false}>{label}</StatusBadge>
@@ -928,20 +867,7 @@ export function RefusalCard({
       className="rounded-xl border border-danger/30 bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] p-4 space-y-3"
     >
       <div className="flex items-start gap-2.5">
-        <svg
-          className="mt-0.5 size-4 shrink-0 text-danger"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
+        <Icon name="warning" className="mt-0.5 size-4 shrink-0 text-danger" />
         <div>
           <p className="text-body font-semibold text-danger">Safety-critical query — sources returned directly</p>
           {reason && <p className="mt-0.5 text-caption text-muted">{reason}</p>}
@@ -996,11 +922,15 @@ export function PageHeader({
   return (
     <header className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="min-w-0">
-        {eyebrow && <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">{eyebrow}</p>}
-        <h1 className={cn("mt-1 font-semibold leading-tight text-balance", compact ? "text-title" : "text-display")}>
+        {eyebrow && (
+          <p className="mb-3 inline-flex bg-accent px-2.5 py-1 text-label font-semibold uppercase tracking-[0.08em] text-on-accent">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className={cn("display text-balance text-ink", compact ? "text-title" : "text-display sm:text-hero")}>
           {title}
         </h1>
-        {lede && <p className="mt-1.5 max-w-prose text-body text-muted text-pretty">{lede}</p>}
+        {lede && <p className={cn("max-w-prose text-muted text-pretty", compact ? "mt-1.5 text-body" : "mt-3 text-subtitle")}>{lede}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
@@ -1016,27 +946,15 @@ export function EmptyState({
   action?: { label: string; onClick: () => void } | { label: string; href: string };
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line py-12 text-center">
-      <svg
-        className="size-8 text-muted/40"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 8v4M12 16h.01" />
-      </svg>
-      <p className="text-body text-muted">{message}</p>
+    <div className="relative flex flex-col items-center gap-4 border border-line bg-surface-2 px-6 py-12 text-center">
+      <span className="lp-tick lp-tick--solid -left-[6px] -top-[6px]" aria-hidden="true" />
+      <p className="max-w-md font-display text-title font-medium leading-snug text-pretty text-ink">{message}</p>
       {action && ("href" in action ? (
         <Link
           href={action.href}
-          className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-caption font-medium text-ink transition-colors hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))] hover:bg-surface-2"
+          className="inline-flex h-9 items-center gap-2 bg-ink px-3.5 text-body font-medium text-canvas transition-[transform,background-color] duration-150 ease-out hover:bg-(--accent-fill) hover:text-on-accent active:scale-[0.98]"
         >
-          {action.label}
+          {action.label} <span aria-hidden="true">›</span>
         </Link>
       ) : (
         <Button variant="ghost" onClick={action.onClick}>

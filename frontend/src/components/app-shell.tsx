@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BrandLink } from "./brand-link";
-import { AppHeader } from "./app-header";
 import { MobileAppHeader } from "./mobile-app-header";
 import { CommandPalette, ShortcutsHelp, type PaletteItem } from "./command-palette";
 import { getMe, logout } from "@/lib/auth";
@@ -16,7 +15,8 @@ import type { Role, User, GovernorEventState, PlantState } from "@/lib/types";
 import { capitalize, cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { PageSkeleton } from "./skeleton";
-import { Modal } from "./ui";
+import { Icon as SharedIcon, isIconName, type IconName as SharedIconName } from "./icon";
+import { getSearchShortcut } from "@/lib/search-shortcut";
 
 // Staff surfaces (Assure group + RCA) are hidden from field workers. Dev-bypass (no session)
 // defaults to engineer, so an unauthenticated demo still sees everything.
@@ -24,43 +24,22 @@ const STAFF: Role[] = ["engineer", "reliability", "admin"];
 /** Staff plus the read-only compliance auditor — mirrors STAFF_AND_COMPLIANCE in use-role.ts. */
 const STAFF_AND_COMPLIANCE: Role[] = [...STAFF, "compliance"];
 
-type IconName =
-  | "briefs" | "copilot" | "assets" | "rca" | "compliance"
-  | "management" | "governance" | "documents" | "search" | "menu" | "close" | "graph" | "audit"
-  | "events" | "offboarding" | "projects" | "voice" | "chevron" | "settings" | "health" | "info" | "alert"
-  | "chart";
+// Nav keys → the shared Phosphor set (components/icon.tsx). Conventional metaphors
+// over clever ones: a sidebar is scanned, not read.
+const NAV_ICON = {
+  management: "squares-four", briefs: "clipboard-text", copilot: "sparkle", assets: "cube",
+  events: "pulse", voice: "waveform", alert: "flag", rca: "target", graph: "graph",
+  coverage: "chart-pie-slice", compliance: "shield-check", governance: "scales",
+  audit: "clock-counter-clockwise", documents: "file-text", projects: "folders",
+  offboarding: "handshake", settings: "gear-six", chevron: "caret-right",
+} as const satisfies Record<string, SharedIconName>;
+type IconName = keyof typeof NAV_ICON;
 
-function Icon({ name, className = "size-[18px]" }: { name: IconName; className?: string }) {
-  const paths: Record<IconName, React.ReactNode> = {
-    briefs: <path d="M4 6h16M4 12h16M4 18h10" />,
-    copilot: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
-    assets: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></>,
-    rca: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-    compliance: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
-    management: <><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M18 17V9M13 17V5M8 17v-3" /></>,
-    governance: <><path d="M12 3v18M7 21h10" /><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" /><path d="m5 7-3 8c.87.65 1.92 1 3 1s2.13-.35 3-1L5 7zM19 7l-3 8c.87.65 1.92 1 3 1s2.13-.35 3-1l-3-8z" /></>,
-    documents: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /></>,
-    search: <><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></>,
-    menu: <path d="M4 6h16M4 12h16M4 18h16" />,
-    close: <path d="M6 6l12 12M18 6L6 18" />,
-    graph: <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" /></>,
-    audit: <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01" /></>,
-    events: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>,
-    offboarding: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="m17 8 5 5m0-5-5 5" /></>,
-    projects: <><path d="M3 7l9-4 9 4-9 4-9-4z" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" /></>,
-    voice: <><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><path d="M12 19v4M8 23h8" /></>,
-    chevron: <path d="M9 6l6 6-6 6" />,
-    settings: <><circle cx="12" cy="12" r="3" /><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /></>,
-    health: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-    info: <><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></>,
-    alert: <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
-    chart: <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>,
-  };
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {paths[name]}
-    </svg>
-  );
+/** Active items switch to the filled cut of the same glyph (Linear/Apple convention). */
+function Icon({ name, className, active = false }: { name: IconName; className?: string; active?: boolean }) {
+  const base = NAV_ICON[name];
+  const filled = `${base}-fill`;
+  return <SharedIcon name={active && isIconName(filled) ? filled : base} className={className} />;
 }
 
 type NavItem = { href: string; label: string; icon: IconName; roles?: Role[] };
@@ -87,7 +66,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       { href: "/rca", label: "RCA", icon: "rca", roles: STAFF },
       { href: "/graph", label: "Graph", icon: "graph", roles: STAFF },
-      { href: "/management/coverage", label: "Coverage", icon: "chart", roles: STAFF },
+      { href: "/management/coverage", label: "Coverage", icon: "coverage", roles: STAFF },
     ],
   },
   {
@@ -171,12 +150,17 @@ function useRailCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
-export function SidebarContent({ onNavigate, role, user, collapsible = false }: { onNavigate?: () => void; role: Role; user: User | null; collapsible?: boolean }) {
+/** Global actions the rail owns on desktop (there is no top bar): search, the primary
+ *  action, and the account. Optional so the rail renders standalone in tests. */
+export type RailActions = { onSearch: () => void; onCreate: () => void; onOpenUser: () => void; accountName: string; accountInitials: string };
+
+export function SidebarContent({ onNavigate, role, user, collapsible = false, actions }: { onNavigate?: () => void; role: Role; user: User | null; collapsible?: boolean; actions?: RailActions }) {
   const pathname = usePathname();
   const [railCollapsed, toggleRail] = useRailCollapsed();
   const homeHref = role === "field_worker" ? "/briefs" : "/management";
   // Collapse is per-group, default open, session-local (persistence = hydration churn for nothing).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const shortcut = getSearchShortcut(typeof navigator === "undefined" ? undefined : navigator.platform);
   const sections = NAV
     .map((s) => ({ ...s, items: s.items.filter((it) => !it.roles || it.roles.includes(role)) }))
     .filter((s) => s.items.length > 0);
@@ -186,7 +170,7 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false }: 
       {/* Layout here is CSS, not `railCollapsed` — state is false on the first
           client render, so a state-driven row would paint the expanded layout
           inside a 68px rail for one frame on every load. */}
-      <div className="rail-brand-row flex items-center justify-between gap-2 px-5 py-6">
+      <div className="rail-brand-row flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-5">
         <BrandLink href={homeHref} />
         {/* Exactly one toggle in the DOM. Collapsed it sits under the mark — beside
             it there is no room. Placing it with state rather than CSS is what keeps
@@ -205,11 +189,36 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false }: 
         )}
       </div>
 
-      <nav className="rail-nav flex-1 space-y-[var(--rail-section-gap,1.25rem)] overflow-y-auto px-3 py-2 scrollbar-none">
+      {actions && (
+        <div className="rail-actions flex shrink-0 gap-2 px-3 pt-4">
+          <button
+            type="button"
+            onClick={actions.onSearch}
+            aria-label="Search workspace"
+            title={`Search (${shortcut})`}
+            className="rail-link flex h-9 min-w-0 flex-1 items-center gap-3 border border-line px-2.5 text-body text-muted transition-colors hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--line))] hover:text-ink"
+          >
+            <SharedIcon name="magnifying-glass" className="size-4 shrink-0" />
+            <span className="rail-label flex-1 text-left">Search</span>
+            <kbd className="rail-label border border-line px-1.5 font-sans text-micro text-muted">{shortcut}</kbd>
+          </button>
+          <button
+            type="button"
+            onClick={actions.onCreate}
+            aria-label="Ingest document"
+            title="Ingest document"
+            className="grid size-9 shrink-0 place-items-center bg-accent text-on-accent transition-[filter] duration-150 ease-out hover:brightness-110"
+          >
+            <SharedIcon name="plus" className="size-4" />
+          </button>
+        </div>
+      )}
+
+      <nav className="rail-nav flex-1 space-y-[var(--rail-section-gap,1.25rem)] overflow-y-auto px-3 pb-2 pt-5 scrollbar-none">
         {sections.map((section) => {
           const isOpen = !collapsed[section.group];
           const list = (
-            <ul id={`nav-${section.group || "top"}`} className="space-y-0.5">
+            <ul id={`nav-${section.group || "top"}`} className="space-y-1">
               {section.items.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
@@ -220,13 +229,14 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false }: 
                       aria-label={item.label}
                       title={item.label}
                       className={cn(
-                        "rail-link flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-body transition-colors",
+                        "rail-link flex items-center gap-3 px-2.5 py-2 text-body transition-colors",
+                        // Square row with a 2px accent rule, the landing's active-cell mark.
                         active
-                          ? "bg-accent-soft font-semibold text-accent"
+                          ? "bg-surface-2 font-semibold text-ink shadow-[inset_2px_0_0_var(--accent)] [&>svg]:text-accent"
                           : "text-muted hover:bg-surface-2 hover:text-ink",
                       )}
                     >
-                      <Icon name={item.icon} />
+                      <Icon name={item.icon} active={active} />
                       <span className="rail-label">{item.label}</span>
                     </Link>
                   </li>
@@ -261,22 +271,29 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false }: 
 
       {user && <GovernorPill userId={user.user_id} />}
 
-      <div className="mx-3 mb-4 mt-2 space-y-0.5 border-t border-line pt-3">
-        <Link href="/system-information" onClick={onNavigate} className="rail-link flex items-center gap-2 rounded-lg px-2 py-1.5 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
-          <Icon name="info" className="size-[18px]" /><span className="rail-label">System Information</span>
-        </Link>
-        {ADMIN_ROLES.includes(role) && (
-          <>
-            <Link href="/system-health" onClick={onNavigate} className="rail-link flex items-center gap-2 rounded-lg px-2 py-1.5 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
-              <Icon name="health" className="size-[18px]" /><span className="rail-label">System Health</span>
-            </Link>
-            <Link href="/system-benchmarks" onClick={onNavigate} className="rail-link flex items-center gap-2 rounded-lg px-2 py-1.5 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
-              <Icon name="chart" className="size-[18px]" /><span className="rail-label">System Benchmarks</span>
-            </Link>
-          </>
-        )}
-        <Link href="/settings" onClick={onNavigate} className="rail-link flex items-center gap-2 rounded-lg px-2 py-1.5 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink"><Icon name="settings" className="size-[18px]" /><span className="rail-label">System Settings</span></Link>
-      </div>
+      {/* Account lives at the foot of the rail, as in Linear / Vercel / Notion.
+          Settings, System Health (admins) and sign-out are inside the menu it opens. */}
+      {actions ? (
+        <button
+          type="button"
+          onClick={actions.onOpenUser}
+          aria-label="Open user menu"
+          className="rail-link mx-3 mb-3 mt-2 flex items-center gap-3 border-t border-line px-2 pb-1 pt-3 text-left transition-colors hover:text-ink"
+        >
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-label font-bold text-ink">{actions.accountInitials}</span>
+          <span className="rail-label min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-body text-ink">{actions.accountName}</span>
+            <span className="block text-micro capitalize text-muted">{role.replace(/_/g, " ")}</span>
+          </span>
+          <SharedIcon name="caret-up-down" className="rail-label size-4 shrink-0 text-muted" />
+        </button>
+      ) : (
+        <div className="mx-3 mb-4 mt-2 border-t border-line pt-2">
+          <Link href="/settings" onClick={onNavigate} aria-label="System Settings" title="System Settings" className="rail-link flex items-center gap-3 px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
+            <Icon name="settings" /><span className="rail-label">System Settings</span>
+          </Link>
+        </div>
+      )}
 
     </div>
   );
@@ -289,71 +306,23 @@ function AccountMenu({ open, onClose, name, role, onSignOut }: { open: boolean; 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-label="User menu">
       <button className="absolute inset-0" aria-label="Close user menu" onClick={onClose} />
-      <div className="sidebar-scope absolute right-4 top-16 w-64 rounded-xl border border-line p-2 shadow-xl animate-[overlay-in_150ms_ease-out]">
+      <div className="sidebar-scope absolute right-4 top-16 w-64 border border-line p-2 shadow-xl animate-[overlay-in_150ms_ease-out] lg:bottom-3 lg:left-[calc(var(--rail-w)+0.5rem)] lg:right-auto lg:top-auto">
         <div className="flex items-start justify-between gap-3 px-3 py-2"><div className="min-w-0"><p className="truncate text-sm font-semibold">{name}</p><p className="text-caption text-muted">{role.replace(/_/g, " ")}</p></div><ThemeToggle className="-mr-1 -mt-1 shrink-0" /></div>
-        <Link href="/settings" onClick={onClose} className="flex rounded-lg px-3 py-2 text-sm transition-colors hover:bg-surface-2">System Settings</Link>
-        <button type="button" onClick={onSignOut} className="flex w-full rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-surface-2">Sign out</button>
+        <Link href="/settings" onClick={onClose} className="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-surface-2"><SharedIcon name="gear-six" className="size-4 text-muted" />System Settings</Link>
+        {ADMIN_ROLES.includes(role as Role) && (
+          <Link href="/system-health" onClick={onClose} className="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-surface-2"><SharedIcon name="heartbeat" className="size-4 text-muted" />System Health</Link>
+        )}
+        <button type="button" onClick={onSignOut} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-surface-2"><SharedIcon name="sign-out" className="size-4" />Sign out</button>
       </div>
     </div>
   );
 }
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-export function MiniCalendar({ onClose }: { onClose: () => void }) {
-  const [today] = useState(() => new Date());
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const totalCells = Math.ceil((firstWeekday + daysInMonth) / WEEKDAYS.length) * WEEKDAYS.length;
-  const monthLabel = today.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-
-  return (
-    <Modal title="Calendar" onClose={onClose}>
-      <table aria-label={`Calendar for ${monthLabel}`} className="w-full table-fixed border-collapse text-center">
-        <caption className="mb-3 text-left text-subtitle font-semibold text-ink">{monthLabel}</caption>
-        <thead>
-          <tr className="text-label font-semibold text-muted">
-            {WEEKDAYS.map((weekday) => <th key={weekday} scope="col" className="pb-2">{weekday}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: totalCells / WEEKDAYS.length }, (_, week) => (
-            <tr key={week}>
-              {Array.from({ length: WEEKDAYS.length }, (_, weekday) => {
-                const day = week * WEEKDAYS.length + weekday - firstWeekday + 1;
-                if (day < 1 || day > daysInMonth) return <td key={`${week}-${weekday}`} className="h-9" />;
-                const isToday = day === today.getDate();
-                const dateTime = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                return (
-                  <td key={dateTime} className="h-9">
-                    <time
-                      dateTime={dateTime}
-                      aria-current={isToday ? "date" : undefined}
-                      className={cn(
-                        "inline-grid size-7 place-items-center rounded-full text-caption",
-                        isToday ? "bg-accent-soft font-semibold text-accent" : "text-ink",
-                      )}
-                    >
-                      {day}
-                    </time>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Modal>
-  );
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [palette, setPalette] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const goSeqRef = useRef<number | null>(null);
@@ -532,6 +501,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
+  const railActions: RailActions = {
+    onSearch: () => setPalette(true),
+    onCreate: () => router.push("/documents/ingest"),
+    onOpenUser: () => setAccountOpen((open) => !open),
+    accountName: user?.email ?? "Kairos user",
+    accountInitials: getUserInitials(user?.email),
+  };
+
 // Auth gate: never blank. Show shell chrome + skeleton until token resolves.
   if (authed !== true) {
     return (
@@ -561,12 +538,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} items={paletteItems} />
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-      {calendarOpen && <MiniCalendar onClose={() => setCalendarOpen(false)} />}
 
-      {/* Desktop sidebar — all roles; sidebar-scope remaps tokens to the dark rail palette */}
+      {/* Desktop sidebar — all roles; sidebar-scope remaps tokens to the dark rail palette.
+          There is no desktop top bar: search, Ingest and the account live in the rail. */}
       <aside data-rail className="sidebar-scope hidden w-[var(--rail-w)] shrink-0 border-r border-line transition-[width] duration-200 motion-reduce:transition-none lg:block print:hidden">
         <div className="sticky top-0 h-dvh">
-          <SidebarContent role={role} user={user} collapsible />
+          <SidebarContent role={role} user={user} collapsible actions={railActions} />
         </div>
       </aside>
 
@@ -574,7 +551,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <button className="absolute inset-0 animate-[overlay-in_150ms_ease-out] bg-[var(--scrim)]" aria-label="Close menu" onClick={() => setMobileDrawerOpen(false)} />
           <div className="sidebar-scope absolute inset-y-0 left-0 w-[316px] max-w-[86vw] overflow-y-auto border-r border-line outline-none animate-[drawer-in_250ms_ease-out]">
-            <SidebarContent onNavigate={() => setMobileDrawerOpen(false)} role={role} user={user} />
+            <SidebarContent onNavigate={() => setMobileDrawerOpen(false)} role={role} user={user} actions={railActions} />
           </div>
         </div>
       )}
@@ -604,27 +581,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile: 56px bottom tabs + safe-area for all roles; content padding clears them */}
       {/* inert while the sheet dialog is open so screen readers can't wander behind it */}
       <div
-        inert={moreOpen || mobileDrawerOpen || calendarOpen || undefined}
+        inert={moreOpen || mobileDrawerOpen || undefined}
         className="flex min-w-0 flex-1 flex-col pb-[calc(56px+env(safe-area-inset-bottom))] lg:pb-0 print:pb-0"
       >
-        <AppHeader
-          name={user?.email ?? "Kairos user"}
-          role={role}
-          onOpenSearch={() => setPalette(true)}
-          onOpenCalendar={() => setCalendarOpen((open) => !open)}
-          calendarOpen={calendarOpen}
-          onCreate={() => router.push("/documents/ingest")}
-          onOpenBriefs={() => router.push("/briefs")}
-          onOpenUser={() => setAccountOpen((open) => !open)}
-          userInitial={getUserInitials(user?.email)}
-        />
         <MobileAppHeader
           onOpenMenu={() => setMobileDrawerOpen(true)}
           onOpenSearch={() => setPalette(true)}
-          onOpenCalendar={() => setCalendarOpen((open) => !open)}
-          calendarOpen={calendarOpen}
           onCreate={() => router.push("/documents/ingest")}
-          onOpenBriefs={() => router.push("/briefs")}
           onOpenUser={() => setAccountOpen((open) => !open)}
           userInitial={getUserInitials(user?.email)}
         />
@@ -636,7 +599,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className={cn(
               "flex items-center gap-3 px-5 py-2.5 text-body font-semibold",
               plantState.state === "emergency"
-                ? "bg-danger text-white"
+                ? "bg-danger text-on-danger"
                 : "bg-[color-mix(in_srgb,var(--caution)_18%,var(--surface))] text-caution",
             )}
           >
@@ -645,15 +608,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {" — only critical briefs are being delivered"}
           </div>
         )}
-        {/* Shell owns page padding; /copilot opts out (full-bleed sticky composer). */}
-        <main
-          id="main"
-          className={cn(
-            "min-w-0 flex-1",
-            pathname !== "/copilot" && "px-5 py-8 sm:px-8 sm:py-10 print:p-0",
+        {/* Shell owns page padding; /copilot opts out (full-bleed sticky composer).
+            Every other route sits in the landing's frame: hairline rails either side
+            of a centred column, visible once the viewport is wider than the column. */}
+        <main id="main" className="flex min-w-0 flex-1 flex-col overflow-x-clip">
+          {pathname === "/copilot" ? (
+            <div key={pathname} className="app-route flex-1">{children}</div>
+          ) : (
+            <div className="relative mx-auto flex w-full max-w-[1464px] flex-1 flex-col xl:border-x print:border-0">
+              <div key={pathname} className="app-route flex-1 px-5 py-8 sm:px-8 sm:py-10 print:p-0">{children}</div>
+            </div>
           )}
-        >
-          <div key={pathname} className="app-route">{children}</div>
         </main>
       </div>
 

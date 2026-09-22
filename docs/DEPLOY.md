@@ -35,7 +35,8 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 | Security group | 22 (your IP), 80, 443 |
 | Certificate | Let's Encrypt, renewed automatically by Caddy |
 | Running | the 11 services started by `make prod`; memory about 2.8 GiB of 7.6 GiB |
-| Account | AWS Free plan, $100 credit, about $2.63 a day while running |
+| Account | AWS Free plan, $200 credit ($100 sign-up + $100 from the five Explore AWS activities), about $2.63 a day while running |
+| Runway | **$182.24** left on 22 September 2026 ÷ $2.63 a day = about 69 days. Billing lags usage by up to a day, so count from 21 September: credit runs out around **29 November 2026** |
 
 **Accepted risk:** the login page's "Explore the live demo" button (it signs in as admin), and the seeded passwords in the
 repository, let anyone act as admin on the live data. Replace them with a read-only demo account before
@@ -89,15 +90,16 @@ the graph. But that loses four things:
 
 ## 2. Sizing and cost
 
-Prices are AWS on-demand rates for **Asia Pacific (Mumbai)**, checked on 14 September 2026. A month is 730 hours.
+Prices are AWS on-demand rates for **Asia Pacific (Mumbai)**, checked on 14 September 2026 and re-checked against the AWS Price List API on 22 September 2026. A month is 730 hours.
 
 | Item | Rate | t4g.large (Paid plan) | m7i-flex.large (Free plan) |
 |---|---|---|---|
 | Instance, 2 vCPU / 8 GiB | per hour | $0.0448 → **$32.70/mo** | $0.10075 → **$73.55/mo** |
 | 30 GB gp3 disk | $0.0912 / GB-month | $2.74/mo | $2.74/mo |
 | 1 public IPv4 (Elastic IP) | $0.005 / hour | $3.65/mo | $3.65/mo |
-| **Total** | | **$39.09/mo · $1.29/day** | **$79.94/mo · $2.63/day** |
-| Days $100 of credit lasts | | about 77 | about 38 |
+| **Total** | | **$39.09/mo · $1.29/day** | **$79.93/mo · $2.63/day** |
+| Days $100 of credit lasts | | about 78 | about 38 |
+| Days $200 of credit lasts | | about 156 | about 76 |
 
 **Other costs:**
 - **Data transfer out:** the first 100 GB per month is free, and API responses are kilobytes.
@@ -480,7 +482,7 @@ docker compose -f docker-compose.yml --profile prod logs -f --tail 100 kairos-ba
 **Stop:** EC2 → Instances → select `kairos-backend` → **Instance state → Stop instance**.
 
 - **What keeps billing while stopped:** the disk ($2.74/mo) and the Elastic IP ($3.65/mo), about
-  **$6.40 a month, or $0.21 a day**. The instance charge ($2.42 a day) stops.
+  **$6.39 a month, or $0.21 a day**. The instance charge ($2.42 a day) stops.
 - **What survives:** the disk, the code, `.env`, the Elasticsearch index, the certificate, and the address.
   DuckDNS and the Vercel frontend need no changes.
 - **While it is stopped** the Vercel site still loads, but every page shows "backend unreachable".

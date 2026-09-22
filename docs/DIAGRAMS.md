@@ -99,7 +99,7 @@ flowchart TB
 flowchart TB
     subgraph SHELL["App shell"]
         ROLE["use-role.ts<br/>one central guard, not per page"]
-        NAV["44 routes · 5 personas"]
+        NAV["42 routes · 5 personas"]
         ROLE --> NAV
     end
 

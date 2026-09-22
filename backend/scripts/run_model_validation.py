@@ -15,7 +15,7 @@ TWO THINGS THIS SCRIPT REPORTS BEYOND THE RAW F1
      already had once, surviving as a per-document failure mode. A run with any fallback is marked
      SUSPECT and its F1 is a ceiling, not a measurement.
   2. Persistence. Results are written to `audit_log` as `model_gate_result`, the same row shape the
-     Celery gate writes, so a CLI run reaches /system-benchmarks instead of vanishing at stdout.
+     Celery gate writes, so a CLI run reaches /governance/model-gate instead of vanishing at stdout.
 """
 
 import argparse
@@ -131,7 +131,7 @@ async def _run(model_name: str, persist: bool = True) -> dict:
 async def _persist(supabase, model_name: str, result: dict) -> None:
     """
     Write the run to `audit_log` in the same shape `workers/model_validation.py` uses, so CLI runs
-    and Celery-triggered runs land in one series on /system-benchmarks. Append-only; never updates
+    and Celery-triggered runs land in one series on /governance/model-gate. Append-only; never updates
     or deletes. A persistence failure must not discard an otherwise-good measurement, so it warns
     rather than raising — the metrics are already on stdout by then.
     """

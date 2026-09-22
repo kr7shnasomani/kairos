@@ -19,7 +19,7 @@ describe("IngestPage", () => {
   it("uses a guided intake while preserving document metadata fields", () => {
     render(<IngestPage />);
 
-    expect(screen.getByTestId("ingest-workspace")).toHaveClass("max-w-[1200px]");
+    expect(screen.getByTestId("ingest-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("ingest-intake")).toHaveClass("lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)]");
     expect(screen.getByTestId("ingest-file-drop")).toBeInTheDocument();
     expect(screen.getByTestId("ingest-metadata")).toBeInTheDocument();

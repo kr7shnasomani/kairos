@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // generateMetadata on every transition, not just the first load; no page in this route
 // group sets its own <title>, and AppShell doesn't either — a route missing from this
 // list, or listed only under a shorter prefix, shows the wrong title in both cases,
-// not just on refresh, which is how /system-benchmarks and /management/coverage were
+// not just on refresh, which is how /system-benchmarks (since removed) and /management/coverage were
 // found and fixed 2026-08-24: the first had no entry at all (bare "Kairos"), the second
 // fell through to the generic "/management" entry ("Kairos: Overview") because a
 // specific one wasn't listed above it. `.find()` returns the first array match, so a
@@ -31,14 +31,12 @@ const ROUTE_LABELS: [string, string][] = [
   ["/management/plant-state", "Plant State"],
   ["/management/coverage", "Coverage"],
   ["/management", "Overview"],
-  ["/system-benchmarks", "System Benchmarks"],
   ["/documents/ingest", "Document Ingest"],
   ["/documents/compare", "Document Compare"],
   ["/documents", "Documents"],
   ["/offboarding", "Off-Boarding"],
   ["/settings", "System Settings"],
   ["/system-health", "System Health"],
-  ["/system-information", "System Information"],
   ["/field/voice", "Voice Note"],
   ["/field/deviation", "Deviation Flag"],
   ["/field/elicitation", "Knowledge Capture"],

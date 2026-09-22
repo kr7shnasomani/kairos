@@ -16,30 +16,27 @@ vi.mock("./use-role", async (importOriginal) => {
 
 describe("SystemTabs", () => {
   beforeEach(() => {
-    mocks.pathname = "/system-benchmarks";
+    mocks.pathname = "/system-health";
     mocks.role = "admin";
   });
 
   it("renders every system surface for an admin", () => {
     render(<SystemTabs />);
-    for (const label of ["Information", "Health", "Benchmarks", "Settings"]) {
+    for (const label of ["Health", "Settings"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
   });
 
   it("marks the active tab with aria-current", () => {
     render(<SystemTabs />);
-    expect(screen.getByRole("link", { name: "Benchmarks" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Health" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Settings" })).not.toHaveAttribute("aria-current");
   });
 
-  it("hides admin-only tabs from a non-admin", () => {
+  it("renders nothing for a non-admin, who would only have the Settings tab", () => {
     mocks.role = "engineer";
     render(<SystemTabs />);
-    expect(screen.getByRole("link", { name: "Information" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Health" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Benchmarks" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "System" })).not.toBeInTheDocument();
   });
 
   it("survives a null pathname", () => {
@@ -48,6 +45,6 @@ describe("SystemTabs", () => {
     mocks.pathname = null;
     render(<SystemTabs />);
     expect(screen.getByRole("navigation", { name: "System" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Benchmarks" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Health" })).not.toHaveAttribute("aria-current");
   });
 });

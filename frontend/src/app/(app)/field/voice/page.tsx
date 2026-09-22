@@ -6,6 +6,7 @@ import { submitVoiceNote } from "@/lib/api";
 import { PageHeader } from "@/components/ui";
 import { useMe } from "@/components/use-role";
 
+import { Icon } from "@/components/icon";
 type Stage = "record" | "submitting" | "done" | "error";
 
 // Ad-hoc voice capture reached from the field bottom-tab (no work order in the
@@ -34,7 +35,7 @@ export default function VoiceCapturePage() {
   }
 
   return (
-    <div data-testid="field-voice-workspace" className="mx-auto max-w-[1100px]">
+    <div data-testid="field-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         compact
         className="mb-6"
@@ -81,7 +82,7 @@ export default function VoiceCapturePage() {
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="size-2 animate-bounce rounded-full bg-muted"
+                className="size-2 animate-pulse rounded-full bg-muted"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
@@ -93,18 +94,7 @@ export default function VoiceCapturePage() {
       {stage === "done" && (
         <div className="flex flex-col items-center py-8 text-center">
           <div className="mx-auto grid size-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--verified)_12%,transparent)]">
-            <svg
-              className="size-7 text-verified"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+            <Icon name="check" className="size-7 text-verified" />
           </div>
           {/* A duplicate used to read "Transcription is processing" — for a note that would never appear. */}
           <h2 className="mt-4 text-title font-semibold">{duplicate ? "Already submitted" : "Submitted"}</h2>
@@ -144,7 +134,7 @@ export default function VoiceCapturePage() {
       )}
         </main>
 
-        <aside data-testid="field-voice-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="field-voice-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">Engineering review</p>
           <h2 className="mt-1 text-title font-semibold">From field note to governed fact</h2>
           <ol className="mt-4 space-y-3 text-caption text-muted">

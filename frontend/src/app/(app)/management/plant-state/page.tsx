@@ -10,6 +10,7 @@ import { Modal, StatusBadge, Button, PageHeader } from "@/components/ui";
 import { fmtRelTime } from "@/lib/format";
 import { STATE_META, STATES, toneToken } from "./_components/state-meta";
 
+import { Icon } from "@/components/icon";
 export default function PlantStatePage() {
   const [current, setCurrent] = useState<PlantState | null>(null);
   const [siteId, setSiteId] = useState<string | null>(null);
@@ -59,11 +60,9 @@ export default function PlantStatePage() {
   const activeMeta = current ? STATE_META[current.state] : null;
 
   return (
-    <div data-testid="plant-state-workspace" className="mx-auto max-w-[1200px]">
+    <div data-testid="plant-state-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/management" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Overview
       </Link>
 
@@ -97,7 +96,7 @@ export default function PlantStatePage() {
           </div>
         ) : (
           <div className="mt-3 flex items-center gap-2">
-            <span className="inline-flex gap-1.5">{[0,1,2].map((i) => <span key={i} className="size-2 animate-bounce rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />)}</span>
+            <span className="inline-flex gap-1.5">{[0,1,2].map((i) => <span key={i} className="size-2 animate-pulse rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />)}</span>
           </div>
         )}
       </section>
@@ -170,7 +169,7 @@ export default function PlantStatePage() {
       )}
         </main>
 
-        <aside data-testid="plant-state-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="plant-state-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">Site scope</p>
           <p className="tabular mt-1 text-title font-semibold">{siteId ?? "Loading…"}</p>
           <div className="mt-4 border-t border-line pt-4">

@@ -131,7 +131,7 @@ export default function GovernancePage() {
   return (
     <div data-testid="governance-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Layer 7 · Dual-track governance"
+        eyebrow="Governance · Human sign-off"
         title="Governance"
         lede="Where contradictions surface, unverified inputs are gated, and human authority decides what becomes canonical truth."
       />
@@ -145,13 +145,11 @@ export default function GovernancePage() {
         )}
       </div>
 
-      <div data-testid="governance-summary" className="mt-6 rounded-xl border border-line bg-surface p-3 shadow-sm">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div data-testid="governance-summary" className="mesh stagger mt-6 grid-cols-2 lg:grid-cols-4">
           <KpiCard label="Open conflicts" value={value("openConflicts")} sub="Awaiting decision" tone={overview?.openConflicts ? "danger" : "neutral"} loading={loading} />
           <KpiCard label="Engineering track" value={value("engineeringConflicts")} sub="Human sign-off" tone={overview?.engineeringConflicts ? "caution" : "neutral"} loading={loading} />
           <KpiCard label="Pending quarantine" value={value("pendingQuarantine")} sub="Unverified inputs" tone={overview?.pendingQuarantine ? "caution" : "neutral"} loading={loading} />
           <KpiCard label="Overdue" value={value("overdue")} sub="Across active queues" tone={overview?.overdue ? "danger" : "neutral"} loading={loading} />
-        </div>
       </div>
 
       <div className="mt-6 flex items-end justify-between gap-3">
@@ -162,7 +160,7 @@ export default function GovernancePage() {
         <span className="tabular shrink-0 text-caption text-muted">{SURFACES.length} controls</span>
       </div>
 
-      <div data-testid="governance-surfaces" className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div data-testid="governance-surfaces" className="mesh stagger mt-3 md:grid-cols-2 xl:grid-cols-3">
         {SURFACES.map((surface) => {
           const status = statusFor(surface.key);
           const cta = ctaFor(surface.key, status);
@@ -171,15 +169,15 @@ export default function GovernancePage() {
               key={surface.key}
               href={surface.href}
               data-testid={`governance-surface-${surface.key}`}
-              className="group flex min-h-44 flex-col rounded-xl border border-line bg-surface p-5 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--line))] hover:shadow-md"
+              className="lp-cell group flex min-h-44 flex-col bg-surface p-5"
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-label font-semibold uppercase tracking-[0.1em] text-muted">{surface.group}</span>
                 <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
               </div>
-              <h3 className="mt-4 text-subtitle font-semibold text-ink">{surface.title}</h3>
+              <h3 className="mt-4 font-display text-title font-medium text-ink">{surface.title}</h3>
               <p className="mt-1.5 text-body leading-relaxed text-muted">{surface.desc}</p>
-              <span className="mt-auto pt-4 text-caption font-semibold text-accent">{cta} <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span></span>
+              <span className="mt-auto pt-4 text-caption font-semibold text-accent">{cta} <span className="inline-block transition-transform group-hover:translate-x-0.5">›</span></span>
             </Link>
           );
         })}

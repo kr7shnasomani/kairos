@@ -9,6 +9,7 @@ import { AuthorityBadge, Button, EmptyState, StatusBadge, PageHeader } from "@/c
 import { PageSkeleton } from "@/components/skeleton";
 import { authorityLabel, triggerLabel, relativeTime } from "@/lib/utils";
 
+import { Icon } from "@/components/icon";
 export default function CompareRoute() {
   return (
     <Suspense fallback={<PageSkeleton />}>
@@ -54,15 +55,13 @@ function ComparePage() {
   }, [sp]);
 
   return (
-    <div data-testid="compare-workspace" className="mx-auto max-w-[1200px]">
+    <div data-testid="compare-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/documents" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Documents
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Layer 2 · Immutable vault" title="Compare versions" lede="Walk the supersede chain and diff metadata across two versions. A superseded document is never presented as current. Supersession closes a validity window; it does not erase." />
+      <PageHeader className="mt-4" eyebrow="Knowledge · Immutable vault" title="Compare versions" lede="Walk the supersede chain and diff metadata across two versions. A superseded document is never presented as current. Supersession closes a validity window; it does not erase." />
 
       <div data-testid="compare-toolbar" className="mt-6 rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
         <div className="mb-3">

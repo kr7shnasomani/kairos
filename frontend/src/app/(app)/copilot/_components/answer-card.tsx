@@ -7,6 +7,7 @@ import { AuthorityBadge, SourceChip, StatusBadge, ConfidenceMeter } from "@/comp
 import { cn, providerName } from "@/lib/utils";
 import { EntityAnnotations } from "./entity-annotations";
 
+import { Icon } from "@/components/icon";
 // Phase 1 = retrieval only (no synthesized prose); 2+ = full synthesis.
 const PHASE = process.env.NEXT_PUBLIC_KAIROS_PHASE ?? "3";
 export const SYNTHESIS_ENABLED = PHASE !== "1";
@@ -31,9 +32,9 @@ export function Thinking() {
   return (
     <div className="flex items-center gap-2 text-body text-muted">
       <span className="inline-flex gap-1" aria-hidden="true">
-        <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.3s]" />
-        <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.15s]" />
-        <span className="size-1.5 animate-bounce rounded-full bg-muted" />
+        <span className="size-1.5 animate-pulse rounded-full bg-muted [animation-delay:-0.3s]" />
+        <span className="size-1.5 animate-pulse rounded-full bg-muted [animation-delay:-0.15s]" />
+        <span className="size-1.5 animate-pulse rounded-full bg-muted" />
       </span>
       Assembling evidence…
     </div>
@@ -180,19 +181,7 @@ export function Answer({ data, query = "", streaming }: {
       {/* Quarantine dependency banner */}
       {hasQuarantine && (
         <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--caution)_35%,var(--line))] bg-[color-mix(in_srgb,var(--caution)_8%,var(--surface))] px-3 py-2 text-caption text-caution">
-          <svg
-            className="size-3.5 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
+          <Icon name="warning-circle" className="size-3.5 shrink-0" />
           Draws on unverified field input — treat with additional caution
         </div>
       )}
@@ -204,20 +193,7 @@ export function Answer({ data, query = "", streaming }: {
           className="rounded-lg border border-[color-mix(in_srgb,var(--danger)_35%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface))] p-3.5"
         >
           <div className="flex items-start gap-2.5">
-            <svg
-              className="mt-0.5 size-4 shrink-0 text-danger"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
+            <Icon name="warning" className="mt-0.5 size-4 shrink-0 text-danger" />
             <div>
               <p className="text-body font-semibold text-danger">
                 Safety-critical query — refused
@@ -271,10 +247,10 @@ export function Answer({ data, query = "", streaming }: {
       ) : SYNTHESIS_ENABLED ? (
         <p className="text-sm leading-relaxed text-ink text-pretty">{data.answer}</p>
       ) : (
-        /* Phase 1 gate — retrieval only */
+        /* Retrieval-only deployment (KAIROS_PHASE=1): sources, no written answer */
         <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--caution)_30%,var(--line))] bg-[color-mix(in_srgb,var(--caution)_6%,var(--surface))] px-3 py-2.5 text-caption text-caution">
           <span className="size-1.5 shrink-0 rounded-full bg-caution" aria-hidden="true" />
-          Phase 1 — source documents returned directly. Synthesis activates in Phase 2.
+          Source documents only. Written answers are switched off on this deployment.
         </div>
       )}
 
@@ -291,20 +267,7 @@ export function Answer({ data, query = "", streaming }: {
             aria-expanded={sourcesOpen}
             className="flex w-full items-center gap-1.5 text-micro font-bold uppercase tracking-[0.1em] text-muted hover:text-ink"
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={cn("shrink-0 transition-transform", sourcesOpen && "rotate-90")}
-              aria-hidden="true"
-            >
-              <path d="M9 6l6 6-6 6" />
-            </svg>
+            <Icon name="caret-right" size={12} className={cn("shrink-0 transition-transform", sourcesOpen && "rotate-90")} />
             {data.refused ? "Sources — verify directly" : "Sources"} · {data.sources.length}
           </button>
           {sourcesOpen && (

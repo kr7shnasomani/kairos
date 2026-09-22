@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "./ui";
 import { cn } from "@/lib/utils";
 
+import { Icon } from "@/components/icon";
 export interface PaletteItem {
   group: string;
   label: string;
@@ -69,9 +70,7 @@ function PaletteDialog({ onClose, items }: { onClose: () => void; items: Palette
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-2.5 border-b border-line px-4">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-muted" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
-          </svg>
+          <Icon name="magnifying-glass" size={15} className="shrink-0 text-muted" />
           <input
             autoFocus
             value={query}

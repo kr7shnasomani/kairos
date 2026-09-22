@@ -8,6 +8,7 @@ import { KnowledgeGraph } from "@/components/lazy";
 import { AssetSearch } from "./asset-search";
 import { HierarchyPanel } from "./hierarchy-panel";
 
+import { Icon } from "@/components/icon";
 const VERIF_TONE = { verified: "verified", unverified: "caution", disputed: "danger" } as const;
 
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,9 +27,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   return (
     <div data-testid="asset-detail-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/assets" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Assets
       </Link>
 
@@ -41,7 +40,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           lede={<>{a.equipment_class.replaceAll("_", " ")}{a.parent && <> · Parent {a.parent}</>}</>}
           actions={
             <>
-              <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full bg-surface-2 px-2 text-label font-semibold" style={{ color: a.criticalityColor }}>
+              <span className="inline-flex h-[22px] items-center gap-1.5 bg-surface-2 px-2 text-label font-semibold" style={{ color: a.criticalityColor }}>
                 <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
                 {a.criticalityLabel}
               </span>

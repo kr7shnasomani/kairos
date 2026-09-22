@@ -39,7 +39,7 @@ function GovernorBanner({ response }: { response: BriefsResponse }) {
         </span>
       </div>
       <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full bg-danger" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-danger" style={{ width: `${pct}%` }} />
       </div>
 
       {/* What is being held, not just how many. A bare count cannot answer "does the held
@@ -98,7 +98,7 @@ export function BriefInbox({ response }: { response: BriefsResponse }) {
         />
         <div className="flex flex-wrap items-center gap-2 text-caption">
           <span className={cn(
-            "inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 font-medium",
+            "inline-flex min-h-8 items-center gap-1.5 px-3 font-medium",
             response.total_pending > 0
               ? "bg-[color-mix(in_srgb,var(--caution)_10%,transparent)] text-caution"
               : "bg-[color-mix(in_srgb,var(--verified)_9%,transparent)] text-verified",
@@ -107,13 +107,13 @@ export function BriefInbox({ response }: { response: BriefsResponse }) {
             <span className="tabular">{response.total_pending} pending</span>
           </span>
           {criticalCount > 0 && (
-            <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 font-medium text-danger">
+            <span className="inline-flex min-h-8 items-center gap-1.5 bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-3 font-medium text-danger">
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
               <span className="tabular">{criticalCount} critical</span>
             </span>
           )}
           <span className={cn(
-            "inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 font-medium",
+            "inline-flex min-h-8 items-center gap-1.5 px-3 font-medium",
             response.governor_state.state === "suppressed" || response.suppressed_count > 0
               ? "bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-danger"
               : "bg-[color-mix(in_srgb,var(--verified)_9%,transparent)] text-verified",

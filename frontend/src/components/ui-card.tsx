@@ -9,7 +9,7 @@ export function Card({
   className,
   children,
 }: {
-  /** Hover lift for clickable cards (pair with an onClick/Link wrapper). */
+  /** Landing hover (lp-card) for clickable cards (pair with an onClick/Link wrapper). */
   interactive?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -17,8 +17,9 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-line bg-surface",
-        interactive && "cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
+        "border border-line bg-surface",
+        // The landing's lift: scale 1.02 + accent border, no floating shadow.
+        interactive && "lp-card cursor-pointer",
         className,
       )}
     >

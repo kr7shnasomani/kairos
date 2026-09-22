@@ -13,7 +13,7 @@ describe("VoicePage", () => {
   it("keeps work-order context visible around the capture task", () => {
     render(<VoicePage />);
 
-    expect(screen.getByTestId("work-order-voice-workspace")).toHaveClass("max-w-[1100px]");
+    expect(screen.getByTestId("work-order-voice-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("work-order-voice-layout")).toHaveClass("lg:grid-cols-[minmax(0,1fr)_300px]");
     expect(screen.getByTestId("work-order-voice-capture")).toHaveTextContent("Start recording");
     expect(screen.getByTestId("work-order-voice-context")).toHaveTextContent("WO-118");

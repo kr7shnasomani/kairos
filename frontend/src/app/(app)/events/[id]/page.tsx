@@ -10,6 +10,7 @@ import { Button, StatusBadge, EmptyState, PageHeader } from "@/components/ui";
 import { DetailSkeleton } from "@/components/skeleton";
 import { relativeTime, triggerLabel } from "@/lib/utils";
 
+import { Icon } from "@/components/icon";
 const PRIORITY_TONE: Record<EventPriority, "danger" | "caution" | "info" | "neutral"> = {
   critical: "danger", high: "caution", normal: "info", low: "neutral",
 };
@@ -45,9 +46,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div data-testid="event-detail-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/events" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Events
       </Link>
 
@@ -87,7 +86,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               {event.brief_id && (
                 <Link href={`/briefs/${event.brief_id}`} className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-line bg-surface px-4 py-3 text-body shadow-sm transition-colors hover:bg-surface-2 sm:px-5">
                   <span>Triggered brief <span className="tabular font-semibold text-accent">{event.brief_id}</span></span>
-                  <span className="shrink-0 text-caption font-semibold text-accent">Open brief →</span>
+                  <span className="shrink-0 text-caption font-semibold text-accent">Open brief ›</span>
                 </Link>
               )}
 
@@ -161,7 +160,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   <ul className="mt-2 space-y-2">
                     {event.correlated_event_ids!.map((cid) => (
                       <li key={cid}>
-                        <Link href={`/events/${cid}`} className="tabular inline-flex min-h-11 items-center text-caption font-semibold text-accent hover:underline sm:min-h-0">{cid} →</Link>
+                        <Link href={`/events/${cid}`} className="tabular inline-flex min-h-11 items-center text-caption font-semibold text-accent hover:underline sm:min-h-0">{cid} ›</Link>
                       </li>
                     ))}
                   </ul>

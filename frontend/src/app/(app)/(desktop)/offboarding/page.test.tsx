@@ -20,7 +20,7 @@ describe("OffboardingPage", () => {
   it("renders a data-driven expert handover overview", async () => {
     render(await OffboardingPage());
 
-    expect(screen.getByTestId("offboarding-workspace")).toHaveClass("max-w-[1200px]");
+    expect(screen.getByTestId("offboarding-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("offboarding-summary")).toHaveTextContent(/2\s*active programmes/);
     expect(screen.getByTestId("offboarding-summary")).toHaveTextContent(/1\s*complete/);
     expect(screen.getByTestId("offboarding-summary")).toHaveTextContent(/6\s*of 10 sessions/);

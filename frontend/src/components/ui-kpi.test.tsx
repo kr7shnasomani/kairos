@@ -5,10 +5,10 @@ import { KpiCard } from "./ui";
 describe("KpiCard color hierarchy", () => {
   afterEach(cleanup);
 
-  it("uses the reference-style inset marker for relevant metrics", () => {
+  it("carries the tone in a square marker beside the label", () => {
     render(<KpiCard label="Assets tracked" value="12" tone="info" />);
 
-    expect(screen.getByTestId("kpi-accent")).toHaveClass("left-2", "bg-info");
+    expect(screen.getByTestId("kpi-accent")).toHaveClass("size-1.5", "bg-info");
   });
 
   it("reserves an attention marker for warning states", () => {

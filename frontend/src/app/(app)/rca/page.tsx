@@ -50,7 +50,7 @@ export default function RcaPage() {
 
   return (
     <div data-testid="rca-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader eyebrow="Layer 11 · Root Cause" title="RCA workspace" lede="Assemble failure timelines, evidence-weighted hypotheses, and supporting documents for engineering review." />
+      <PageHeader eyebrow="Analyze · Root cause" title="RCA workspace" lede="Assemble failure timelines, evidence-weighted hypotheses, and supporting documents for engineering review." />
 
       <form
         data-testid="rca-builder"
@@ -111,7 +111,7 @@ export default function RcaPage() {
           <button
             key={p.label}
             onClick={() => assemble(p.asset_id, p.failure_code)}
-            className="min-h-9 rounded-full border border-line bg-surface px-3 py-1.5 text-caption text-muted transition-colors hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))] hover:text-accent"
+            className="min-h-9 border border-line bg-surface px-3 py-1.5 text-caption text-muted transition-colors hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))] hover:text-accent"
           >
             {p.label}
           </button>
@@ -147,7 +147,7 @@ function RcaResult({ pack }: { pack: RcaPack }) {
   const { ref: gridRef, revealed: gridRevealed } = useScrollReveal<HTMLDivElement>();
   const { ref: lowerRef, revealed: lowerRevealed } = useScrollReveal<HTMLDivElement>();
   const revealCls = (revealed: boolean) =>
-    `min-w-0 transition-all duration-500 ${revealed ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`;
+    `min-w-0 transition-[opacity,transform] duration-500 ease-out ${revealed ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`;
   const briefSources = docsToBriefSources(pack);
 
   return (

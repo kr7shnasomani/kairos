@@ -11,7 +11,7 @@ export function MetricCardSkeleton() {
   return (
     <div className="flex min-h-[104px] w-full flex-col gap-2 rounded-xl border border-line bg-surface px-5 py-4" aria-hidden="true">
       <Skeleton className="h-3 w-24" />
-      <Skeleton className="h-8 w-20" />
+      <Skeleton className="mt-2 h-10 w-20" />
     </div>
   );
 }
@@ -59,8 +59,8 @@ export function DetailSkeleton() {
       <Skeleton className="h-3 w-24" />
       <Skeleton className="mt-3 h-8 w-64" />
       <div className="mt-3 flex gap-2">
-        <Skeleton className="h-5 w-20 rounded-full" />
-        <Skeleton className="h-5 w-24 rounded-full" />
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-24" />
       </div>
       <Skeleton className="mt-6 h-40 w-full rounded-xl" />
       <Skeleton className="mt-4 h-64 w-full rounded-xl" />

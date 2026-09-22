@@ -22,7 +22,7 @@ describe("CompareRoute", () => {
     fireEvent.click(screen.getByRole("button", { name: "Compare" }));
 
     await waitFor(() => expect(screen.getByTestId("document-compare-matrix")).toBeInTheDocument());
-    expect(screen.getByTestId("compare-workspace")).toHaveClass("max-w-[1200px]");
+    expect(screen.getByTestId("compare-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("compare-toolbar")).toHaveClass("rounded-xl", "bg-surface");
     expect(screen.getByTestId("compare-row-file")).toHaveClass("md:grid-cols-[minmax(120px,0.45fr)_minmax(0,1fr)_minmax(0,1fr)]");
     expect(screen.getByTestId("compare-value-file-a")).toHaveClass("bg-[color-mix(in_srgb,var(--caution)_10%,transparent)]");

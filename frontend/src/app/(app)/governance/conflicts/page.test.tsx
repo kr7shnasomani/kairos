@@ -48,7 +48,7 @@ describe("ConflictsPage", () => {
 
     await waitFor(() => expect(screen.getByText("CONF-1")).toBeInTheDocument());
     // Engineering row routes to MoC instead of exposing a resolve action.
-    expect(screen.getByRole("link", { name: "MoC required →" })).toHaveAttribute("href", "/governance/moc");
+    expect(screen.getByRole("link", { name: "MoC required ›" })).toHaveAttribute("href", "/governance/moc");
 
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
     await waitFor(() => expect(mocks.resolveConflict).toHaveBeenCalledWith("CONF-1", { decision: "accept_higher_authority" }));

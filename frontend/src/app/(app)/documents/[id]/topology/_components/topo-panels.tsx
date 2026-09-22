@@ -4,6 +4,7 @@
 import type { TopologyNode } from "@/lib/types";
 import { nodeVar } from "./topo-node";
 
+import { Icon } from "@/components/icon";
 export function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void }) {
   const color = nodeVar(node.node_type, node.verification_status);
   return (
@@ -15,9 +16,7 @@ export function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () 
           aria-label="Close"
           className="nodrag grid size-11 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-ink"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
+          <Icon name="x" size={14} />
         </button>
       </div>
       <div className="p-4 space-y-2 text-label">

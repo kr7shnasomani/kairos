@@ -80,7 +80,7 @@ export default function ProjectsPage() {
 
       <div data-testid="projects-portfolio-pulse" className="mt-6 grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(130px,0.55fr))]">
         <div className="relative bg-[linear-gradient(120deg,color-mix(in_srgb,var(--info)_7%,var(--surface)),var(--surface))] px-5 py-5 sm:col-span-2 lg:col-span-1">
-          <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 w-[3px] rounded-full bg-info" />
+          <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 w-[3px] bg-info" />
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-label font-semibold uppercase tracking-[0.1em] text-muted">Portfolio coverage</p>
           </div>
@@ -94,7 +94,7 @@ export default function ProjectsPage() {
 
       <div data-testid="projects-portfolio" className="mt-6 grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
         {classNames.length > 0 && (
-          <aside data-testid="projects-class-navigation" className="rounded-xl border border-line bg-surface p-2 shadow-sm lg:sticky lg:top-20">
+          <aside data-testid="projects-class-navigation" className="rounded-xl border border-line bg-surface p-2 shadow-sm lg:sticky lg:top-6">
             <p className="px-2 pb-2 pt-1 text-label font-semibold uppercase tracking-[0.1em] text-muted">Equipment classes</p>
             <div className="flex flex-wrap gap-1 lg:flex-col" role="group" aria-label="Equipment classes">
               <ClassButton label="All classes" count={groups.length} active={active === "all"} onClick={() => setActive("all")} />

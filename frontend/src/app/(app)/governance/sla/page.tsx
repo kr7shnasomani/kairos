@@ -18,6 +18,7 @@ import { nowMs } from "@/lib/utils";
 import { buildRows, COLUMNS, type SlaRow } from "./_components/columns";
 import { mixDonut, rankedBars, type CountRow } from "./_components/plots";
 
+import { Icon } from "@/components/icon";
 const BUCKETS = [
   { label: "0–1d", max: 1 },
   { label: "1–3d", max: 3 },
@@ -86,22 +87,20 @@ export default function SlaPage() {
   return (
     <div data-testid="sla-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance" className="inline-flex items-center gap-1.5 text-body text-muted transition-colors hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Governance
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 7 · Case management"
+        eyebrow="Governance · Deadlines"
         title="SLA escalations"
         lede="Where governance SLAs are breached right now: overdue conflicts and quarantine reviews, escalated for attention."
       />
       {report && <p className="mt-2 text-caption text-muted">Checked {fmtRelTime(report.checked_at)}</p>}
 
       {/* KPI strip — overdue tones flip to verified at zero */}
-      <div data-testid="sla-summary" className="mt-5 grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div data-testid="sla-summary" className="mt-5 mesh stagger grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Overdue conflicts" value={conflictsTotal} sub="past decision deadline" loading={loading} href="/governance/conflicts" tone={conflictsTotal === null ? "neutral" : conflictsTotal === 0 ? "verified" : "danger"} />
         <MetricCard label="Overdue quarantine" value={quarantineTotal} sub="past review window" loading={loading} href="/governance/quarantine" tone={quarantineTotal === null ? "neutral" : quarantineTotal === 0 ? "verified" : "danger"} />
         <MetricCard label="Escalated conflicts" value={escalated?.conflicts ?? null} sub="this run" loading={loading} tone={escalated?.conflicts ? "caution" : "neutral"} />

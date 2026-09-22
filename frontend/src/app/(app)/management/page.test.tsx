@@ -58,8 +58,8 @@ describe("ManagementPage", () => {
 
     // Attention ranking (spec §5): overdue conflict first, then quarantine, then gaps.
     const attention = screen.getByTestId("overview-needs-attention");
-    expect(attention).toHaveTextContent("Overdue conflict · technical");
-    expect(attention).toHaveTextContent("Overdue quarantine · field_note");
+    expect(attention).toHaveTextContent("Overdue conflict · Technical");
+    expect(attention).toHaveTextContent("Overdue quarantine · Field note");
     expect(attention).toHaveTextContent("2 critical compliance gaps");
 
     // Signals feed rows deep-link to the event.

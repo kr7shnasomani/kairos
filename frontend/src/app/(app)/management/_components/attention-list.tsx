@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ListSkeleton } from "@/components/skeleton";
 import { fmtRelTime } from "@/lib/format";
+import { label } from "@/lib/labels";
 import { staggerDelay } from "@/lib/motion";
 import type { ComplianceDashboard, SlaReport } from "@/lib/types";
 
@@ -21,7 +22,7 @@ function rank(sla: SlaReport | null, compliance: ComplianceDashboard | null): { 
   const conflicts = (sla?.overdue_conflicts ?? []).map((c): Row => ({
     key: `conflict-${c.conflict_id}`,
     tone: "danger",
-    title: `Overdue conflict · ${c.track}`,
+    title: `Overdue conflict · ${label(c.track)}`,
     asset: c.asset_id,
     since: c.sla_deadline,
     href: "/governance/conflicts",
@@ -37,7 +38,7 @@ function rank(sla: SlaReport | null, compliance: ComplianceDashboard | null): { 
     // `item_id, asset_id, input_type, sla_due_at`, so `content` is always undefined — and were it
     // ever added to that select, `elicitation_response` rows store a JSON array string, so the
     // list would render raw `[{"answer": …}]`.
-    title: `Overdue quarantine · ${q.input_type}`,
+    title: `Overdue quarantine · ${label(q.input_type)}`,
     asset: q.asset_id,
     since: q.sla_due_at,
     href: "/governance/quarantine",
@@ -91,7 +92,7 @@ export function AttentionList({
                 <span className="min-w-0 flex-1 truncate" title={r.title}>{r.title}</span>
                 {r.asset && <span className="shrink-0 rounded-md border border-line bg-surface-2 px-1.5 py-0.5 text-label text-muted">{r.asset}</span>}
                 {r.since && <time className="tabular shrink-0 text-label text-muted">{fmtRelTime(r.since)}</time>}
-                <span className="shrink-0 text-label text-muted transition-colors group-hover:text-accent" aria-hidden="true">→</span>
+                <span className="shrink-0 text-label text-muted transition-colors group-hover:text-accent" aria-hidden="true">›</span>
               </Link>
             </li>
           ))}

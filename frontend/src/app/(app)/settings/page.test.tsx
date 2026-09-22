@@ -10,7 +10,7 @@ describe("SettingsPage", () => {
   it("uses a responsive preferences navigation and content panel", () => {
     render(<SettingsPage />);
 
-    expect(screen.getByTestId("settings-workspace")).toHaveClass("max-w-[1100px]");
+    expect(screen.getByTestId("settings-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("settings-layout")).toHaveClass("md:grid-cols-[220px_minmax(0,1fr)]");
     expect(screen.getByTestId("settings-navigation")).toHaveTextContent("Appearance");
     expect(screen.getByTestId("settings-panel")).toHaveTextContent("Display");

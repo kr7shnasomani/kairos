@@ -93,7 +93,7 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 | REST API reference · backend services/workers/config | `docs/API.md` · `BACKEND.md` |
 | Infra (ports, stores, dev cmds) · Docker build & run modes | `docs/INFRA.md` · `DOCKER.md` |
 | Database schemas · frontend routes & wiring | `docs/DATABASE.md` · `FRONTEND.md` |
-| Implementation plans · E2E sweep (44 routes × 5 personas) | `docs/implementation/BE.md` · `FE.md` · `e2e-sweep.md` |
+| Implementation plans · E2E sweep (42 routes × 5 personas) | `docs/implementation/BE.md` · `FE.md` · `e2e-sweep.md` |
 | Tests · golden dataset · benchmarks (results → `benchmark/RESULTS.md`) | `docs/TESTS.md` · `DATASET.md` · `BENCHMARKS.md` |
 | Backend fixtures (mock-by-design) · deploy (AWS EC2 backend + Vercel frontend) | `docs/FIXTURES.md` · `DEPLOY.md` |
 
@@ -104,7 +104,7 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 **Backend:** FastAPI (Python 3.12) · **Neo4j Aura (cloud)** · **Qdrant Cloud** · ES 8.13 · Redis 7.2 · Temporal · Celery · Go 1.25 (Gin) · OPA · **OTEL → Grafana Cloud** · Supabase (Postgres + Storage + Auth + Vault)  
 **Frontend:** Next.js 16 · React 19 · Tailwind CSS **v4** (not v3) · TypeScript strict · `node:20-alpine`  
 **Models (cloud only):** LLM → NIM `nvidia/nemotron-3-super-120b-a12b` (thinking off) | NER → NIM `meta/llama-3.2-11b-vision-instruct` | OCR → NIM `nvidia/nemotron-ocr-v2` | Embed → Jina `jina-embeddings-v3` | STT → Groq `whisper-large-v3` — names in `.env`  
-**Synthesis cascade:** Nebius Token Factory → NIM → OpenRouter → Gemini → Ollama, built by `services/model_providers.py` (`synthesis_cascade`). A tier with no API key is not in the list, so with only `NVIDIA_NIM_API_KEY` set this is NIM-only, as before. **Token Factory ships unkeyed and inactive:** it serves the same Nemotron build as NIM, so activating it changes who serves the model, not which model answers. Whether it becomes the primary path is not yet decided. NVIDIA retired `llama-3.1-70b` (410, 2026-09-13); tier 1 is now Nemotron, so an OpenRouter (`llama-3.1-70b`) or Gemini answer is a fallback model and the benchmark marks such a run SUSPECT (`tokenfactory` and `nim` both count as the pinned model). `NVIDIA_NIM_TIMEOUT=60` **must stay under** the frontend's 90 s budget for `POST /search/synthesize`.  
+**Synthesis cascade:** Nebius Token Factory → NIM → OpenRouter → Gemini → Ollama, built by `services/model_providers.py` (`synthesis_cascade`). A tier with no API key is not in the list, so with only `NVIDIA_NIM_API_KEY` set this is NIM-only, as before. **Token Factory ships unkeyed in the repo, and is keyed in the local `.env` since 2026-09-23.** It serves the same Nemotron build as NIM, so activating it changes who serves the model, not which model answers. **A key being present is enough to spend credits:** whenever the stack runs it is tier 1 and every answer and brief bills Nebius. No call has been made yet (user decision, `status.md` P14); comment the key line out to revert to NIM with no code change. Whether it becomes the primary path is not yet decided. NVIDIA retired `llama-3.1-70b` (410, 2026-09-13); tier 1 is now Nemotron, so an OpenRouter (`llama-3.1-70b`) or Gemini answer is a fallback model and the benchmark marks such a run SUSPECT (`tokenfactory` and `nim` both count as the pinned model). `NVIDIA_NIM_TIMEOUT=60` **must stay under** the frontend's 90 s budget for `POST /search/synthesize`.  
 **Cloud stores:** Neo4j (Aura), Qdrant, Supabase, Grafana — creds in `.env` only; local Neo4j/Qdrant are profile-gated (`--profile local-stores`). ES · Redis · Temporal · OPA · Go stay local. **Ports:** API `8000` · Frontend `3000` · ES `9200` · Redis `6379` · Temporal `7233/8088` · OPA `8181` · Go `8090`
 
 ---
@@ -124,7 +124,7 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 
 ### Frontend
 - **Tailwind v4 syntax only.** v4 ≠ v3 — invoke `tailwind-4-docs` first.
-- Colors from `var(--token)` only. Never hardcode hex. One component, two palettes.
+- Colors from `var(--token)` only. Never hardcode hex. One component, three palettes (light · dark · sunlight).
 - No new npm deps unless the task names one. React Flow is the only pre-approved addition.
 - SSR: `API_INTERNAL_URL` for server components; `NEXT_PUBLIC_API_URL` for browser. Never hardcode.
 - **Live-only: there are no fixtures to fall back to.** `DataSource` is a single member (`"live"`), so a fallback cannot return without a type error. Fetchers **throw**; the app shows real data, a skeleton, or error+retry. Timeouts: reads 4 s, writes 8 s, `synthesize()` 90 s. Flatten backend shapes inside the `api.ts` fetcher (adapter layer).
@@ -154,7 +154,7 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 - **Timestamp drift = same event, different source systems.** Never `occurred_at` vs `ingested_at`.
 - EEMUA governor: `check_governor(user_id)` before every brief. ≤6/operator/hour. PTW always exempt.
 - Celery: lazy imports inside task body. 6 queues: `ingestion,extraction,attribution,transcription,elicitation,validation`.
-- Secrets: never hardcode. All via `api/config.py` Settings → env vars.
+- Secrets: never hardcode. All via `api/config.py` Settings → env vars. **`.env` and `.env.example` stay in sync** — same variable names, same order and section headings. Adding a setting means adding it to both: `.env.example` carries the safe default, `.env` the real value. Drifted twice before (19 variables missing locally on 2026-09-23) and it hides nothing until something silently falls back to a code default.
 - **Authz fails closed.** `_ask_opa` returns `self.debug` when OPA is unreachable — never bare `True`. Any `read_*` action added to `kairos.rego` must also go in `_sensitive_actions`, or the catch-all grants it to every role. Never gate `OPTIONS` (CORS preflight carries no token, and this middleware is outermost). Read grants mirror `frontend/src/components/use-role.ts` — a role that can open a page but not call its API is a broken page, not a closed boundary.
 - **One token verifier: `dependencies.resolve_token`.** Never decode a Supabase JWT by hand — this project issues **ES256**, so an HS256 decode silently rejects every token and degrades authz to the dev bypass. Verify by probing the live API with a restricted persona and confirming a **403**; policy tests alone cannot tell you the layer is reached.
 - **Site scope comes from the token, never the query string** — `dependencies.site_scope`. A blank `site_id` means *no* rows, not *all* rows.
@@ -186,5 +186,6 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 | Neo4j · Supabase schema (source of truth) · seed scripts | `db/neo4j/init_schema.cypher` · `db/schema.sql` · `backend/scripts/` |
 | Golden dataset (mounted `/app/dataset`) | `dataset/` · canon: `dataset/00_Reference/00_KAIROS_CANON.md` |
 | Frontend API client · types · primitives · shell | `frontend/src/lib/api.ts` · `types.ts` · `components/ui.tsx` · `app-shell.tsx` |
+| Frontend design tokens · icon set | `frontend/src/app/globals.css` · `components/icon.tsx` (Phosphor; never hand-draw an `<svg>` icon) |
 
 **Supabase** project `ernffgrvdcikwwhkhiix` · bucket `kairos-vault` (private, immutable, 500 MB) · **tooling** `gh` for PRs/CI, Supabase MCP for SQL (prefer over `docker exec`) · **release** `git tag v{version} && git push origin v{version}`

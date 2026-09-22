@@ -35,7 +35,7 @@ describe("MocDetailPage", () => {
     expect(screen.getByTestId("moc-case-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("moc-case-layout")).toHaveClass("lg:grid-cols-[minmax(0,1fr)_320px]");
     expect(screen.getByTestId("moc-evidence")).toHaveTextContent("12.5 bar");
-    expect(screen.getByTestId("moc-decision")).toHaveClass("lg:sticky", "lg:top-20");
+    expect(screen.getByTestId("moc-decision")).toHaveClass("lg:sticky", "lg:top-6");
     expect(screen.getByRole("button", { name: "Approve MoC" })).toHaveClass("min-h-11");
   });
 });

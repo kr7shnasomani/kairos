@@ -25,7 +25,7 @@ describe("ElicitationPage", () => {
     render(<ElicitationPage />);
     await waitFor(() => expect(screen.getByText("What did you observe?")).toBeInTheDocument());
 
-    expect(screen.getByTestId("elicitation-workspace")).toHaveClass("max-w-[1100px]");
+    expect(screen.getByTestId("elicitation-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("elicitation-layout")).toHaveClass("lg:grid-cols-[minmax(0,1fr)_280px]");
     expect(screen.getByTestId("elicitation-question")).toHaveTextContent("Noise");
     expect(screen.getByTestId("elicitation-context")).toHaveTextContent("WO-118");

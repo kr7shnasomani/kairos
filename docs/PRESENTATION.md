@@ -513,13 +513,14 @@ Everything **after** Beat 6 can be squeezed. Everything **before** it cannot.
 
 ---
 
-## 7. All 44 screens — shown or not
+## 7. All 42 screens — shown or not
 
-The app has **44 routes**. You will show **11 of them** across 12 screens (`/copilot` appears twice, as
-two separate sessions). The other 33 stay shut, on purpose. The point of this table is that when a
+The app has **42 routes** (44 until `/system-benchmarks` and `/system-information` were removed on
+2026-09-22). You will show **11 of them** across 12 screens (`/copilot` appears twice, as
+two separate sessions). The other 31 stay shut, on purpose. The point of this table is that when a
 judge asks *"what else is in there?"*, you answer in one sentence instead of clicking around.
 
-**11 shown · 16 held in reserve · 17 deliberately closed = 44.**
+**11 shown · 15 held in reserve · 16 deliberately closed = 42.**
 
 ### Shown during the run — 11 routes, 12 screens
 
@@ -538,7 +539,7 @@ judge asks *"what else is in there?"*, you answer in one sentence instead of cli
 | `/field/voice` | 10 | Mobile field capture, offline queue, straight into quarantine |
 | `/login` | pre-flight | Five real personas. Judges see three different sidebars during the run |
 
-### Held in reserve — open only if asked — 16
+### Held in reserve — open only if asked — 15
 
 Have these bookmarked. Do **not** open them unprompted.
 
@@ -551,18 +552,16 @@ Have these bookmarked. Do **not** open them unprompted.
 | `/documents` · `/documents/<id>` | "Where do the source documents live?" |
 | `/events` | "What triggers a brief?" |
 | `/audit` | "Is any of this auditable?" — **1,419** logged actions (live count 2026-08-25; it grows with every run, so check it or say "over a thousand") |
-| `/system-benchmarks` | "Show me the numbers inside the product" |
-| `/system-information` | "Explain the 13 layers" |
+| `/governance/model-gate` | "Show me the numbers inside the product" — recorded gate runs. **Do not press Run**: ~12-minute background job, 27 extractions. The in-app benchmark and architecture pages were removed 2026-09-22; for the full numbers use `benchmark/RESULTS.md` and `ARCHITECTURE.md` |
 | `/management` | "What does a plant manager see?" |
 | `/management/coverage` | "Which assets have no knowledge attached?" |
 | `/governance` · `/governance/conflicts` | "What happens when two documents disagree?" |
 | `/governance/moc` | "How many changes are waiting on a signature?" — the queue behind the Beat 8 screen |
 
-### Deliberately closed — 17
+### Deliberately closed — 16
 
 | Route | Why not |
 |---|---|
-| `/governance/model-gate` | The **Run** button is a **~12-minute** background job and **27 extractions**. Corrected 2026-08-25 — the old ~2.5 min figure was a 429-failed run |
 | `/system-health` | Admin-only, and the model probes spend provider quota |
 | `/management/cross-site` | An honest "no data — this is a single-site deployment" state. Correct, but it looks like a bug to someone who does not know that |
 | `/governance/sla` · `/governance/circuit-breaker` | Real, but they need a paragraph of setup each to make sense. Q&A material |
@@ -572,7 +571,7 @@ Have these bookmarked. Do **not** open them unprompted.
 | `/field/deviation` · `/field/elicitation/<id>` · `/field/voice/<id>` | Beat 10 covers field capture. Three field screens is one too many |
 | `/offboarding` · `/offboarding/<id>` | The knowledge-cliff answer is already spoken in Beat 10. Opening it costs 30 s you do not have |
 
-**If someone says "you only showed us a slice":** every one of the 44 routes has been driven
+**If someone says "you only showed us a slice":** every one of the routes has been driven
 end-to-end, five personas each, with the results written down in
 `docs/implementation/e2e-sweep.md` — including **twelve write paths** driven end-to-end, **three of
 them with the negative case checked too** (engineer promote → 403, field_worker MoC approve → 403,

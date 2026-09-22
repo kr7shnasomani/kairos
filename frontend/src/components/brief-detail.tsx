@@ -9,6 +9,7 @@ import { ackBrief, countersignBrief, sendBriefFeedback } from "@/lib/api";
 import { PROMOTE_ROLES, useMe } from "./use-role";
 import { AuthorityBadge, Button, EvidenceLineage, PageHeader, SourceChip, StatusBadge } from "./ui";
 
+import { Icon } from "@/components/icon";
 type FeedbackRating = "accurate" | "missing_context" | "incorrect";
 type AckStep = "idle" | "step1_done" | "complete";
 
@@ -104,9 +105,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
   return (
     <div data-testid="brief-detail-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/briefs" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Briefs
       </Link>
 
@@ -178,9 +177,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
           <ul className="mt-3 space-y-2">
             {brief.action_items.map((a) => (
               <li key={a} className="flex items-start gap-2.5 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-body">
-                <svg className="mt-0.5 size-4 shrink-0 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+                <Icon name="check" className="mt-0.5 size-4 shrink-0 text-accent" />
                 {a}
               </li>
             ))}
@@ -227,13 +224,11 @@ export function BriefDetail({ brief }: { brief: Brief }) {
       </div>
 
       {/* PTW dual sign-off or standard ack */}
-      <section data-testid="brief-acknowledgment" className="rounded-xl border border-line bg-surface p-5 shadow-sm lg:sticky lg:top-20" aria-label="Acknowledgment">
+      <section data-testid="brief-acknowledgment" className="rounded-xl border border-line bg-surface p-5 shadow-sm lg:sticky lg:top-6" aria-label="Acknowledgment">
         {isComplete ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-body font-semibold text-verified">
-              <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+              <Icon name="check" className="size-4" />
               {isPtw
                 ? `PTW signed off — acknowledged by ${brief.acknowledged_by_name ?? (engineerSig || "engineer")} · countersigned by ${brief.countersigned_by_name ?? me?.email ?? "second authority"}`
                 : `Acknowledged${engineerSig ? ` · signed ${engineerSig}` : ""}`}

@@ -11,6 +11,7 @@ import { OpenArtifactButton } from "./open-artifact";
 import { RedactedExport } from "./redacted-export";
 import type { VaultDocument } from "@/lib/types";
 
+import { Icon } from "@/components/icon";
 function fmtSize(bytes?: number): string {
   if (!bytes) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -67,9 +68,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   return (
     <div data-testid="document-detail-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/documents" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Documents
       </Link>
 
@@ -191,7 +190,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       <BlastRadiusPanel documentId={d.document_id} />
         </main>
 
-        <aside data-testid="document-context" className="space-y-5 rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="document-context" className="space-y-5 rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <section>
             <h2 className="text-xs font-bold uppercase tracking-[0.1em] text-muted">Linked assets</h2>
             {d.asset_links && d.asset_links.length > 0 ? (

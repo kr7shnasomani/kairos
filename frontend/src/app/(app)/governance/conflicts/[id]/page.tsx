@@ -13,6 +13,7 @@ import type { AuthorityLevel, ConflictSource } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { nowMs, relativeTime, slaCountdown } from "@/lib/utils";
 
+import { Icon } from "@/components/icon";
 const SEV_TONE: Record<string, "danger" | "caution" | "verified" | "neutral"> = { critical: "danger", major: "caution", minor: "verified" };
 
 function SourceCard({ label, source, authority }: { label: string; source: ConflictSource; authority: AuthorityLevel }) {
@@ -46,7 +47,7 @@ export default function ConflictDetailPage() {
 
   const back = (
     <Link href="/governance/conflicts" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+      <Icon name="caret-left" size={15} />
       Conflicts
     </Link>
   );
@@ -120,7 +121,7 @@ export default function ConflictDetailPage() {
             : <p className="rounded-xl border border-line bg-surface p-4 text-caption text-muted">No source document recorded, so there is no blast radius to trace.</p>}
         </main>
 
-        <aside className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <h2 className="text-sm font-semibold text-ink">Decision</h2>
           <p className="tabular break-all text-label text-muted">{c.conflict_id}</p>
           {status === "resolved" ? (

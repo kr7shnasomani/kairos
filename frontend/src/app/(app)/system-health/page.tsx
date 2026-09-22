@@ -12,6 +12,7 @@ import { capitalize, cn, providerName } from "@/lib/utils";
 import { fmtRelTime } from "@/lib/format";
 import type { HealthDetailed, ServiceHealth } from "@/lib/types";
 
+import { Icon } from "@/components/icon";
 // Cheap DB-read probes poll at 30s (13 req/cycle ≈ 26/min, far under the 120/min rate limit).
 const POLL_MS = 30000;
 // Model providers are rate-limited (each probe spends quota) — opt-in, and only once/minute when on.
@@ -188,9 +189,7 @@ export default function SystemHealthPage() {
             disabled={refreshing}
             className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-caption font-semibold text-ink transition-[transform,background-color] duration-150 ease-out hover:bg-surface-2 active:scale-[0.97] disabled:opacity-60"
           >
-            <svg className={cn("size-3.5", refreshing && "animate-spin")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
-            </svg>
+            <Icon name="arrow-clockwise" className={cn("size-3.5", refreshing && "animate-spin")} />
             {refreshing ? "Checking…" : "Refresh"}
           </button>
         }

@@ -30,7 +30,7 @@ export default function TimestampDriftPage() {
   return (
     <div data-testid="timestamp-drift-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Layer 4 · Temporal alignment"
+        eyebrow="Governance · Clock alignment"
         title="Timestamp drift"
         lede="Clock disagreement between systems that recorded the same physical event. Occurred-versus-ingested gaps are history, not drift, and are never counted."
       />
@@ -43,7 +43,7 @@ export default function TimestampDriftPage() {
         </section>
       ) : (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="mt-6 mesh stagger grid-cols-2 lg:grid-cols-4">
             <KpiCard label="Compound events checked" value={report?.compound_events_checked} loading={loading} />
             <KpiCard label="Drift detected" value={report?.drift_detected_count} tone={report?.drift_detected_count ? "caution" : "neutral"} loading={loading} />
             <KpiCard label="Tolerance" value={report ? `${report.tolerance_minutes} min` : null} loading={loading} />

@@ -9,6 +9,7 @@ import type { ElicitationQuestion, ElicitationSession } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button, PageHeader } from "@/components/ui";
 
+import { Icon } from "@/components/icon";
 function QuestionCard({
   question,
   answer,
@@ -107,7 +108,7 @@ export default function ElicitationPage() {
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="size-2 animate-bounce rounded-full bg-muted"
+              className="size-2 animate-pulse rounded-full bg-muted"
               style={{ animationDelay: `${i * 0.15}s` }}
             />
           ))}
@@ -153,18 +154,7 @@ export default function ElicitationPage() {
     return (
       <div className="mx-auto max-w-xl rounded-2xl border border-line bg-surface px-5 py-8 text-center shadow-sm sm:px-8">
         <div className="mx-auto grid size-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--verified)_12%,transparent)]">
-          <svg
-            className="size-7 text-verified"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+          <Icon name="check" className="size-7 text-verified" />
         </div>
         <h1 className="mt-4 text-title font-semibold">
           {queued ? "Responses queued" : "Responses submitted"}
@@ -179,7 +169,7 @@ export default function ElicitationPage() {
   }
 
   return (
-    <div data-testid="elicitation-workspace" className="mx-auto max-w-[1100px]">
+    <div data-testid="elicitation-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         compact
         className="mb-6"
@@ -200,7 +190,7 @@ export default function ElicitationPage() {
           <span
             key={i}
             className={cn(
-              "rounded-full transition-all",
+              "rounded-full transition-[width,background-color] duration-300 ease-out",
               i === step
                 ? "size-3 bg-accent"
                 : i < step
@@ -265,7 +255,7 @@ export default function ElicitationPage() {
       </div>
         </main>
 
-        <aside data-testid="elicitation-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="elicitation-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">Work order</p>
           <p className="tabular mt-1 text-title font-semibold">{workOrderId}</p>
           <div className="mt-4 border-t border-line pt-4">

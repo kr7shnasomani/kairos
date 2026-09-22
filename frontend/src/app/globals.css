@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Kairos workspace theme. ONE UI, TWO PALETTES.
+   Kairos workspace theme. ONE UI, THREE PALETTES (light · dark · sunlight/high-contrast),
+   plus one permanently dark scope (.sidebar-scope) for the rail and the login panel.
    Light is default; [data-theme="dark"] recolors, never restructures.
    Brand typography and base surfaces match the public landing page.
    ============================================================ */
@@ -23,6 +24,7 @@
 
   /* semantic status — authority / verification / severity */
   --danger: #a81f28;      /* 356.1deg - 18.3deg off --accent so alarm != brand; 7.26:1 on white */
+  --on-danger: #ffffff;   /* text on a FILLED danger block (button, count badge, banner) */
   --caution: #9a5b00;
   /* Text on a caution tint (StatusBadge). --caution itself measured 4.35:1 on its own 16% tint
      over a white row, under AA's 4.5:1 for 11px text. This measures 5.16:1 there and 4.89:1 on
@@ -33,8 +35,19 @@
   --link: #1d4ed8;        /* clickable identifiers - never --accent, never --danger */
   --validation: #6d28d9;  /* under validation / review */
 
-  --radius: 8px;
-  --radius-lg: 12px;
+  /* Square chrome, as on the landing page. Tailwind v4's rounded-{xs…4xl}
+     utilities read these variables, and unlayered :root beats its @layer theme
+     defaults, so this one block squares every card, button, input and tab.
+     rounded-full is not variable-driven and stays round: dots, avatars. */
+  --radius: 0;
+  --radius-lg: 0;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
 
   /* Overlay scrim. One token so every dialog/panel/drawer dims identically.
      The nav rail is permanently dark (.sidebar-scope), so a heavy black wash
@@ -43,10 +56,13 @@
 }
 
 :root[data-theme="dark"] {
-  --canvas: #0a0a0a;      /* landing page dark band */
-  --surface: #141414;
-  --surface-2: #1d1d1d;
-  --line: #ffffff1f;
+  /* Three separated greys. The rail is pinned at #0a0a0a in every theme, so the
+     canvas cannot also be #0a0a0a: the rail stopped reading as its own surface
+     and cards floated on nothing. Ink on #101010 still measures 17.4:1. */
+  --canvas: #101010;      /* page ground, one step up from the rail */
+  --surface: #181818;     /* cards */
+  --surface-2: #222222;   /* insets, hover */
+  --line: #ffffff26;      /* hairlines need more presence on dark than on white */
   --ink: #f5f5f4;
   --muted: #a3a09b;
 
@@ -56,6 +72,9 @@
   --on-accent: #ffffff;
 
   --danger: #e85a63;      /* 356.2deg - 23.9deg off --accent; 5.33:1 on --surface */
+  /* The dark red is light, so white on it measures 3.6:1 — under AA for button text.
+     Dark ink on the same fill measures ~5:1 and keeps the block reading as an alarm. */
+  --on-danger: #1b0e0f;
   --caution: #f5a623;
   --caution-ink: var(--caution); /* already 6.77:1 on its tint over the dark surface */
   --verified: #4fa96b;
@@ -78,6 +97,7 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
+  --color-on-danger: var(--on-danger);
   --color-danger: var(--danger);
   --color-caution: var(--caution);
   --color-caution-ink: var(--caution-ink);
@@ -102,13 +122,22 @@
   --text-subtitle: 15px;
   --text-title: 20px;
   --text-display: 28px;
+  --text-hero: 40px;     /* workspace page titles, the landing's display voice */
+}
+
+/* The landing never floats a surface on a shadow; hairlines do that job. The two
+   small steps (88 in-page uses) go flat. md and up stay for real overlays:
+   modals, menus, the command palette. */
+@theme {
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
 }
 
 /* React Flow zoom/fit controls — token-driven so both palettes work
    (the library default is white-on-white in dark mode). */
 .react-flow__controls {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
   box-shadow: none;
 }
@@ -135,7 +164,7 @@
 @keyframes panel-in {
   from { opacity: 0; transform: translateY(6px) scale(0.98); }
 }
-/* Route-level page entrance — replayed by (app)/template.tsx remounting per navigation. */
+/* Short fade + rise for revealed panels (ChartCard expand). Routes use .app-route. */
 @keyframes page-in {
   from { opacity: 0; transform: translateY(8px); }
 }
@@ -182,9 +211,46 @@ body {
 /* Workspace headings share the landing page's Instrument Sans voice. */
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
+
+/* The landing's display treatment: Instrument 500, line-height 1, tight
+   tracking. For page titles and headline numerals, not body headings. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Children rise in one after another, like the landing's [data-stagger].
+   Mount-time rather than scroll-driven: workspace content is above the fold. */
+.stagger > * {
+  animation: rise-in 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+.stagger > :nth-child(2) { animation-delay: 0.05s; }
+.stagger > :nth-child(3) { animation-delay: 0.1s; }
+.stagger > :nth-child(4) { animation-delay: 0.15s; }
+.stagger > :nth-child(5) { animation-delay: 0.2s; }
+.stagger > :nth-child(n + 6) { animation-delay: 0.25s; }
+
+/* Hairline mesh, as in the landing's capability grid: the container draws the
+   top/left rules and every cell its right/bottom, so borders never double and
+   a short last row leaves the page ground showing, not a grey block. Unlayered
+   on purpose: it must beat a cell's own `border` utility (KpiCard carries one
+   for standalone use). Pair cells with .lp-cell for the accent top-bar hover. */
+.mesh {
+  display: grid;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.mesh > * {
+  border-style: solid;
+  border-width: 0 1px 1px 0;
+}
+
 
 /* Numerals, tags, codes line up and read as data */
 .tabular {
@@ -201,6 +267,15 @@ h1, h2, h3, .font-display {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+}
+
+/* Theme flip. The toggle wraps the attribute write in a view transition, so the
+   whole page crossfades between palettes instead of snapping. Snapshot animation
+   only — nothing moves, and reduced-motion callers skip the transition entirely. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -411,7 +486,7 @@ button:not(:disabled),
 .lp-frame {
   max-width: 76rem;
   margin-inline: auto;
-  border-inline: 1px solid var(--lp-line);
+  border-inline: 1px solid var(--lp-line, var(--line));
 }
 .lp-frame--dark {
   border-inline-color: var(--lp-dark-line);
@@ -430,8 +505,8 @@ button:not(:disabled),
   z-index: 10;
   width: 10px;
   height: 10px;
-  border: 1px solid var(--lp-accent);
-  background: var(--lp-tick-bg, var(--lp-bg));
+  border: 1px solid var(--lp-accent, var(--accent));
+  background: var(--lp-tick-bg, var(--lp-bg, var(--canvas)));
 }
 .lp-tick--solid {
   width: 12px;
@@ -582,6 +657,8 @@ button:not(:disabled),
 }
 
 /* ── Hover ────────────────────────────────────────────────────────────────
+   Shared with the workspace: outside .landing the --lp-* lookups fall back to
+   the app tokens, so Card/KpiCard/meshes hover exactly like the landing.
    The reference lifts a card slightly and turns its border accent. Applied to
    every box that reads as a discrete object. Transform stays on the compositor
    (scale only), so none of this triggers layout. */
@@ -597,7 +674,7 @@ button:not(:disabled),
     position: relative;
     z-index: 10;
     transform: scale(1.02);
-    border-color: var(--lp-accent);
+    border-color: var(--lp-accent, var(--accent));
   }
   /* Grid cells sit in a hairline mesh, so they lift by filling instead of
      scaling. Scaling one cell of a 1px-gap grid just tears the mesh. */
@@ -613,7 +690,7 @@ button:not(:disabled),
     inset-inline: 0;
     top: 0;
     height: 2px;
-    background: var(--lp-accent);
+    background: var(--lp-accent, var(--accent));
     transform: scaleX(0);
     transform-origin: left;
     transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
@@ -624,7 +701,7 @@ button:not(:disabled),
   /* An accent wash rather than a flat surface colour: on the white sections
      --lp-surface IS the ground, so filling with it changed nothing. */
   .lp-cell:hover {
-    background: color-mix(in srgb, var(--lp-accent) 6%, var(--lp-surface));
+    background: color-mix(in srgb, var(--lp-accent, var(--accent)) 6%, var(--lp-surface, var(--surface)));
   }
   .lp-cell--dark:hover {
     background: color-mix(in srgb, var(--lp-accent) 14%, var(--lp-dark-surface));
@@ -682,6 +759,16 @@ button:not(:disabled),
 :root[data-nav="collapsed"] [data-rail] .rail-group-header {
   display: none;
 }
+/* Search and Ingest sit side by side; 68px has room for one, so they stack. */
+:root[data-nav="collapsed"] [data-rail] .rail-actions {
+  flex-direction: column;
+  align-items: center;
+}
+:root[data-nav="collapsed"] [data-rail] .rail-actions > .rail-link {
+  flex: none;
+  width: 2.25rem;
+  padding-inline: 0;
+}
 /* Section rhythm collapses with the labels — without this the icon column
    inherits gaps sized for headings that are no longer there. */
 :root[data-nav="collapsed"] [data-rail] .rail-nav {
@@ -696,6 +783,11 @@ button:not(:disabled),
   margin-inline: auto;
 }
 :root[data-nav="collapsed"] [data-rail] .rail-brand-row {
+  /* Mark and toggle stack here, which needs more than the 64px header row, so
+     the rule that continues the header line would land 40px low: drop it. */
+  height: auto;
+  border-bottom-width: 0;
+  padding-block: 1rem;
   flex-direction: column;
   justify-content: flex-start;
   padding-inline: 0.5rem;
@@ -707,21 +799,23 @@ button:not(:disabled),
    the Governor pill. Compress the rhythm instead of scrolling. Height-scoped
    so tall screens and the mobile drawer keep their touch-sized rows.
 
-   Measured 2026-09-22, with the group headers at their 24px minimum target
-   size: the full nav is 718px of content and needs a 1003px-tall viewport,
-   so 1440x900 laptops overflowed. Compressed, it is 622px of content in 651px
-   at a 900px viewport (29px spare). The breakpoint sits a little above 1003
-   for margin. Below ~870px it still scrolls, which is the honest outcome.
-   Adding nav items moves every one of these numbers. */
+   Re-measured 2026-09-22 with the sidebar-first shell (search + Ingest at the
+   top, account at the foot, no desktop top bar) and 37.5px row pitch: at
+   1440x900 the engineer rail has ~72px spare and the full admin rail (Voice,
+   Deviation added) fits with ~5px. Below ~890px it scrolls, which is the
+   honest outcome. Adding nav items moves every one of these numbers. */
 @media (max-height: 1020px) {
   [data-rail] .rail-brand-row {
     padding-block: 1rem;
   }
   [data-rail] .rail-nav {
-    --rail-section-gap: 0.75rem;
+    --rail-section-gap: 0.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.25rem;
   }
   [data-rail] .rail-link {
-    padding-block: 0.25rem;
+    /* 7px, not 4px: at 4px rows sat 2px apart and read as a cramped list. */
+    padding-block: 0.4375rem;
   }
   [data-rail] .rail-group-header {
     padding-bottom: 0.25rem;

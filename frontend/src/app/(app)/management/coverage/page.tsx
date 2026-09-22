@@ -12,6 +12,7 @@ import type { AssetCoverage } from "@/lib/types";
 type CoverageRow = AssetCoverage & Record<string, unknown>;
 import { cn } from "@/lib/utils";
 
+import { Icon } from "@/components/icon";
 // The four dimensions the platform can honestly report per asset. "Verified" is deliberately
 // included even though it reads zero across the estate today — that is the quarantine gate doing
 // its job (nothing is auto-promoted), and hiding the column would hide the finding.
@@ -116,9 +117,7 @@ export default function CoveragePage() {
   return (
     <div data-testid="coverage-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/management" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Overview
       </Link>
 
@@ -168,7 +167,7 @@ export default function CoveragePage() {
                   <Link
                     key={b.asset_id}
                     href={`/assets/${b.asset_id}`}
-                    className="rounded-full border border-line bg-surface px-2.5 py-1 text-label text-ink hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))]"
+                    className="border border-line bg-surface px-2.5 py-1 text-label text-ink hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))]"
                   >
                     {b.asset_id}
                   </Link>

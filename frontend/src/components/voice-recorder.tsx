@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui";
 
+import { Icon } from "@/components/icon";
 type State = "idle" | "recording" | "stopped";
 const MAX_MB = 10;
 
@@ -140,19 +141,10 @@ export function VoiceRecorder({ onBlob, disabled }: Props) {
             "grid size-16 place-items-center rounded-full transition-transform focus-visible:outline-2 focus-visible:outline-accent active:scale-95",
             disabled
               ? "cursor-not-allowed bg-line text-muted"
-              : "bg-danger text-white hover:opacity-90",
+              : "bg-danger text-on-danger hover:opacity-90",
           )}
         >
-          <svg className="size-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 1a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z" />
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              d="M19 11a7 7 0 0 1-14 0M12 18v3M9 21h6"
-            />
-          </svg>
+          <Icon name="microphone" className="size-7" />
         </button>
       )}
 

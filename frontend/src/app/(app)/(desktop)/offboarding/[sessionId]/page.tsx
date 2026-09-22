@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { Button, StatusBadge } from "@/components/ui";
 import { VoiceRecorder } from "@/components/voice-recorder";
 
+import { Icon } from "@/components/icon";
 // Session list panel — selects an item in-page (all items belong to one programme).
 function SessionList({
   items,
@@ -43,9 +44,7 @@ function SessionList({
             <span className="tabular text-label">Session {s.session_number}</span>
             <span className="min-w-0 flex-1 truncate capitalize">{familyLabel(s.equipment_family)}</span>
             {s.status === "completed" ? (
-              <svg className="size-3.5 shrink-0 text-verified" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-label="Completed">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+              <Icon name="check" className="size-3.5 shrink-0 text-verified" aria-label="Completed" />
             ) : s.status === "questions_ready" ? (
               <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-label="Ready" />
             ) : (
@@ -99,9 +98,7 @@ function Interview({
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
         <div className="grid size-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--verified)_12%,transparent)]">
-          <svg className="size-7 text-verified" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+          <Icon name="check" className="size-7 text-verified" />
         </div>
         <p className="text-subtitle font-semibold">Session complete</p>
         <p className="max-w-sm text-body text-muted">
@@ -124,7 +121,7 @@ function Interview({
           <span className="tabular text-caption font-medium text-muted">{answeredCount} of {questions.length} answered</span>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" aria-label={`${answeredPct}% answered`}>
-          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${answeredPct}%` }} />
+          <div className="h-full bg-accent transition-[width] duration-300 ease-out" style={{ width: `${answeredPct}%` }} />
         </div>
         <p className="mt-3 text-label text-muted">Responses enter knowledge quarantine for engineering review before promotion.</p>
       </div>
@@ -150,10 +147,7 @@ function Interview({
                   onClick={() => setVoiceAnswers((v) => ({ ...v, [i]: true }))}
                   className="inline-flex min-h-11 items-center gap-1.5 text-caption font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent sm:min-h-9"
                 >
-                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <path d="M12 1a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z" />
-                    <path d="M19 11a7 7 0 0 1-14 0M12 18v3" />
-                  </svg>
+                  <Icon name="microphone" className="size-3.5" />
                   Use voice instead
                 </button>
               ) : (
@@ -222,7 +216,7 @@ export default function OffboardingSessionPage() {
       <div className="flex min-h-[60vh] items-center justify-center" aria-label="Loading">
         <span className="inline-flex gap-1.5">
           {[0, 1, 2].map((i) => (
-            <span key={i} className="size-2 animate-bounce rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />
+            <span key={i} className="size-2 animate-pulse rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </span>
       </div>
@@ -254,7 +248,7 @@ export default function OffboardingSessionPage() {
   }
 
   return (
-    <div data-testid="offboarding-session-workspace" className="mx-auto max-w-[1200px]">
+    <div data-testid="offboarding-session-workspace" className="mx-auto max-w-[1400px]">
       <div className="mb-4 flex items-center gap-2 text-body text-muted">
         <Link href="/offboarding" className="hover:text-ink focus-visible:outline-2 focus-visible:outline-accent">Offboarding</Link>
         <span aria-hidden="true">›</span>
@@ -271,14 +265,14 @@ export default function OffboardingSessionPage() {
           </div>
           <div className="min-w-40">
             <p className="tabular text-caption font-semibold text-ink">{completedSessions} of {items.length} sessions</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${programmePct}%` }} /></div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line"><div className="h-full rounded-full bg-accent transition-[width] duration-300 ease-out" style={{ width: `${programmePct}%` }} /></div>
             <p className="tabular mt-1 text-right text-label text-muted">{programmePct}% captured</p>
           </div>
         </div>
       </section>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
-        <aside data-testid="offboarding-session-navigation" className="rounded-xl border border-line bg-surface p-3 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="offboarding-session-navigation" className="rounded-xl border border-line bg-surface p-3 shadow-sm lg:sticky lg:top-6">
           <p className="mb-2 px-2 text-label font-bold uppercase tracking-[0.1em] text-muted">Knowledge sessions</p>
           <SessionList items={items} activeId={activeId} onSelect={setSelectedId} />
         </aside>

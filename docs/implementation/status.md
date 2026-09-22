@@ -32,9 +32,9 @@ judging 16 to 20 September) as release
 Hackathon 2.0 submission is [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0)
 (`b81ed1f`). **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
 **https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
-519/519 service-free backend tests, 270/271 frontend tests (one pre-existing failure, P11), `tsc`
+519/519 service-free backend tests, 269/270 frontend tests (one pre-existing failure, P11), `tsc`
 clean, `eslint` 0 errors, end-to-end flows 46/46 (2026-09-14). What is still open is listed under
-[Pending — as of 2026-09-22](#pending--as-of-2026-09-22).
+[Pending — as of 2026-09-23](#pending--as-of-2026-09-23).
 
 **All 13 architecture layers are implemented.** Architecture conformance is **~91.5%** — the mean of
 the 13 per-layer scores in [Conformance](#architecture--implementation-conformance).
@@ -91,7 +91,7 @@ so unlike the integration suite it cannot touch the demo dataset.
 | 9 | Structured Knowledge Elicitation | ✅ | `MicroInterviewWorkflow` (`workflows/elicitation_workflow.py`), off-boarding programmes | — |
 | 10 | Telemetry-Grounded Outcome Attribution | ✅ | `workers/attribution.py` — `_attribute`, `_classify_attestation`, `_check_closeout_attestation` (pure), triggered from `POST /events/work-order` | Brownfield branch fixed 2026-08-17: `evidence_role` now branches the decision; uninstrumented assets use closeout attestation as primary; 12 service-free tests |
 | 11 | Reasoning & Synthesis | ✅ | Hybrid search, `/search/synthesize`, `/search/rca-pack`, safety refusal (NIM Nemotron 3 Super 120B + Jina embed; `llama-3.1-70b` retired 2026-09-13) | — |
-| 12 | Phased Deployment, Trust & Point-of-Action Interface | ✅ | Next.js frontend, `PhaseBadge`, field mode, all routes | Cross-site advisories render an honest "unavailable" panel (single-site MVP, by design) |
+| 12 | Phased Deployment, Trust & Point-of-Action Interface | ✅ | Next.js frontend, field mode, all routes (phase is enforced by the backend and reported by `/health/detailed`; the header `PhaseBadge` was removed 2026-09-22 as internal jargon) | Cross-site advisories render an honest "unavailable" panel (single-site MVP, by design) |
 
 **Score: 12 ✅ live + 1 🟨 live-on-mock + Layer 5 🟦 mock-by-design.** The only non-real data paths
 are the external-plant integrations, which are mock **by design**.
@@ -120,7 +120,7 @@ are the external-plant integrations, which are mock **by design**.
 | 9 · Knowledge Elicitation | ✅ | 95 | Micro-interviews on all 3 designed triggers, off-boarding programmes |
 | 10 · Outcome Attribution | ✅ | 92 | Brownfield branch fixed 2026-08-17: `evidence_role` now routes the decision; uninstrumented assets use the human-verified work-order closeout attestation as primary evidence; `_attribute` and `_classify_attestation` are pure + service-free tested (12 tests). **No authority downgrade** on confirmed failure — audit flag only, deliberately conservative |
 | 11 · Reasoning & Synthesis | 🟡 | 97 | Hybrid retrieval (exact+semantic+graph+authority re-rank), double safety refusal gate, all output types, superseded documents excluded from default retrieval, and **engineer-verified P&ID topology admitted as gate evidence** for isolation queries — carrying the edge's own authority, never a privileged one |
-| 12 · Phased Deployment & Interface | 🟡 | 96 | Phase badge, field mode, point-of-action UI, **answer feedback wired to the backend**. Phase/pilot *activation* remains operational, not code |
+| 12 · Phased Deployment & Interface | 🟡 | 96 | Backend-enforced phase (reported by `/health/detailed`; no UI badge since 2026-09-22), field mode, point-of-action UI, **answer feedback wired to the backend**. Phase/pilot *activation* remains operational, not code |
 
 **Overall ~91.5%** (mean of the 13 per-layer scores: 1190/13 = 91.54). L1 85 → 88 on 2026-08-22 with
 the golden-record bulk import; L0 92 → 94 on 2026-08-23 with model-gate run validity and the
@@ -504,7 +504,7 @@ a new PS criterion arrives without a harness.
 
 ## Pending
 
-### Pending — as of 2026-09-22
+### Pending — as of 2026-09-23
 
 Hackathon-specific work (Nebius x NVIDIA) is planned in [`nebius-prep.md`](./nebius-prep.md). That file
 holds the submission plan only; general project debt found while doing it is recorded here, not there.
@@ -517,13 +517,15 @@ Safety class as in [Next actions](#next-actions--in-order-with-their-safety-clas
 | P1 | **Public demo login is admin.** The login page's "Explore the live demo" button (it signs in as admin) and the seeded persona passwords (in this repo and the public `deterium-kairos` copy) let anyone act as admin on the live data. | 🔴 | Accepted for the judging window (user decision 2026-09-15). Fix: a read-only `demo` role (one write-blocking check in the backend, admin-equivalent reads, the button pointed at it), then rotate the seeded passwords in Supabase Auth |
 | P2 | **Vercel preview deployments are public.** Protection was turned off entirely with the CLI; production must be public, previews need not be | 🟡 | Vercel → `kairos` → Settings → Deployment Protection → Vercel Authentication → *Only Preview Deployments* |
 | P3 | **Regenerate the DuckDNS token** — it was shown in a screenshot during setup | 🟡 | duckdns.org; nothing in the repo uses it |
-| P4 | **Stop the EC2 instance after the results** (about 2026-09-25) and follow *Pause between events* in [`DEPLOY.md`](../DEPLOY.md); check the AWS Free plan end date before restarting | 🟡 | Running costs about $2.63/day of credit, stopped about $0.21/day |
+| P4 | **Keep the EC2 instance running until AWS Zero to Shipped judging ends** (other hackathons need it to 2026-10-10, Zero to Shipped Gate 2 runs the week of 2026-10-12), then follow *Pause between events* in [`DEPLOY.md`](../DEPLOY.md); check the AWS Free plan end date before restarting | 🟡 | Running costs about $2.63/day of credit, stopped about $0.21/day. $182.24 left on 2026-09-22 lasts to about 2026-11-29 |
 | P5 | **Five open Dependabot PRs** — #52 (npm, 17 updates), #46 (vitest 5, major), #41 (docker), #40 (python, 37 updates), #23 (go). Held back to keep the submission tree unchanged during judging | 🟢 | Review and merge after judging; vitest 5 and the Python group need a full service-free and frontend run |
 | P6 | **Server Elasticsearch snapshot is from 2026-09-13** (18 documents / 10 assets vs 20 / 11 locally — the QA test document and asset are missing) | 🟢 | Harmless: both are test data. Re-export with `make export-search-index` if the corpus changes |
 | P7 | **Stale measurements** — `run_retrieval_baseline.py` (predates the 2026-08-24 `/search` fix), `run_safety_eval.py` (not re-run since 2026-08-17), `run_cross_functional.py` (measured at n=37) | 🟡 | Re-run after judging, not during it (provider quota) |
 | P10 | **Two quarantine items from a QA sweep**: an elicitation response "QA: scoring on the seal face…" (engineer persona) and a voice note whose transcript is "." (field_worker persona). Deliberately **not** filtered: a "QA:" prefix can be a real quality-assurance note, and hiding an item from a review queue means it is never reviewed | 🔴 | Dispute or archive both through the quarantine review queue, which also exercises the governance flow. A write, so the user's call |
-| P11 | **`offboarding/page.test.tsx` fails** ("keeps identifiers honest and makes retirement timing explicit"). Pre-existing: fails with the 2026-09-22 changes stashed | 🟢 | Frontend-only; the other 270 vitest tests pass |
+| P11 | **`offboarding/page.test.tsx` fails** ("keeps identifiers honest and makes retirement timing explicit"). Pre-existing: fails with the 2026-09-22 changes stashed | 🟢 | Frontend-only; the other 269 vitest tests pass |
 | P12 | **`ARCHITECTURE.md` still lists the cascade as NIM → OpenRouter → Gemini → Ollama.** Left on purpose until the Nebius Token Factory tier's role is decided; every other doc describes the registry | 🟢 | Update §6 when the tier is keyed and promoted |
+| P13 | **The Token Factory key is live in the local `.env`.** Whenever the stack runs, Token Factory is tier 1 and every answer and brief spends Nebius credits (balance $29.50 + $1 trial on 2026-09-22). No call has been made yet, by user decision | 🟡 | Comment the `NEBIUS_TOKEN_FACTORY_API_KEY` line out to pause spending: an unkeyed tier is dropped from the cascade, so it reverts to NIM with no code change |
+| P14 | **The UI overhaul landed (uncommitted, 2026-09-23).** Square chrome + display type + hairline meshes, Phosphor icon set, sidebar-first shell (no desktop top bar; calendar and bell removed as dead chrome), `/system-benchmarks` and `/system-information` removed, login rebuilt, dark palette re-cut into three greys, `--on-danger` added, theme flip crossfades. Every reference swept: `layout.tsx`, `use-role.ts`, `system-tabs.tsx`, `FRONTEND.md`, `e2e-sweep.md`, `nebius-prep.md`, `PRESENTATION.md`, `BACKEND.md`, `FE.md`, `run_model_validation.py` | 🟢 | Route count: **48 → 46 page files** (44 `page.tsx` under `(app)` + `/login` + the landing); the e2e sweep numbers **42 live routes** (44 rows, two struck through) because it collapses some dynamic variants. Both WCAG fixes verified present (24px nav group headers, `--caution-ink` badge). Frontend suite re-run: 269/270 (P11 only), `tsc` clean, eslint 0 errors. **Still uncommitted** — review the diff before it lands |
 | P8 | Backlog carry-overs: synthesis verdict (#8), form-parsing layout pass (#6), FastAPI major upgrade (#2), D3 `COMPONENT` labels, 7 eslint unused-var warnings | 🟢 | Unchanged; see [Next actions](#next-actions--in-order-with-their-safety-class) and the [Backlog](#improvement-backlog) |
 
 ### Reported UI/wiring issues — triaged and fixed 2026-08-23
@@ -1108,6 +1110,7 @@ recorded above.
 | Blast-radius / topology are nested | `blast-radius/{id}` → `affected:[{edge,target}]`; `documents/{id}/topology` → nested `topology.{equipment_nodes,isolation_valves,isolation_boundaries,instrumentation_loops}`. Both flattened to the UI shape **inside the `api.ts` fetcher** (adapter). Guarded by `test_contract.py`. |
 | Service-worker refresh loop | `public/sw.js` registered **production-only** (`app-shell.tsx` gates on `NODE_ENV`, unregisters in dev); navigations network-first. A dev-cached shell + changed chunk hashes = infinite reload. Bump `SHELL` cache version to bust. |
 | Turbopack dev 404s-everything | A tight reload loop can corrupt the dev route manifest → all `(app)/*` 404 while `/` 307s. `docker restart kairos-frontend` clears it; not a code bug. |
+| Turbopack dev serves a stale graph after a file vanishes | Deleting a route file (e.g. `(app)/template.tsx`) makes every `(app)/*` route 500 with *"Could not parse module … file not found"*; a `git stash`/`pop` round-trip leaves the old `globals.css` compiled. `docker restart kairos-frontend` clears both (seen 2026-09-22). If the served CSS is *still* old after a restart (Turbopack's on-disk cache survives it), `docker exec kairos-frontend rm -rf /app/.next` then restart. |
 | `next build` fails on `/_global-error` (`useContext` null) | Next 16.2.10's **default** global-error page fails to prerender. Fixed by a custom `src/app/global-error.tsx` (client, own `<html>/<body>`, **inline styles only** — no providers/tokens exist at that level). Keep it self-contained; don't import app components or `next/image` there. |
 | `next build` exits 137 in the dev container | OOM — `kairos-frontend` is capped at **2 GB**, and a Turbopack production build needs more. Not a code error (compile + prerender succeed). CI (ubuntu-latest ~7 GB) and the Docker image build on the runner, not this container. To build locally, raise the container `mem_limit` or run on the host. |
 | `not-found.tsx` uses plain `<img>`, not `next/image` | The root not-found renders inside the `_global-error` boundary at build time, where `<Image>`'s config context is null → prerender crash. Use a plain `<img>` (eslint-disable `no-img-element`), same as `brand-link.tsx`. |

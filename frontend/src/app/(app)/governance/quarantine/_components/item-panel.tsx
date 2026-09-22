@@ -8,6 +8,7 @@ import { Button, StatusBadge } from "@/components/ui";
 import { SlaChip, formatContent } from "./columns";
 import type { ActionMode } from "./actions";
 
+import { Icon } from "@/components/icon";
 const SESSION_TYPES = new Set(["elicitation_response", "offboarding_response", "voice_note"]);
 
 const Meta = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -32,14 +33,7 @@ function SessionContext({ ctx, inputType }: { ctx: Record<string, unknown>; inpu
         className="flex w-full items-center justify-between px-4 py-3 font-medium text-ink outline-none focus-visible:bg-surface-3"
       >
         <span>Session context <span className="ml-1 text-muted font-normal">({entries.length} field{entries.length !== 1 ? "s" : ""})</span></span>
-        <svg
-          width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-          aria-hidden="true"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <Icon name="caret-down" size={16} className={`text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="space-y-3 border-t border-line px-4 pb-4 pt-3">
@@ -118,11 +112,9 @@ export function ItemPanel({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-surface-2 text-muted transition-colors hover:bg-surface-3 hover:text-ink"
+          className="absolute right-4 top-4 z-10 grid size-8 place-items-center bg-surface-2 text-muted transition-colors hover:bg-surface-3 hover:text-ink"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
+          <Icon name="x" size={16} />
         </button>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-6 pb-24">
@@ -160,7 +152,7 @@ export function ItemPanel({
 
             {item.input_type === "deviation_flag" && pending && (
               <div className="flex items-start gap-3 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3">
-                <svg className="mt-0.5 shrink-0 text-danger" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <Icon name="warning-circle" size={16} className="mt-0.5 shrink-0 text-danger" />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-danger">Deviation flag</p>
                   {/* This used to send reviewers to the conflicts queue, which cannot resolve a deviation —

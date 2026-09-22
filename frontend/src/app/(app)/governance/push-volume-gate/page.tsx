@@ -52,10 +52,10 @@ export default function PushVolumeGatePage() {
               <StatusBadge tone={gate.within_eemua_norms ? "verified" : "danger"}>
                 {gate.within_eemua_norms ? "Within EEMUA 191 norms" : "Ceiling breached"}
               </StatusBadge>
-              <span>Phase {gate.current_phase} · advisory only</span>
+              <span>Advisory: the ceiling is reported, not enforced</span>
             </div>
           )}
-          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="mt-4 mesh stagger grid-cols-2 lg:grid-cols-4">
             <KpiCard label="Briefs delivered" value={gate?.briefs_delivered} sub={gate ? `Last ${gate.window_days} days` : undefined} loading={loading} />
             <KpiCard label="Peak per operator" value={gate ? `${gate.peak_per_operator_per_hour}/h` : null} sub={gate ? `Ceiling ${gate.ceiling_per_operator_per_hour}/h` : undefined} tone={gate && gate.peak_per_operator_per_hour > gate.ceiling_per_operator_per_hour ? "danger" : "neutral"} loading={loading} />
             <KpiCard label="Breaching hours" value={gate?.breach_count} tone={gate?.breach_count ? "danger" : "neutral"} loading={loading} />

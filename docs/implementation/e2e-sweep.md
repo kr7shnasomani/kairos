@@ -76,7 +76,7 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 | 29 | `/governance/sla` | Escalation report shape | ✅ renders, 0 console errors |
 | 30 | `/management` | Exec KPI view | ✅ **API-verified 2026-08-17** — all 5 core fetches 200 (conflicts · quarantine · SLA · compliance · events) |
 | 31 | `/management/coverage` | Knowledge-coverage heatmap | ✅ renders, 0 console errors |
-| 32 | `/management/cross-site` | Honest "single-site" state; **eyebrow must not say Layer 13** | ✅ **fixed** — eyebrow was 'Layer 13' (no such layer); now 'Multi-site · Control plane'. Honest empty state correct. |
+| 32 | `/management/cross-site` | Honest "single-site" state; **eyebrow must not say Layer 13** | ✅ **fixed** — eyebrow was 'Layer 13' (no such layer); now 'Overview · All sites' (2026-09-22 plain-language pass). Honest empty state correct. |
 | 33 | `/management/plant-state` | Plant state set/read (admin) | ✅ **API-verified 2026-08-17** **write path** — normal → set `turnaround` (202) → read back `turnaround` → restored to `normal`. Full round trip. |
 | 34 | `/projects` | Project/procurement registry | ✅ renders, 0 console errors |
 | 35 | `/offboarding` | Programme list | ✅ **API-verified 2026-08-17** — 1 programme; detail returns 5 session items, and `/offboarding/{id}/questions` returns **5 questions per item** (the items themselves don't carry questions — that is the documented shape) |
@@ -86,8 +86,8 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 | 39 | `/field/deviation` | Physical deviation flag | ✅ **API-verified 2026-08-17** **write path** — flag on EQ-101 → 202, **4 briefs frozen**; resolve `disputed` → 200, **4 briefs unfrozen**, `moc_id: null`. Freeze/unfreeze proven both directions. |
 | 40 | `/field/elicitation/[workOrderId]` | Micro-interview questions + responses | ✅ **write path verified** — trigger fired on real conditions (`rare_failure_code`, `novel_troubleshooting`) → Temporal generated 4 graph-derived questions → responses submitted → quarantine with question context preserved. |
 | 41 | `/system-health` | 11 probes; AI-model toggles **off by default** | ✅ **API-verified 2026-08-17** — `/health/detailed` 200 reporting `status: ready`, live phase 3. Model probes deliberately **not** exercised: they spend provider quota and are off by default. |
-| 42 | `/system-benchmarks` | Live benchmark cockpit | ✅ renders, 0 console errors |
-| 43 | `/system-information` | Static explainer | ✅ renders, 0 console errors |
+| 42 | ~~`/system-benchmarks`~~ | Live benchmark cockpit | ➖ page removed 2026-09-22 |
+| 43 | ~~`/system-information`~~ | Static explainer | ➖ page removed 2026-09-22 |
 | 44 | `/settings` | System settings | ✅ renders, 0 console errors |
 
 ## B. Personas × access control
@@ -104,11 +104,11 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 
 | Check | Status |
 |---|---|
-| Dark mode across main routes | ✅ briefs/assets/governance/compliance — bg `rgb(20,17,14)`, fg `rgb(237,233,226)`, consistent |
+| Dark mode across main routes | ✅ re-verified 2026-09-23 after the dark palette was re-cut into three greys: rail `rgb(10,10,10)`, page `rgb(16,16,16)`, cards `rgb(24,24,24)`, fg `rgb(245,245,244)`. The earlier warm dark (`rgb(20,17,14)` / `rgb(237,233,226)`) is gone |
 | Mobile viewport (375px) — hamburger nav, no bottom tab bar | ✅ briefs/assets/governance at 375×812 — no horizontal scroll, no error boundary |
-| No `console.error` on any route | ✅ **0 console errors across all 44 routes** |
-| No page scrolls horizontally | ✅ **all 35 static routes at 375×812, 0 overflow** (2026-08-22). Detector validated by injecting a 900 px element: 0 → +525 px → 0, culprit named |
-| Phase badge reflects live backend phase | ✅ |
+| No `console.error` on any route | ✅ **0 console errors across all 44 routes** (swept when the two system pages still existed; 42 live routes since 2026-09-22) |
+| No page scrolls horizontally | ✅ **all 34 static routes at 375×812 and 1440×900, 0 overflow** (re-swept 2026-09-22 across the then-36 routes; two were removed since).<br>Earlier run: all 35 static routes at 375×812 (2026-08-22). Detector validated by injecting a 900 px element: 0 → +525 px → 0, culprit named |
+| Phase badge reflects live backend phase | ➖ removed 2026-09-22 (internal rollout jargon; phase still in `/health/detailed`) |
 | Phase 1 suppresses synthesis, writes nothing | ✅ (curl, 324→324) |
 
 ---

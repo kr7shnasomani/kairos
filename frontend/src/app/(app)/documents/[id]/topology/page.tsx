@@ -25,6 +25,7 @@ import { nodeTypes, edgeTypes, nodeVar } from "./_components/topo-node";
 import { NodeDetail, TopoLegend } from "./_components/topo-panels";
 import { buildLayout } from "./_components/topo-data";
 
+import { Icon } from "@/components/icon";
 export default function TopologyPage() {
   return <TopologyPageInner />;
 }
@@ -91,15 +92,13 @@ function TopologyPageInner() {
           href={`/documents/${id}`}
           className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <Icon name="caret-left" size={15} />
           Document
         </Link>
         {isDemo && (
           <span
             title="This topology was not extracted from the drawing — do not treat it as engineering data."
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-label text-muted"
+            className="inline-flex items-center gap-1.5 border border-line bg-surface-2 px-2 py-0.5 text-label text-muted"
           >
             <span className="size-1.5 rounded-full bg-caution" aria-hidden="true" />
             {topo?.topology_source === "demo_fixture" ? "Fixture — vision model unavailable" : "Demo topology"}
@@ -110,7 +109,7 @@ function TopologyPageInner() {
       <PageHeader
         compact
         className="mt-4 mb-5"
-        eyebrow="Layer 3 · P&ID topology"
+        eyebrow="Knowledge · P&ID topology"
         title={id}
         lede="Equipment, valves, instruments, and flow connections extracted from the P&ID drawing. Candidate topology until an engineer confirms it element by element — confirm or reject each element below."
       />
@@ -121,7 +120,7 @@ function TopologyPageInner() {
             <div className="flex h-full items-center justify-center">
               <span className="inline-flex gap-1.5">
                 {[0, 1, 2].map((i) => (
-                  <span key={i} className="size-2 animate-bounce rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />
+                  <span key={i} className="size-2 animate-pulse rounded-full bg-muted" style={{ animationDelay: `${i * 0.15}s` }} />
                 ))}
               </span>
             </div>
@@ -157,7 +156,7 @@ function TopologyPageInner() {
           )}
         </div>
 
-        <aside data-testid="topology-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="topology-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <h2 className="text-label font-bold uppercase tracking-[0.1em] text-muted">Verification key</h2>
           <div className="mt-3"><TopoLegend /></div>
           {topo && (

@@ -13,7 +13,7 @@ type DocRow = Pick<VaultDocument, keyof VaultDocument>;
 
 const COLUMNS: TableColumn<DocRow>[] = [
   {
-    key: "file_name", label: "Document", sortable: true, className: "w-[38%]",
+    key: "file_name", label: "Document", sortable: true, className: "w-[32%]",
     render: (r) => (
       <span className="block min-w-0">
         <Truncate text={r.file_name} className="font-semibold text-ink" />
@@ -22,7 +22,7 @@ const COLUMNS: TableColumn<DocRow>[] = [
     ),
   },
   {
-    key: "document_type", label: "Type & source", sortValue: (r) => label(r.document_type),
+    key: "document_type", label: "Type & source", className: "w-[16%]", sortValue: (r) => label(r.document_type),
     render: (r) => (
       <span className="block min-w-0">
         <span className="block whitespace-nowrap text-caption font-medium text-ink">{label(r.document_type)}</span>
@@ -31,7 +31,7 @@ const COLUMNS: TableColumn<DocRow>[] = [
     ),
   },
   {
-    key: "authority_level", label: "Authority", sortValue: (r) => r.authority_level ?? 99,
+    key: "authority_level", label: "Authority", className: "w-[14%]", sortValue: (r) => r.authority_level ?? 99,
     render: (r) => (
       <span className="block min-w-0">
         <span className="tabular block whitespace-nowrap text-caption text-ink">{authorityLabel(r.authority_level)}</span>
@@ -40,15 +40,15 @@ const COLUMNS: TableColumn<DocRow>[] = [
     ),
   },
   {
-    key: "status", label: "State", sortable: true,
+    key: "status", label: "State", className: "w-[12%]", sortable: true,
     render: (r) => <StatusBadge tone={statusTone(r.status)}>{label(r.status)}</StatusBadge>,
   },
   {
-    key: "ingested_at", label: "Updated", sortValue: (r) => Date.parse(r.ingested_at),
+    key: "ingested_at", label: "Updated", className: "w-[16%]", sortValue: (r) => Date.parse(r.ingested_at),
     render: (r) => <Timestamp value={r.ingested_at} />,
   },
   {
-    key: "download", label: "Get", align: "right",
+    key: "download", label: "Get", align: "right", className: "w-[10%]",
     render: (r) => (r.vault_url ? <DownloadCell documentId={r.document_id} /> : null),
   },
 ];

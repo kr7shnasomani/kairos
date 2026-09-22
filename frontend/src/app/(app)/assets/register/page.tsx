@@ -13,6 +13,7 @@ import { Button, PageHeader } from "@/components/ui";
 import { PageSkeleton } from "@/components/skeleton";
 import { MDM_ROLES } from "../identity-action";
 
+import { Icon } from "@/components/icon";
 type Criticality = AssetImportRow["criticality"];
 
 const CRITICALITY: { value: Criticality; label: string }[] = [
@@ -258,17 +259,15 @@ export default function RegisterAssetPage() {
   const allowed = role !== null && MDM_ROLES.includes(role);
 
   return (
-    <div data-testid="register-workspace" className="mx-auto max-w-5xl">
+    <div data-testid="register-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/assets" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Assets
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 1 · Master data management"
+        eyebrow="Operate · Asset register"
         title="Register assets"
         lede="Add equipment to the canonical registry one at a time, or import the golden record from your EAM system."
       />

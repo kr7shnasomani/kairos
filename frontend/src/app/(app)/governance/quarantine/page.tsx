@@ -12,6 +12,7 @@ import { ItemPanel } from "./_components/item-panel";
 import { ActionModals, type ActionMode } from "./_components/actions";
 import { buildColumns, type QuarantineRow } from "./_components/columns";
 
+import { Icon } from "@/components/icon";
 export default function QuarantinePage() {
   const role = useRole();
   const canPromote = PROMOTE_ROLES.includes(role);
@@ -89,15 +90,13 @@ export default function QuarantinePage() {
   return (
     <div data-testid="quarantine-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Governance
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 6 · Quarantine"
+        eyebrow="Governance · Human review"
         title="Review queue"
         lede="Unverified field inputs awaiting human review. Promotion to the canonical graph is a one-way gate: nothing is auto-promoted, ever."
       />

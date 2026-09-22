@@ -43,7 +43,7 @@ export default function GraphPage() {
 
   return (
     <div data-testid="graph-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader className="mb-6" eyebrow="Layer 4 · Knowledge graph" title="Temporal asset graph" lede="Investigate the evidence, events, and governed relationships surrounding an asset at any point in time." />
+      <PageHeader className="mb-6" eyebrow="Analyze · Knowledge graph" title="Temporal asset graph" lede="Investigate the evidence, events, and governed relationships surrounding an asset at any point in time." />
 
       <section data-testid="graph-summary" className="grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-3">
         <div className="border-b border-line p-4 sm:border-b-0 sm:border-r">
@@ -54,7 +54,7 @@ export default function GraphPage() {
                 unreachable — the fixture fallbacks it referred to no longer exist. The badge now
                 reports whether this request actually landed. */}
             {state.status === "live" && (
-              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-micro font-semibold text-accent">
+              <span className="bg-accent-soft px-2 py-0.5 text-micro font-semibold text-accent">
                 Live
               </span>
             )}
@@ -184,7 +184,7 @@ export default function GraphPage() {
 
         {/* Height-matched to the 560px graph canvas; validity list scrolls internally
             so the panel never grows taller than the graph. */}
-        <aside data-testid="graph-context" className="flex flex-col gap-4 lg:sticky lg:top-20 lg:h-[560px] lg:self-start">
+        <aside data-testid="graph-context" className="flex flex-col gap-4 lg:sticky lg:top-6 lg:h-[560px] lg:self-start">
           <section className="shrink-0 rounded-xl border border-line bg-surface p-4 shadow-sm">
             <p className="text-micro font-bold uppercase tracking-[0.1em] text-muted">Authority &amp; verification</p>
             <div className="mt-3"><GraphLegend /></div>

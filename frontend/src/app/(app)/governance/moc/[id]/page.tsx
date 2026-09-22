@@ -11,6 +11,7 @@ import { StatusBadge, PageHeader } from "@/components/ui";
 import { DetailSkeleton } from "@/components/skeleton";
 import { BlastRadiusPanel } from "@/components/lazy";
 
+import { Icon } from "@/components/icon";
 const STATUS_TONE: Record<string, "caution" | "verified" | "danger"> = {
   draft: "caution",
   pending: "caution",
@@ -58,7 +59,7 @@ export default function MocDetailPage() {
     return (
       <div className="mx-auto max-w-[1400px]">
         <Link href="/governance/moc" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+          <Icon name="caret-left" size={15} />
           MoC queue
         </Link>
         <div className="mt-6 rounded-xl border border-line bg-surface p-8 text-center">
@@ -86,9 +87,7 @@ export default function MocDetailPage() {
   return (
     <div data-testid="moc-case-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance/moc" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         MoC queue
       </Link>
 
@@ -158,7 +157,7 @@ export default function MocDetailPage() {
           )}
         </div>
 
-        <aside data-testid="moc-decision" className="lg:sticky lg:top-20">
+        <aside data-testid="moc-decision" className="lg:sticky lg:top-6">
 
       {/* Approval */}
       {isPending && (

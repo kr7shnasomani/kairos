@@ -13,6 +13,7 @@ import { fmtNum } from "@/lib/format";
 import { triggerLabel } from "@/lib/utils";
 
 
+import { Icon } from "@/components/icon";
 // DataTable needs an index signature; Pick over the interface provides one.
 type BreakerRow = Pick<CircuitBreakerEntry, keyof CircuitBreakerEntry>;
 
@@ -50,13 +51,11 @@ export default function CircuitBreakerPage() {
   return (
     <div data-testid="circuit-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Governance
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Layer 11 · SPC governor" title="Circuit Breaker" lede="Statistical process control gates that halt ingestion for an asset class when z-score anomalies exceed threshold. Halted classes require admin override or human-verified resolution." />
+      <PageHeader className="mt-4" eyebrow="Governance · Ingestion safeguard" title="Circuit Breaker" lede="Statistical process control gates that halt ingestion for an asset class when z-score anomalies exceed threshold. Halted classes require admin override or human-verified resolution." />
       {state.status === "error" && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--danger)_30%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_5%,var(--surface))] p-4 text-body text-ink">
           Couldn&rsquo;t load circuit-breaker state.
@@ -64,7 +63,7 @@ export default function CircuitBreakerPage() {
         </div>
       )}
 
-      <div data-testid="circuit-summary" className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-testid="circuit-summary" className="mt-5 mesh stagger sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Halted" value={cb ? halted.length : null} tone={halted.length > 0 ? "danger" : "verified"} sub={halted.length === 0 && cb ? "all paths open" : undefined} loading={loading} />
         <MetricCard label="Watched classes" value={cb ? states.length : null} loading={loading} />
         <MetricCard label="Max z-score" value={cb && maxZ !== null ? `${fmtNum(maxZ, 1)}σ` : null} tone={maxZ !== null && maxZ >= 2 ? "caution" : "neutral"} loading={loading} />
@@ -94,7 +93,7 @@ export default function CircuitBreakerPage() {
           />
         </div>
 
-        <aside data-testid="circuit-context" className="rounded-xl border border-line bg-surface p-4 text-caption text-muted shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="circuit-context" className="rounded-xl border border-line bg-surface p-4 text-caption text-muted shadow-sm lg:sticky lg:top-6">
           <p className="font-semibold text-ink">What triggers a halt?</p>
           <p className="mt-2 leading-relaxed">
             A z-score ≥ 2.0σ on ingested values for an asset class. Overrides by field workers increment the counter; ≥ 5 overrides/7d

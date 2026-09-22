@@ -169,7 +169,7 @@ function BlastRadiusPanelInner({ documentId }: { documentId: string }) {
         <span>
           Blast Radius
           {report.affected_count > 0 && (
-            <span className="ml-2 inline-flex items-center rounded-full bg-danger px-1.5 py-0.5 text-micro font-semibold text-white">
+            <span className="ml-2 inline-flex items-center bg-danger px-1.5 py-0.5 text-micro font-semibold text-on-danger">
               {report.affected_count}
             </span>
           )}

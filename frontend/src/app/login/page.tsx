@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getMe, login } from "@/lib/auth";
 
+import { Icon } from "@/components/icon";
 function workspacePath(role?: string) {
   return role === "field_worker" ? "/briefs" : "/management";
 }
@@ -48,86 +49,115 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative grid min-h-dvh place-items-center bg-page px-5 py-20">
+    <main className="relative grid min-h-dvh place-items-center bg-canvas px-5 py-16">
       <title>Kairos: Sign in</title>
-      <Link href="/" aria-label="Back to landing page" className="absolute left-5 top-5 grid size-10 place-items-center rounded-lg border border-line bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-        <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="m14 6-6 6 6 6" />
-        </svg>
+      <Link href="/" aria-label="Back to landing page" className="absolute left-5 top-5 grid size-10 place-items-center border border-line bg-surface text-muted transition-colors hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--line))] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+        <Icon name="caret-left" className="size-4" />
       </Link>
       <div className="absolute right-5 top-5">
         <ThemeToggle />
       </div>
 
-      <div data-testid="login-workspace" className="grid w-full max-w-6xl overflow-hidden rounded-3xl border border-line bg-surface shadow-xl lg:min-h-[680px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.72fr)]">
-        <section data-testid="login-context" className="relative hidden overflow-hidden bg-ink p-10 text-canvas lg:flex lg:flex-col lg:justify-between">
-          <div aria-hidden="true" className="absolute -right-24 -top-24 size-80 rounded-full bg-accent opacity-20 blur-3xl" />
-          <div className="relative">
-            <p className="text-label font-bold uppercase tracking-[0.12em] text-accent">Evidence-linked operations</p>
-            <h2 className="mt-4 max-w-lg text-4xl font-semibold leading-tight text-balance">Enter the workspace with the context your role needs.</h2>
-            <p className="mt-4 max-w-lg text-body leading-relaxed text-canvas/70">Supervisors see plant decisions and live service state. Engineers move through evidence and governance. Field teams get focused, touch-first workflows.</p>
+      <div
+        data-testid="login-workspace"
+        className="grid w-full max-w-5xl overflow-hidden border border-line bg-surface lg:min-h-[620px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.72fr)]"
+      >
+        {/* Permanently dark, like the nav rail and the landing's dark bands:
+            `sidebar-scope` remaps the tokens, so this panel does not invert with the theme. */}
+        <section
+          data-testid="login-context"
+          className="sidebar-scope relative hidden p-10 lg:flex lg:flex-col lg:justify-between"
+        >
+          <span className="lp-tick -left-[5px] -top-[5px]" aria-hidden="true" />
+
+          <div>
+            <p className="inline-flex bg-accent px-2.5 py-1 text-label font-semibold uppercase tracking-[0.08em] text-on-accent">
+              Evidence-linked operations
+            </p>
+            <h2 className="display mt-5 max-w-lg text-display text-balance text-ink">
+              Enter the workspace with the context your role needs.
+            </h2>
+            <p className="mt-5 max-w-md text-body leading-relaxed text-muted text-pretty">
+              Every answer carries its source document, its authority level and the date it was
+              last verified. Sign-in decides where you land and what you can open.
+            </p>
           </div>
 
-          <div className="relative rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 text-label"><span className="font-semibold text-canvas">Kairos workspace</span><span className="text-canvas/55">Role-aware</span></div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-white/5 p-3"><p className="text-micro uppercase tracking-wide text-canvas/50">Decisions</p><div className="mt-3 space-y-2"><span className="block h-2 rounded-full bg-white/15" /><span className="block h-2 w-2/3 rounded-full bg-white/10" /></div></div>
-              <div className="rounded-xl bg-white/5 p-3"><p className="text-micro uppercase tracking-wide text-canvas/50">Evidence</p><div className="mt-3 space-y-2"><span className="block h-2 rounded-full bg-white/15" /><span className="block h-2 w-4/5 rounded-full bg-white/10" /></div></div>
-            </div>
-            <p className="mt-4 text-caption text-canvas/60">Authenticated access routes directly to your operational overview.</p>
+          {/* Was a fake skeleton mock — grey placeholder bars say nothing. This says what
+              each role actually gets, which is also what `routeAllowed` enforces. */}
+          <div className="mesh stagger mt-10">
+            {[
+              { icon: "squares-four", title: "Supervisors", desc: "Plant overview: conflicts, quarantine backlog, overdue decisions." },
+              { icon: "scales", title: "Engineers", desc: "Evidence and governance: trace any claim back to its document." },
+              { icon: "waveform", title: "Field teams", desc: "Briefs and voice capture, sized for a phone at the asset." },
+            ].map((row) => (
+              <div key={row.title} className="flex items-start gap-3 bg-surface px-4 py-3.5">
+                <Icon name={row.icon as "squares-four"} className="mt-0.5 size-[18px] shrink-0 text-accent" />
+                <span className="min-w-0">
+                  <span className="block text-body font-medium text-ink">{row.title}</span>
+                  <span className="mt-0.5 block text-caption leading-relaxed text-muted">{row.desc}</span>
+                </span>
+              </div>
+            ))}
           </div>
         </section>
 
-        <section data-testid="login-form-panel" className="flex items-center justify-center px-5 py-10 sm:px-10">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center text-center">
-          <Image src="/logo.png" alt="Kairos" width={48} height={48} priority className="size-12 rounded-xl object-cover" />
-          <h1 className="mt-4 text-display font-semibold">Sign in to Kairos</h1>
-          <p className="mt-1.5 text-body text-muted">The right knowledge, at the moment of action.</p>
-        </div>
+        <section data-testid="login-form-panel" className="flex items-center justify-center border-line px-5 py-10 sm:px-10 lg:border-l">
+          <div className="w-full max-w-sm">
+            <Image src="/logo.png" alt="Kairos" width={40} height={40} priority className="size-10 object-cover" />
+            <h1 className="display mt-6 text-display text-ink">Sign in to Kairos</h1>
+            <p className="mt-2 text-body text-muted">The right knowledge, at the moment of action.</p>
 
-        <form onSubmit={signIn} className="mt-7 flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-caption font-medium text-muted">Email</span>
-            <input
-              type="email"
-              name="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="engineer@kairos.local"
-              className="min-h-11 rounded-lg border border-line bg-page px-3.5 text-sm outline-none focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-accent"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-caption font-medium text-muted">Password</span>
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="min-h-11 rounded-lg border border-line bg-page px-3.5 text-sm outline-none focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-accent"
-            />
-          </label>
-          {error && (
-            <p className="rounded-lg border border-[color-mix(in_srgb,var(--danger)_35%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface))] px-3 py-2 text-caption text-danger">
-              {error}
-            </p>
-          )}
-          <button type="submit" disabled={busy}
-            className="mt-1 min-h-11 rounded-lg bg-ink text-sm font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-60">
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-          <button type="button" onClick={tryDemo} disabled={busy}
-            className="min-h-11 rounded-lg border border-line bg-surface text-sm font-semibold text-ink transition-colors hover:bg-surface-2 disabled:opacity-60">
-            Explore the live demo
-          </button>
-        </form>
-      </div>
+            <form onSubmit={signIn} className="mt-8 flex flex-col gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-label font-semibold uppercase tracking-[0.08em] text-muted">Email</span>
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="engineer@kairos.local"
+                  className="min-h-11 border border-line bg-canvas px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-muted/60 hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))] focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-accent"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-label font-semibold uppercase tracking-[0.08em] text-muted">Password</span>
+                <input
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="min-h-11 border border-line bg-canvas px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-muted/60 hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))] focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-accent"
+                />
+              </label>
+              {error && (
+                <p className="border border-[color-mix(in_srgb,var(--danger)_35%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface))] px-3 py-2 text-caption text-danger">
+                  {error}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={busy}
+                className="mt-1 inline-flex min-h-11 items-center justify-center gap-2 bg-accent text-sm font-medium text-on-accent transition-[transform,filter] duration-150 ease-out hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
+              >
+                {busy ? "Signing in…" : "Sign in"}
+                {!busy && <span aria-hidden="true">›</span>}
+              </button>
+              <button
+                type="button"
+                onClick={tryDemo}
+                disabled={busy}
+                className="inline-flex min-h-11 items-center justify-center border border-line bg-surface text-sm font-medium text-ink transition-[transform,border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--line))] hover:bg-surface-2 active:scale-[0.99] disabled:opacity-60"
+              >
+                Explore the live demo
+              </button>
+            </form>
+          </div>
         </section>
       </div>
     </main>

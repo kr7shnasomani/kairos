@@ -1871,9 +1871,22 @@ function graphNodeKind(target: Record<string, unknown>): string {
   return String(t.__type__ ?? t.type ?? labels ?? "Concept");
 }
 
+const LABEL_ACRONYMS: Record<string, string> = { oem: "OEM", pid: "P&ID", ptw: "PTW", sop: "SOP", moc: "MoC", rca: "RCA", eam: "EAM", sb: "SB" };
+
+/** Document nodes arrive named by their vault filename (`oem_manual_eq1xx_seal.pdf`).
+ *  Show a title instead: drop the extension, space the words, restore acronyms.
+ *  Identifiers without a separator (EQ-101, ASSET-7) pass through untouched. */
+export function readableNodeLabel(raw: string): string {
+  if (!/[_]|\.[a-z0-9]{2,4}$/i.test(raw)) return raw;
+  const words = raw.replace(/\.[a-z0-9]{2,4}$/i, "").split(/[_\s]+/).filter(Boolean);
+  const out = words.map((w) => LABEL_ACRONYMS[w.toLowerCase()] ?? w).join(" ");
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
 function graphNodeLabel(target: Record<string, unknown>): string {
   const t = target as Record<string, string>;
-  return t.name ?? t.title ?? t.asset_id ?? t.document_id ?? t.event_type ?? "Unknown";
+  const raw = t.name ?? t.title ?? t.asset_id ?? t.document_id ?? t.event_type ?? "Unknown";
+  return readableNodeLabel(raw);
 }
 
 function graphNodeId(target: Record<string, unknown>, i: number): string {

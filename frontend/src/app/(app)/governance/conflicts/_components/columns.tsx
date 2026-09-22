@@ -105,7 +105,7 @@ export function buildColumns(nowMs: number, busy: string | null, onResolve: (c: 
             <span className="size-1.5 rounded-full bg-verified" aria-hidden="true" />Resolved
           </span>
         ) : r.track === "engineering" ? (
-          <Link href="/governance/moc" className="whitespace-nowrap text-caption font-semibold text-accent hover:underline">MoC required →</Link>
+          <Link href="/governance/moc" className="whitespace-nowrap text-caption font-semibold text-accent hover:underline">MoC required ›</Link>
         ) : (
           <button
             onClick={() => onResolve(r)}

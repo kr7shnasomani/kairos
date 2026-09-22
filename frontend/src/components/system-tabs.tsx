@@ -6,7 +6,7 @@ import { useRole, ADMIN_ROLES } from "./use-role";
 import { cn } from "@/lib/utils";
 
 /**
- * Shared sub-navigation for the four system surfaces, which were previously reachable
+ * Shared sub-navigation for the system surfaces (Health, Settings), which were previously reachable
  * only as unrelated sidebar-footer links with no sense of belonging together.
  *
  * Admin-only tabs are hidden (not disabled) for non-admins — `routeAllowed` in
@@ -14,9 +14,7 @@ import { cn } from "@/lib/utils";
  * would immediately redirect.
  */
 const TABS: { href: string; label: string; adminOnly?: boolean }[] = [
-  { href: "/system-information", label: "Information" },
   { href: "/system-health", label: "Health", adminOnly: true },
-  { href: "/system-benchmarks", label: "Benchmarks", adminOnly: true },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -27,6 +25,8 @@ export function SystemTabs() {
   const role = useRole();
   const isAdmin = ADMIN_ROLES.includes(role);
   const tabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  // A single tab is not navigation: non-admins only have Settings.
+  if (tabs.length < 2) return null;
 
   return (
     <nav aria-label="System" className="mb-5 border-b border-line">

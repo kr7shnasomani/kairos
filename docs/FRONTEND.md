@@ -4,7 +4,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Docker
 
 **Local:** `http://localhost:3000` — served by `kairos-frontend` container.
 
-**Design system:** `frontend/DESIGN.md` — Paper theme, colour tokens, typography, component conventions, Refero borrow map. Read before building any new UI component.
+**Design system:** tokens and shared classes live in `frontend/src/app/globals.css`; primitives in `components/ui.tsx` + `ui-card.tsx`. The workspace follows the landing page's language (square chrome, Instrument display type, hairline `.mesh` grids, `lp-card`/`lp-cell` hovers, filled orange eyebrows); the why and the rules are in [`implementation/ui-overhaul.md`](implementation/ui-overhaul.md). Filled danger blocks take `text-on-danger`, never `text-white` (dark's red is light). Icons come only from `components/icon.tsx` (Phosphor Regular, inlined, MIT); never hand-draw an `<svg>` icon. Read both before building any new UI component.
 
 ---
 
@@ -61,20 +61,29 @@ frontend/
 │   │   ├── knowledge-graph.tsx      # React Flow temporal asset graph (Layer 4)
 │   │   ├── supersede-action.tsx     # Document supersede form (client, router.refresh on success)
 │   │   ├── voice-recorder.tsx       # Mic capture → Blob (MediaRecorder), used by field voice + copilot
+│   │   ├── command-palette.tsx      # ⌘K search palette
+│   │   ├── icon.tsx                 # THE icon set — Phosphor Regular path data, inlined (MIT); `*-fill` cuts for active nav
+│   │   ├── brand-link.tsx           # Logo link component
+│   │   ├── mobile-app-header.tsx    # Mobile top bar (menu · search · + Ingest · account)
+│   │   ├── error-boundary.tsx       # Client error boundary wrapper
 │   │   ├── brief-card.tsx · brief-inbox.tsx · brief-detail.tsx   # brief inbox pieces
-│   │   ├── theme-toggle.tsx · skeleton.tsx · stub.tsx
+│   │   ├── charts.tsx · charts/     # Chart primitives and chart sub-components
+│   │   ├── stat-pills.tsx           # Compact metric pills
+│   │   ├── system-tabs.tsx          # Sub-nav tabs for system surfaces (Health · Settings)
+│   │   ├── theme-toggle.tsx · skeleton.tsx
 │   │   ├── use-role.ts              # useRole() + ADMIN_ROLES / PROMOTE_ROLES / RESOLVE_ROLES / FIELD_ROLES
-│   │   └── ui.tsx                   # Primitives: AuthorityBadge, StatusBadge, FilterTabs, Modal, Button, RefusalCard
+│   │   ├── ui.tsx                   # Primitives: PageHeader, KpiCard/KpiGroup, DataTable, FilterTabs, StatusBadge,
+│   │   │                             # AuthorityBadge, SourceChip, Button, Modal, Timeline, EmptyState, RefusalCard
+│   │   └── ui-card.tsx              # Card primitives (lp-card, lp-cell hovers)
 │   └── lib/
 │       ├── api.ts                   # All fetch helpers — SSR-aware API_BASE, live-only fetchers, response normalizers
 │       ├── auth.ts                  # login(), getMe(), logout() — Supabase token lifecycle (kairos-token key)
 │       ├── types.ts                 # All API-derived TypeScript types (single source of truth)
 │       ├── use-fetch.ts             # useFetch() — loading / live / error+retry state machine
 │       ├── idb.ts                   # IndexedDB offline write-queue (OfflineQueue) — flushed on reconnect
-│       ├── utils.ts · format.ts · motion.ts · user-initials.ts · search-shortcut.ts · graph-theme.tsx
+│       ├── utils.ts · format.ts · motion.ts · labels.ts · user-initials.ts · search-shortcut.ts · graph-theme.tsx
 │       └── copilot.ts · rca.ts      # live types + real constants (SUGGESTIONS, RCA_PRESETS); rca.ts `rcaFor` is TEST-ONLY
 ├── Dockerfile                       # node:20-alpine; NEXT_TELEMETRY_DISABLED=1; npm ci at build
-├── DESIGN.md                        # Design system (read before building UI)
 └── package.json
 ```
 
@@ -109,7 +118,6 @@ frontend/
 | `/documents` | Document registry | Live |
 | `/documents/[id]` | Document detail + supersede chain + extraction results + PII-redacted export; a document held by the OCR gate says so, and reliability/admin release or reject it there | Live |
 | `/documents/[id]/topology` | P&ID topology graph (React Flow) | Live |
-| `/system-benchmarks` | **Admin.** Measured evidence: model-gate F1 trend, per-entity-type F1, compliance posture, datastore health | Live |
 | `/documents/ingest` | Upload → pipeline-status timeline | Live (role-gated engineer/admin) |
 | `/documents/compare` | Side-by-side version / metadata diff | Live |
 | `/assets/register` | Register one asset, or bulk-import the EAM golden record as CSV (`POST /assets/`, `/assets/bulk`) | Live (engineer/admin) |
@@ -125,7 +133,6 @@ frontend/
 | `/management/plant-state` | Plant operating-state control | Live (admin-gated write) |
 | `/management/coverage` | Knowledge-coverage matrix (`GET /assets/coverage`) | Live |
 | `/system-health` | Live probes: 11 API surfaces + 5 datastores + OT historian connector registry + opt-in model probes | Live (**admin-only**) |
-| `/system-information` | Static architecture explainer (pipeline, 13 layers, stack) | Live (all roles) |
 | `/settings` | System settings | Live |
 | `/field/deviation` | Physical deviation flag (freezes affected asset briefs) | Live (mobile field capture) |
 | `/field/elicitation/[workOrderId]` | Knowledge-capture micro-interview | Live (mobile) |
@@ -137,7 +144,7 @@ frontend/
 > `/compliance`, `/governance`, `/audit`, `/documents`, `/projects`, `/offboarding`) require
 > engineer/reliability/admin; `/system-health` is **admin-only**. A field worker who navigates to a
 > gated URL is redirected to `/briefs`. Open-to-all routes (briefs, copilot, assets, `/field/*`,
-> `/settings`, `/system-information`) are unlisted. Field routes render at mobile width; **there is no
+> `/settings`) are unlisted. (`/system-information` and `/system-benchmarks` were removed 2026-09-22.) Field routes render at mobile width; **there is no
 > mobile bottom tab bar** — mobile navigates via the hamburger sidebar (see §4).
 
 > Client-only components that must not SSR (React Flow graph, blast-radius, supersede action) are
@@ -150,20 +157,25 @@ frontend/
 
 `AppShell` (`components/app-shell.tsx`) renders two distinct navigations depending on role and viewport.
 
-**Desktop sidebar** (244px, slide-over drawer on mobile) — shown for `admin` / `engineer` / `reliability`:
+**Desktop sidebar** (316px, collapsible to 68px; slide-over drawer on mobile). There is **no desktop
+top bar**: the rail owns the global actions (sidebar-first, as in Linear / Vercel).
 
-- **Operate:** Briefs · Copilot · Assets · RCA · Graph · Events · **Voice · Deviation (admin + field_worker only)**
-- **Assure:** Compliance · Governance · Audit trail · Documents · Projects · Off-boarding
-- **Manage:** Overview (management)
-- **Footer:** System information (all roles) · System health (**admin only**) · System settings
+- **Top:** Search (⌘K command palette) · **+ Ingest** (`/documents/ingest`)
+- *(ungrouped)* Overview (`/management`, staff)
+- **Operate:** Briefs · Copilot · Assets · Events · **Voice · Deviation (admin + field_worker only)**
+- **Analyze:** RCA · Graph · Coverage
+- **Assure:** Compliance · Governance · Audit Trail
+- **Knowledge:** Documents · Projects · Off-Boarding
+- **Foot:** account row → menu with System Settings, System Health (**admin only**), Sign out
+
+Mobile keeps a top bar: menu · search · + Ingest · account.
 
 > The field-capture items **Voice** (`/field/voice`) and **Deviation** (`/field/deviation`) are nav-gated to
 > `["field_worker", "admin"]` — so the **admin sidebar is a full superset** of every role's navigation.
-> Engineer/reliability don't see them (but the header "+" capture button routes anyone to `/field/voice`).
+> Engineer/reliability don't see them.
 
-Active route highlighted with `bg-accent-soft text-accent`. User chip at the bottom shows the live authenticated user's name, role, and site from `GET /auth/me`. Sign-out clears tokens and redirects to `/login`. The sidebar logo is `public/logo.png`, a 30px rounded square.
+Active route is a square row with a 2px inset accent rule, ink text and the **filled** cut of its icon (`bg-surface-2 … shadow-[inset_2px_0_0_var(--accent)]`). The account row at the foot shows the signed-in email and role from `GET /auth/me`; its menu holds System Settings, System Health (admins) and Sign out, which clears tokens and redirects to `/login`. The sidebar logo is `public/logo.png` at 30px (square, like all chrome since the 2026-09-22 overhaul).
 
-- **`/system-information`** — static visual architecture explainer (pipeline, 13 layers, stack). Open to all.
 - **`/system-health`** — admin-only live dashboard: probes all 11 cheap API surfaces + 5 datastores every 30s, plus an opt-in "AI models" section (NIM/Gemini/Jina/Groq) that probes `GET /health/model?provider=…` once/minute **only when toggled on** (each probe spends provider quota; off by default, persisted in `localStorage`).
 - **Login** (`/login`) has an **"Explore the live demo"** button that signs straight into the seeded admin account.
 
@@ -429,7 +441,7 @@ Key types:
 | Component | Props | Renders |
 |-----------|-------|---------|
 | `AuthorityBadge` | `level: AuthorityLevel` | Neutral badge reading `L{n} · {name}` (e.g. `L3 · OEM`). Hover text from `authorityDescription()` says what the level is and that 1 is highest |
-| `StatusBadge` | `tone: "verified" \| "caution" \| "danger" \| "neutral"` | Pill badge |
+| `StatusBadge` | `tone: Tone` (`"danger" \| "caution" \| "verified" \| "info" \| "validation" \| "neutral"`) | Pill badge |
 | `SourceChip` | `quarantine?: boolean` | Document ID chip; orange ring if quarantine |
 | `Modal` | `open, onClose, title, children` | Overlay modal for promote/dispute actions |
 | `Button` | `variant, size, onClick` | Primary/ghost button with active press state |
@@ -438,9 +450,9 @@ Key types:
 
 `useRole()` — reads role from live user profile via `getMe()`. `PROMOTE_ROLES = ["reliability", "admin"]`
 (matches OPA `can_promote_quarantine` — engineers resolve conflicts but do **not** promote quarantine).
-`ADMIN_ROLES = ["admin"]` gates Identity confirmation, plant-state write, model-gate Run, System Health, and System Benchmarks.
+`ADMIN_ROLES = ["admin"]` gates Identity confirmation, plant-state write, model-gate Run, and System Health.
 
-**`SystemTabs` (`components/system-tabs.tsx`)** joins the four system surfaces — Information · Health · Benchmarks · Settings — into one tabbed section, rendered at the top of each. Admin-only tabs are hidden for non-admins; `routeAllowed` remains the enforcement point. `usePathname()` is guarded with `?? ""` because it returns null without router context.
+**`SystemTabs` (`components/system-tabs.tsx`)** joins the two system surfaces — Health · Settings — into a tabbed sub-navigation, rendered at the top of each. (`/system-information` and `/system-benchmarks` were removed 2026-09-22.) Admin-only tabs are hidden for non-admins; `routeAllowed` remains the enforcement point. A single visible tab (non-admin sees only Settings) renders nothing — a lone tab is not navigation. `usePathname()` is guarded with `?? ""` because it returns null without router context.
 
 **File:** `src/components/skeleton.tsx`
 
@@ -532,7 +544,9 @@ landing is deliberately **light-only** — its dark bands are part of the
 composition, not a theme — so it carries no `[data-theme]` pairs.
 
 Typography is `Instrument Sans` (display) + `DM Sans` (body) via `next/font`,
-declared in `app/landing-fonts.ts` so the root layout and the app keep Geist.
+declared in `app/landing-fonts.ts` so the landing and the workspace load one copy of
+each. The root layout adds `Geist Mono` (tabular numerals, codes and IDs) and
+`Noto Sans Devanagari` (Hindi/Hinglish content).
 
 **Three things to know before editing it:**
 
@@ -675,7 +689,7 @@ UI changes landed with the architecture-conformance work.
 | `components/use-role.ts` | New `useMe()` — identity, not just role, because the countersigner is compared to the acknowledger by user id. |
 | `documents/[id]/topology` | Confirm/Reject **per element** (role-gated on `RESOLVE_ROLES`), a canonical-gate panel showing safety-critical progress, and a rewrite onto the shared `useFetch` hook. |
 | `documents/[id]` | `handwriting_suspect` chip — image-path documents only, **excluding** `pid_drawing` (a drawing is an image but carries no handwriting). |
-| `components/ui.tsx` · `app-header.tsx` | `PhaseBadge` reads the **live** phase from `/health/detailed` instead of a build-time env var, and is actually rendered. It renders nothing until the phase is known, so it can never assert an unconfirmed phase. |
+| `components/ui.tsx` · `app-header.tsx` (header since deleted) | `PhaseBadge` reads the **live** phase from `/health/detailed` instead of a build-time env var, and is actually rendered. It renders nothing until the phase is known, so it can never assert an unconfirmed phase. **Removed 2026-09-22**: a rollout stage is operator detail, not user information; the phase is still enforced server-side and reported by `/health/detailed`. |
 | `management/cross-site` | Eyebrow corrected — it read "Layer 13"; the architecture defines layers 0–12. |
 | `governance/circuit-breaker` | `?? FIXTURE` fallback removed (it invented halted breakers for "Valve" and "Separator"). Its test was **inverted, not deleted**: one case renders live data, one pins that an empty response renders no invented rows. |
 

@@ -18,6 +18,7 @@ import type { ModelGateResult } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { useRole, ADMIN_ROLES } from "@/components/use-role";
 
+import { Icon } from "@/components/icon";
 // There is no fixed F1 bar. The backend fails a run when any entity type or asset class scores below
 // the last valid run (workers/model_validation.py). A hard-coded 80% here once labelled a passed
 // 72% run as below threshold and coloured it red.
@@ -152,15 +153,13 @@ export default function ModelGatePage() {
   return (
     <div data-testid="model-gate-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Governance
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 12 · Model Gate"
+        eyebrow="Governance · Model validation"
         title="Model Gate"
         lede="Precision / recall gate on the validation corpus. A failed run blocks model promotion. Runs are triggered manually or by the nightly Temporal workflow."
         actions={
@@ -196,7 +195,7 @@ export default function ModelGatePage() {
       ) : (
         <>
           {/* KPI strip — latest run quality + pass rate across history */}
-          <div data-testid="model-gate-summary" className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div data-testid="model-gate-summary" className="mt-5 mesh stagger sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Precision" value={fmtPct(latest?.precision)} sub="latest run" tone="accent" loading={loading} />
             <MetricCard label="Recall" value={fmtPct(latest?.recall)} sub="latest run" tone="info" loading={loading} />
             <MetricCard label="F1" value={fmtPct(latest?.f1)} sub={GATE_RULE} tone="neutral" loading={loading} />

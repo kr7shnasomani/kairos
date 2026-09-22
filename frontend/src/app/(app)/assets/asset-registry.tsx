@@ -7,6 +7,7 @@ import { label } from "@/lib/labels";
 import { criticalityMeta } from "@/lib/utils";
 import { DataTable, EmptyState, type TableColumn } from "@/components/ui";
 
+import { Icon } from "@/components/icon";
 type CriticalityFilter = "all" | "safety" | "critical" | "non-critical";
 
 /** AssetSummary re-mapped so it satisfies DataTable's Record constraint. */
@@ -22,11 +23,11 @@ function matchesCriticality(value: string, filter: CriticalityFilter) {
 const CRIT_RANK: Record<string, number> = { safety_critical: 0, high: 0, critical: 1, medium: 1, non_critical: 2, low: 2 };
 
 const COLUMNS: TableColumn<AssetRow>[] = [
-  { key: "asset_id", label: "Asset", sortable: true, render: (r) => <span className="tabular whitespace-nowrap font-semibold text-link">{r.asset_id}</span> },
+  { key: "asset_id", label: "Asset", sortable: true, className: "w-[12%]", render: (r) => <span className="tabular whitespace-nowrap font-semibold text-link">{r.asset_id}</span> },
   { key: "name", label: "Name", sortable: true, className: "w-[30%]", render: (r) => <span className="block truncate font-medium text-ink">{r.name}</span> },
-  { key: "equipment_class", label: "Equipment class", sortable: true, render: (r) => <span className="block truncate text-caption text-muted">{label(r.equipment_class)}</span> },
+  { key: "equipment_class", label: "Equipment class", sortable: true, className: "w-[20%]", render: (r) => <span className="block truncate text-caption text-muted">{label(r.equipment_class)}</span> },
   {
-    key: "criticality", label: "Criticality", sortValue: (r) => CRIT_RANK[r.criticality] ?? 9,
+    key: "criticality", label: "Criticality", className: "w-[14%]", sortValue: (r) => CRIT_RANK[r.criticality] ?? 9,
     render: (r) => {
       const meta = criticalityMeta(r.criticality);
       return (
@@ -40,13 +41,13 @@ const COLUMNS: TableColumn<AssetRow>[] = [
   // Issue counts from `GET /assets/` (D6). Zero stays muted so the rows that need attention stand
   // out; a gap is a compliance finding, so it takes the danger tone rather than the accent.
   {
-    key: "open_work_orders_count", label: "Open WOs", align: "right", sortable: true,
+    key: "open_work_orders_count", label: "Open WOs", align: "right", sortable: true, className: "w-[10%]",
     // Unknown (a failed lookup) sorts below every real count, including 0.
     sortValue: (r) => r.open_work_orders_count ?? -1,
     render: (r) => <span className={`tabular ${r.open_work_orders_count ? "font-semibold text-ink" : "text-muted"}`}>{r.open_work_orders_count ?? "—"}</span>,
   },
   {
-    key: "compliance_gap_count", label: "Compliance gaps", align: "right", sortable: true,
+    key: "compliance_gap_count", label: "Compliance gaps", align: "right", sortable: true, className: "w-[14%]",
     sortValue: (r) => r.compliance_gap_count ?? -1,
     render: (r) => <span className={`tabular ${r.compliance_gap_count ? "font-semibold text-danger" : "text-muted"}`}>{r.compliance_gap_count ?? "—"}</span>,
   },
@@ -82,7 +83,7 @@ export function AssetRegistry({ assets }: { assets: AssetSummary[] }) {
       <div data-testid="asset-filter-toolbar" className="mb-3 flex flex-wrap items-center gap-2">
         <label className="relative block min-w-0 flex-1 sm:max-w-[280px]">
           <span className="sr-only">Search assets</span>
-          <svg className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+          <Icon name="magnifying-glass" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <input
             type="search"
             value={query}

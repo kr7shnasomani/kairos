@@ -15,7 +15,7 @@ export default async function DocumentsPage() {
   return (
     <div data-testid="documents-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Immutable evidence vault"
+        eyebrow="Knowledge · Evidence vault"
         title="Documents"
         lede="Every source is stored byte-for-byte and never deleted. Superseding closes a validity window; it does not erase."
         actions={

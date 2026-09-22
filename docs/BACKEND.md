@@ -70,13 +70,13 @@ kairos/                          # repo root
 │   │   ├── internal/events/relay.go # Redis Stream relay
 │   │   └── fixtures/sample_assets.json  # 5 demo assets for EAM sync
 │   ├── scripts/
-│   │   ├── seed_users.py            # Creates 3 Supabase auth test users
+│   │   ├── seed_users.py            # Creates 5 Supabase auth users (admin, engineer, field_worker, reliability, compliance)
 │   │   ├── seed_regulations.py      # Seeds 12 regulations into Neo4j
 │   │   ├── init_neo4j.py            # Neo4j schema constraints + indices
 │   │   ├── init_qdrant.py           # Qdrant collection creation
 │   │   ├── run_model_validation.py  # Entity-extraction F1 vs validation_corpus (Layer-0 model gate).
 │   │   │                             # NOTE: prints only — it does NOT write audit_log, so its
-│   │   │                             # results never appear on /system-benchmarks. Only the
+│   │   │                             # results never appear on /governance/model-gate. Only the
 │   │   │                             # Celery task (POST /governance/model-gate/run) persists.
 │   │   ├── seed_validation_corpus.py # Seed NER ground-truth entities from canon (entity-F1 labels)
 │   │   ├── load_demo_dataset.py     # Load dataset/ via the real API pipeline; seeds aliases + NER corpus (`make load-dataset`)

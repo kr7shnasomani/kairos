@@ -17,6 +17,7 @@ import { Button, StatusBadge, EmptyState, PageHeader } from "@/components/ui";
 import { PageSkeleton } from "@/components/skeleton";
 import { MDM_ROLES } from "../identity-action";
 
+import { Icon } from "@/components/icon";
 // Both queues are live: provisional records are `assets` rows with no confirmed identity, and alias
 // candidates are the extraction pipeline's unconfirmed `asset_alias_map` proposals. This page used to
 // render three hardcoded provisional assets and two aliases whose Confirm/Reject changed nothing.
@@ -85,27 +86,22 @@ export default function BootstrapPage() {
   const aliasItems = aliases.status === "live" ? aliases.data : [];
 
   return (
-    <div data-testid="identity-workspace" className="mx-auto max-w-5xl">
+    <div data-testid="identity-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/assets" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Assets
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 1 · Master data management"
+        eyebrow="Operate · Asset register"
         title="Asset identity confirmation"
         lede="Review provisional equipment records and approve only identities that belong to a canonical asset."
       />
 
       <div data-testid="identity-guardrail" className="mt-5 flex gap-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--caution)_14%,transparent)] text-caution" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 3l7 3v5c0 4.6-2.9 8.1-7 10-4.1-1.9-7-5.4-7-10V6l7-3z" />
-            <path d="M9 12l2 2 4-4" />
-          </svg>
+          <Icon name="shield-check" size={18} />
         </span>
         <div className="min-w-0">
           <p className="text-body font-semibold text-ink">Human confirmation required</p>

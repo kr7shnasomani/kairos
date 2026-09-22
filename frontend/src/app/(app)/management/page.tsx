@@ -5,13 +5,13 @@
 // every zone: loading skeletons → live/demo → error + retry.
 import Link from "next/link";
 import { useMemo } from "react";
-import { Area, AreaChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Tooltip, XAxis, YAxis } from "recharts";
 import { AXIS, ChartCard, GRID, TOOLTIP } from "@/components/charts";
 import { MetricCard, PageHeader, StatusBadge } from "@/components/ui";
 import type { Fetched } from "@/lib/api";
 import { getComplianceDashboard, getConflicts, getEvents, getHealthDetailed, getQuarantine, getSlaReport } from "@/lib/api";
 import { label } from "@/lib/labels";
-import { useScrollReveal } from "@/lib/motion";
+import { useReducedMotion, useScrollReveal } from "@/lib/motion";
 import type { ComplianceDashboard, OperationalEvent, SlaReport } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { nowMs } from "@/lib/utils";
@@ -90,6 +90,7 @@ export default function ManagementPage() {
   const plantState = health?.overall ? label(health.overall) : healthState.status === "error" ? "Unavailable" : null;
   const plantTone = health?.overall === "healthy" ? "verified" : health?.overall === "degraded" ? "caution" : health?.overall === "down" ? "danger" : "info";
 
+  const reduced = useReducedMotion();
   const trendEndMs = useMemo(() => (data ? trendEnd(data.events) : null), [data]);
   const trend = useMemo(
     () => (data && trendEndMs !== null ? dailyCounts(data.events, trendEndMs) : null),
@@ -99,6 +100,7 @@ export default function ManagementPage() {
     trendEndMs !== null && nowMs() - trendEndMs > DAY_MS
       ? `Daily volume, ${TREND_DAYS} days to ${new Date(trendEndMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
       : `Daily volume, last ${TREND_DAYS} days`;
+  const peak = trend ? Math.max(...trend.map((b) => b.count)) : 0;
   // All-zero series draws a misleading flat line — show nothing instead.
   const spark = useMemo(() => {
     const s = trend?.map((b) => b.count);
@@ -111,29 +113,29 @@ export default function ManagementPage() {
   const { ref: attentionRef, revealed: attentionRevealed } = useScrollReveal<HTMLDivElement>();
   const { ref: signalsRef, revealed: signalsRevealed } = useScrollReveal<HTMLDivElement>();
   const revealCls = (revealed: boolean) =>
-    `min-w-0 transition-all duration-500 ${revealed ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`;
+    `min-w-0 transition-[opacity,transform] duration-500 ease-out ${revealed ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`;
 
   return (
     <div data-testid="overview-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Cross-functional"
+        eyebrow="Overview · All functions"
         title="Plant overview"
         lede="Situational awareness across knowledge, conflicts, and compliance."
         actions={
-          <>
-            <Link
-              href="/management/cross-site"
-              className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-caption font-semibold text-ink outline-offset-2 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent"
-            >
-              Cross-site patterns
-            </Link>
+          <div className="flex flex-col items-end gap-2">
             <Link
               href="/management/plant-state"
               className="inline-flex min-h-11 items-center rounded-lg outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent"
             >
-              <StatusBadge tone={plantTone}>Plant state{plantState ? ` · ${plantState}` : ""}</StatusBadge>
+              <StatusBadge tone={plantTone}>Plant state{plantState ? `: ${plantState}` : ""}</StatusBadge>
             </Link>
-          </>
+            <Link
+              href="/management/cross-site"
+              className="inline-flex min-h-11 items-center border border-line px-3 text-caption font-semibold text-ink outline-offset-2 transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              Cross-site patterns
+            </Link>
+          </div>
         }
       />
 
@@ -152,7 +154,7 @@ export default function ManagementPage() {
       ) : (
         <>
           {/* KPI strip — deep-linked tiles; numbers count up as live data lands */}
-          <div data-testid="overview-kpis" className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div data-testid="overview-kpis" className="mt-6 mesh stagger grid-cols-2 lg:grid-cols-4">
             <MetricCard label="Open conflicts" value={data?.conflictsTotal} sub="awaiting resolution" tone="caution" href="/governance/conflicts" loading={loading} />
             <MetricCard label="Quarantine backlog" value={data?.quarantineTotal} sub="items in review queue" tone="info" href="/governance/quarantine" loading={loading} />
             <MetricCard label="Overdue SLA items" value={overdueSla} sub="past deadline" tone="danger" href="/governance/sla" loading={loading} />
@@ -168,19 +170,20 @@ export default function ManagementPage() {
               loading={trend === null}
               empty={trend !== null && trend.every((b) => b.count === 0) && "No events in this window."}
             >
-              <AreaChart data={trend ?? []} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="event-fill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
-                    <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
+              {/* Daily counts are discrete, so bars: a smoothed area drew a hump of
+                  fractional events between integer days. The busiest day leads in
+                  accent, as on the landing's chart; the rest stay ink. */}
+              <BarChart data={trend ?? []} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barCategoryGap="22%">
                 <CartesianGrid {...GRID} />
-                <XAxis dataKey="day" {...AXIS} interval="preserveStartEnd" minTickGap={24} />
+                <XAxis dataKey="day" {...AXIS} interval="preserveStartEnd" minTickGap={40} />
                 <YAxis {...AXIS} allowDecimals={false} width={36} />
-                <Tooltip {...TOOLTIP} />
-                <Area type="monotone" dataKey="count" name="Events" stroke="var(--accent)" strokeWidth={2} fill="url(#event-fill)" dot={false} />
-              </AreaChart>
+                <Tooltip {...TOOLTIP} cursor={{ fill: "var(--surface-2)" }} />
+                <Bar dataKey="count" name="Events" isAnimationActive={!reduced}>
+                  {(trend ?? []).map((b) => (
+                    <Cell key={b.day} fill={b.count > 0 && b.count === peak ? "var(--accent)" : "var(--ink)"} />
+                  ))}
+                </Bar>
+              </BarChart>
             </ChartCard>
           </div>
 

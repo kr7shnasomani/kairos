@@ -10,6 +10,7 @@ import { relativeTime } from "@/lib/utils";
 import { Button, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 
+import { Icon } from "@/components/icon";
 /** MocItem re-mapped so it satisfies DataTable's Record constraint. */
 type MocRow = Pick<MocItem, keyof MocItem>;
 
@@ -87,15 +88,13 @@ export default function MocListPage() {
   return (
     <div data-testid="moc-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Governance
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 7 · Engineering governance"
+        eyebrow="Governance · Management of change"
         title="Management of Change"
         lede="Auto-drafted EWR items for engineering-track conflicts. Approval here closes the validity window of the superseded edge and clears any affected downstream facts."
       />

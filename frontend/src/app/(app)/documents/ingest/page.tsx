@@ -7,6 +7,7 @@ import { ingestDocument, getDocumentStatus, type DocumentIngestResponse } from "
 import { useRole, RESOLVE_ROLES } from "@/components/use-role";
 import { Button, StatusBadge, Timeline, PageHeader } from "@/components/ui";
 
+import { Icon } from "@/components/icon";
 // Default authority follows the dataset canon (regulation L1 … field shift log L5); the uploader can
 // still override it. A flat L3 default filed SOPs and shift logs as OEM-grade evidence.
 const DOC_TYPES = [
@@ -114,15 +115,13 @@ export default function IngestPage() {
     : [];
 
   return (
-    <div data-testid="ingest-workspace" className="mx-auto max-w-[1200px]">
+    <div data-testid="ingest-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/documents" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Documents
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Flow C · Universal document ingestion" title="Ingest a document" lede="The entry point of the platform. Files are stored byte-for-byte in the immutable vault and run through the extraction pipeline. Identical files (same SHA-256) are de-duplicated, never re-stored." />
+      <PageHeader className="mt-4" eyebrow="Knowledge · Document ingestion" title="Ingest a document" lede="The entry point of the platform. Files are stored byte-for-byte in the immutable vault and run through the extraction pipeline. Identical files (same SHA-256) are de-duplicated, never re-stored." />
 
       {!canIngest && (
         <div className="mt-5 rounded-xl border border-line bg-surface p-5 text-body text-muted">
@@ -145,9 +144,7 @@ export default function IngestPage() {
               className="flex min-h-40 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line bg-surface-2 px-5 py-8 text-center transition-colors hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <span className="grid size-11 place-items-center rounded-xl bg-surface text-muted shadow-sm" aria-hidden="true">
-                <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-                </svg>
+                <Icon name="upload-simple" className="size-6" />
               </span>
               <span className="text-body font-semibold text-ink">{file ? file.name : "Choose a source file"}</span>
               <span className="text-label text-muted">{file ? `${(file.size / 1024).toFixed(0)} KB selected` : "PDF, image, scanned form, or P&ID"}</span>

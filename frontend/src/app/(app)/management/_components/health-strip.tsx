@@ -26,20 +26,21 @@ export function HealthStrip({ health, loading = false }: { health: HealthDetaile
       ) : services.length === 0 ? (
         <p className="mt-3 text-caption text-muted">Live service status is unavailable.</p>
       ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
+        // Cell mesh, as the landing lays out its system grid: one service per cell.
+        <div className="mesh stagger mt-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
           {services.map((s) => (
-            <span
+            <div
               key={s.name}
-              title={s.details ?? undefined}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-line bg-surface-2 px-2.5 text-caption capitalize"
+              title={[s.details, s.latency_ms != null ? `${Math.round(s.latency_ms)} ms` : null].filter(Boolean).join(" · ") || undefined}
+              className="flex min-w-0 items-center gap-2 bg-surface px-3 py-2.5 text-caption"
             >
               <span
-                className={`size-1.5 rounded-full ${s.status === "healthy" ? "bg-verified" : s.status === "degraded" ? "bg-caution" : "bg-danger"}`}
+                className={`size-1.5 shrink-0 ${s.status === "healthy" ? "bg-verified" : s.status === "degraded" ? "bg-caution" : "bg-danger"}`}
                 aria-hidden="true"
               />
-              {s.name} · {s.status}
-              {s.latency_ms != null && <span className="tabular text-label text-muted">{Math.round(s.latency_ms)} ms</span>}
-            </span>
+              <span className="min-w-0 flex-1 truncate text-ink" title={s.name}>{s.name}</span>
+              <span className={s.status === "healthy" ? "sr-only" : s.status === "degraded" ? "shrink-0 capitalize text-caution" : "shrink-0 capitalize text-danger"}>{s.status}</span>
+            </div>
           ))}
         </div>
       )}

@@ -8,6 +8,7 @@ import { Button, DataTable, EmptyState, FilterTabs, PageHeader } from "@/compone
 import { StatPills } from "@/components/stat-pills";
 import { buildColumns, type ConflictRow } from "./_components/columns";
 
+import { Icon } from "@/components/icon";
 const TEST_PREFIXES = ["ASSET-TEST-", "ASSET-EV-", "ASSET-DEDUP-"];
 const isTestData = (c: ConflictRow) => TEST_PREFIXES.some((p) => c.asset_id?.startsWith(p));
 
@@ -74,15 +75,13 @@ export default function ConflictsPage() {
   return (
     <div data-testid="conflicts-workspace" className="mx-auto max-w-[1400px]">
       <Link href="/governance" className="inline-flex items-center gap-1.5 text-body text-muted hover:text-ink">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
+        <Icon name="caret-left" size={15} />
         Governance
       </Link>
 
       <PageHeader
         className="mt-4"
-        eyebrow="Layer 7 · Dual-track governance"
+        eyebrow="Governance · Human sign-off"
         title="Conflicts"
         lede="Contradictions between sources, split by track. Administrative conflicts resolve here; engineering conflicts are safety-critical and route through Management of Change."
       />

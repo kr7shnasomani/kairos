@@ -123,7 +123,7 @@ export default function CompliancePage() {
   return (
     <div data-testid="compliance-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Layer 11 · Quality & compliance"
+        eyebrow="Assure · Compliance"
         title="Compliance"
         lede="High-recall gap detection: every asset + regulation without a verified procedure is flagged."
         actions={<>
@@ -142,7 +142,7 @@ export default function CompliancePage() {
       ) : (
         <>
           {/* KPI strip — count-up via MetricCard; 0 gaps reads as verified, not alarming */}
-          <div data-testid="compliance-kpis" className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div data-testid="compliance-kpis" className="mt-6 mesh stagger grid-cols-1 sm:grid-cols-3">
             <MetricCard label="Critical" value={counts.critical} sub="Immediate evidence gap" tone={counts.critical > 0 ? "danger" : "verified"} loading={loading} />
             <MetricCard label="Major" value={counts.major} sub="Remediation required" tone={counts.major > 0 ? "caution" : "verified"} loading={loading} />
             <MetricCard label="Minor" value={counts.minor} sub="Track in review cycle" tone={counts.minor > 0 ? "info" : "verified"} loading={loading} />
@@ -208,13 +208,13 @@ export default function CompliancePage() {
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Link href="/compliance/audit-pack" className="block rounded-xl focus-visible:outline-2 focus-visible:outline-accent">
               <Card interactive className="h-full p-5">
-                <p className="text-body font-semibold text-ink">Assemble audit pack →</p>
+                <p className="text-body font-semibold text-ink">Assemble audit pack ›</p>
                 <p className="mt-1 text-caption text-muted">Bundle verified evidence for an auditor handover.</p>
               </Card>
             </Link>
             <Link href="/compliance/nonconformance" className="block rounded-xl focus-visible:outline-2 focus-visible:outline-accent">
               <Card interactive className="h-full p-5">
-                <p className="text-body font-semibold text-ink">Non-conformance register →</p>
+                <p className="text-body font-semibold text-ink">Non-conformance register ›</p>
                 <p className="mt-1 text-caption text-muted">Track raised findings through closure.</p>
               </Card>
             </Link>

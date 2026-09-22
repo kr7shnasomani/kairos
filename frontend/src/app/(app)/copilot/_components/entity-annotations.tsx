@@ -57,7 +57,7 @@ export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] })
             <div key={k} className="flex flex-col gap-1">
               <div
                 className={cn(
-                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-label",
+                  "flex items-center gap-1 border px-2.5 py-1 text-label",
                   action === "confirmed"
                     ? "border-[color-mix(in_srgb,var(--verified)_40%,var(--line))] bg-[color-mix(in_srgb,var(--verified)_8%,transparent)]"
                     : action === "corrected"
@@ -94,7 +94,7 @@ export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] })
                     <button
                       onClick={() => annotate(e, true)}
                       aria-label={`Confirm ${e.entity_text} as ${e.entity_type}`}
-                      className="grid size-6 shrink-0 place-items-center rounded-full text-label text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--verified)_15%,transparent)] hover:text-verified"
+                      className="grid size-6 shrink-0 place-items-center text-label text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--verified)_15%,transparent)] hover:text-verified"
                     >
                       ✓
                     </button>
@@ -104,14 +104,14 @@ export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] })
                         setEditing(k);
                       }}
                       aria-label={`Correct type for ${e.entity_text}`}
-                      className="grid size-6 shrink-0 place-items-center rounded-full text-label text-muted transition-colors hover:bg-accent-soft hover:text-accent"
+                      className="grid size-6 shrink-0 place-items-center text-label text-muted transition-colors hover:bg-accent-soft hover:text-accent"
                     >
                       ✎
                     </button>
                     <button
                       onClick={() => annotate(e, false)}
                       aria-label={`Remove entity ${e.entity_text}`}
-                      className="grid size-6 shrink-0 place-items-center rounded-full text-label text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] hover:text-danger"
+                      className="grid size-6 shrink-0 place-items-center text-label text-muted transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] hover:text-danger"
                     >
                       ✕
                     </button>

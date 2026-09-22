@@ -28,7 +28,7 @@ describe("GovernancePage", () => {
     render(<GovernancePage />);
 
     expect(screen.getByTestId("governance-workspace")).toHaveClass("max-w-[1400px]");
-    expect(screen.getByTestId("governance-summary")).toHaveClass("rounded-xl", "bg-surface");
+    expect(screen.getByTestId("governance-summary")).toHaveClass("mesh", "lg:grid-cols-4");
     expect(screen.getByTestId("governance-surfaces")).toHaveClass("md:grid-cols-2", "xl:grid-cols-3");
 
     await waitFor(() => expect(screen.getByTestId("governance-surface-conflicts")).toHaveTextContent("2 open"));
@@ -55,12 +55,12 @@ describe("GovernancePage", () => {
     const ctas = surfaces.map((surface) => surface.lastElementChild?.textContent?.trim());
 
     expect(ctas).toEqual([
-      "Review 2 open conflicts →",
-      "Review 2 pending inputs →",
-      "Review 1 pending changes →",
-      "Inspect 2 overdue decisions →",
-      "Inspect anomaly gates →",
-      "Review model validation →",
+      "Review 2 open conflicts ›",
+      "Review 2 pending inputs ›",
+      "Review 1 pending changes ›",
+      "Inspect 2 overdue decisions ›",
+      "Inspect anomaly gates ›",
+      "Review model validation ›",
     ]);
     expect(new Set(ctas).size).toBe(surfaces.length);
     for (const surface of surfaces) {

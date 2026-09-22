@@ -28,7 +28,7 @@ export function ClassSection({ group }: { group: ClassGroup }) {
   const latest = failures[0];
 
   return (
-    <section data-testid={`project-class-${slug}`} className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm transition-shadow duration-200 hover:shadow-md motion-reduce:transition-none">
+    <section data-testid={`project-class-${slug}`} className="overflow-hidden border border-line bg-surface">
       <div className="p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -44,7 +44,7 @@ export function ClassSection({ group }: { group: ClassGroup }) {
         </div>
         {group.assets.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Linked assets">
-            {group.assets.map((asset) => <span key={asset.asset_id} className="tabular rounded-full border border-line bg-surface-2 px-2.5 py-1 text-label font-medium text-ink">{asset.asset_id}</span>)}
+            {group.assets.map((asset) => <span key={asset.asset_id} className="tabular border border-line bg-surface-2 px-2.5 py-1 text-label font-medium text-ink">{asset.asset_id}</span>)}
           </div>
         )}
       </div>

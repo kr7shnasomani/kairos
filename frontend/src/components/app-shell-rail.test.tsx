@@ -59,4 +59,16 @@ describe("nav rail collapse", () => {
       expect(link).toHaveAccessibleName();
     }
   });
+
+  it("owns the global actions when given them: search, ingest, account", () => {
+    const actions = { onSearch: vi.fn(), onCreate: vi.fn(), onOpenUser: vi.fn(), accountName: "avery@kairos.local", accountInitials: "AV" };
+    render(<SidebarContent role="engineer" user={null} collapsible actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: "Search workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingest document" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open user menu" }));
+    expect(actions.onSearch).toHaveBeenCalledOnce();
+    expect(actions.onCreate).toHaveBeenCalledOnce();
+    expect(actions.onOpenUser).toHaveBeenCalledOnce();
+    expect(screen.getByText("avery@kairos.local")).toBeInTheDocument();
+  });
 });

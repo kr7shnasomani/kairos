@@ -8,6 +8,7 @@ import { submitVoiceNote } from "@/lib/api";
 import { PageHeader } from "@/components/ui";
 import { useMe } from "@/components/use-role";
 
+import { Icon } from "@/components/icon";
 type Stage = "record" | "submitting" | "done" | "error";
 
 export default function VoicePage() {
@@ -37,7 +38,7 @@ export default function VoicePage() {
   }
 
   return (
-    <div data-testid="work-order-voice-workspace" className="mx-auto max-w-[1100px]">
+    <div data-testid="work-order-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         compact
         className="mb-6"
@@ -68,7 +69,7 @@ export default function VoicePage() {
             {[0, 1, 2].map((i) => (
               <span
                 key={i}
-                className="size-2 animate-bounce rounded-full bg-muted"
+                className="size-2 animate-pulse rounded-full bg-muted"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
@@ -80,18 +81,7 @@ export default function VoicePage() {
       {stage === "done" && (
         <div className="flex flex-col items-center py-8 text-center">
           <div className="mx-auto grid size-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--verified)_12%,transparent)]">
-            <svg
-              className="size-7 text-verified"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+            <Icon name="check" className="size-7 text-verified" />
           </div>
           <h2 className="mt-4 text-title font-semibold">{duplicate ? "Already submitted" : "Submitted"}</h2>
           <p className="mt-2 text-body text-muted">
@@ -126,7 +116,7 @@ export default function VoicePage() {
       )}
         </main>
 
-        <aside data-testid="work-order-voice-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-20">
+        <aside data-testid="work-order-voice-context" className="rounded-xl border border-line bg-surface p-4 shadow-sm lg:sticky lg:top-6">
           <p className="text-label font-bold uppercase tracking-[0.1em] text-accent">Work order</p>
           <p className="tabular mt-1 text-title font-semibold text-ink">{workOrderId}</p>
           <div className="mt-4 border-t border-line pt-4">
