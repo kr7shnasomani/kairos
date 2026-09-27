@@ -53,7 +53,7 @@ function summarizeMeta(action: string, meta: Record<string, unknown> | null): st
       break;
     case "synthesis":
       if (m.query) push(`"${String(m.query).slice(0, 48)}"`);
-      push(m.refused ? "refused · safety gate" : "answered");
+      push(m.refused ? "refused, safety gate" : "answered");
       if (m.query_category) push(pretty(String(m.query_category)));
       break;
     case "sla_escalated":
@@ -88,7 +88,7 @@ function summarizeMeta(action: string, meta: Record<string, unknown> | null): st
       if (parts.length >= 3) break;
     }
   }
-  return parts.length ? parts.join(" · ") : null;
+  return parts.length ? parts.join(", ") : null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -202,7 +202,7 @@ export default function AuditPage() {
   return (
     <div data-testid="audit-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Assure · Immutable record"
+        eyebrow="Assure"
         title="Audit Trail"
         lede="Every governance decision, delivery, ingestion, and model-gate result, in chronological order. Immutable by design."
         actions={

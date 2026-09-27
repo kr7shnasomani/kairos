@@ -74,7 +74,7 @@ describe("RedactedExport", () => {
 
     expect(await screen.findByText("Handed over by [PERSON_1].")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("1 identifiers masked");
-    expect(screen.getByText("person · 1")).toBeInTheDocument();
+    expect(screen.getByText("person, 1")).toBeInTheDocument();
     expect(screen.queryByText(/phone/)).not.toBeInTheDocument();
   });
 

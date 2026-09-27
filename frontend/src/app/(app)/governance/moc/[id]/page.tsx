@@ -7,7 +7,7 @@ import { useParams } from "next/navigation";
 import type { MocItem, ConflictSource } from "@/lib/types";
 import { getMoc, approveMoc } from "@/lib/api";
 import { relativeTime } from "@/lib/utils";
-import { StatusBadge, PageHeader } from "@/components/ui";
+import { Button, PageHeader, StatusBadge } from "@/components/ui";
 import { DetailSkeleton } from "@/components/skeleton";
 import { BlastRadiusPanel } from "@/components/lazy";
 
@@ -177,13 +177,9 @@ export default function MocDetailPage() {
             />
             {error && <p className="text-caption text-danger">{error}</p>}
             <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
-              <button
-                onClick={handleApprove}
-                disabled={busy}
-                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 text-caption font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
+              <Button variant="primary" onClick={handleApprove} disabled={busy} className="min-h-11 text-caption">
                 {busy ? "Approving…" : "Approve MoC"}
-              </button>
+              </Button>
               <Link
                 href="/governance/conflicts"
                 className="inline-flex min-h-11 items-center justify-center rounded-lg border border-line px-4 text-caption font-semibold text-muted transition-colors hover:bg-surface hover:text-ink"

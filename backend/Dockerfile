@@ -71,4 +71,6 @@ USER 1001:1001
 EXPOSE 8000
 
 # Default = API. Workers override `command:` in docker-compose.yml.
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --forwarded-allow-ips: trust Caddy's X-Forwarded-Proto, or redirects (e.g. /search -> /search/)
+# come back as http:// and an https page blocks them. Safe: port 8000 is published on loopback only.
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--forwarded-allow-ips", "*"]

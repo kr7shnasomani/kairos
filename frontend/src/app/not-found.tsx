@@ -1,5 +1,5 @@
-import Link from "next/link";
 
+import { ButtonLink } from "@/components/ui";
 export default function NotFound() {
   return (
     <main className="grid min-h-dvh place-items-center px-5">
@@ -13,12 +13,7 @@ export default function NotFound() {
         <p className="mt-1.5 text-body leading-relaxed text-muted">
           That screen doesn&rsquo;t exist. It may have moved, or the link is out of date.
         </p>
-        <Link
-          href="/briefs"
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-ink px-4 text-body font-semibold text-canvas transition-opacity hover:opacity-90"
-        >
-          Back to briefs
-        </Link>
+        <ButtonLink href="/briefs" variant="primary" className="mt-6">Back to briefs</ButtonLink>
       </div>
     </main>
   );

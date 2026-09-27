@@ -123,7 +123,7 @@ export default function CompliancePage() {
   return (
     <div data-testid="compliance-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Assure · Compliance"
+        eyebrow="Assure"
         title="Compliance"
         lede="High-recall gap detection: every asset + regulation without a verified procedure is flagged."
         actions={<>

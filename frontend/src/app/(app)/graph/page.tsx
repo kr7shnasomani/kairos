@@ -43,7 +43,7 @@ export default function GraphPage() {
 
   return (
     <div data-testid="graph-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader className="mb-6" eyebrow="Analyze · Knowledge graph" title="Temporal asset graph" lede="Investigate the evidence, events, and governed relationships surrounding an asset at any point in time." />
+      <PageHeader className="mb-6" eyebrow="Analyze" title="Temporal asset graph" lede="Investigate the evidence, events, and governed relationships surrounding an asset at any point in time." />
 
       <section data-testid="graph-summary" className="grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-3">
         <div className="border-b border-line p-4 sm:border-b-0 sm:border-r">
@@ -59,7 +59,7 @@ export default function GraphPage() {
               </span>
             )}
           </div>
-          <p className="mt-1 text-label text-muted">{asOf ? `Snapshot · ${asOf}` : "Current knowledge state"}</p>
+          <p className="mt-1 text-label text-muted">{asOf ? `Snapshot ${asOf}` : "Current knowledge state"}</p>
         </div>
         <div className="border-b border-line p-4 sm:border-b-0 sm:border-r">
           <p className="text-micro font-bold uppercase tracking-[0.1em] text-muted">Connected knowledge</p>
@@ -121,9 +121,9 @@ export default function GraphPage() {
             />
             <button
               type="submit"
-              className="h-11 rounded-lg border border-accent bg-accent-soft px-4 text-body font-medium text-accent transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)]"
+              className="fill-sweep h-11 bg-accent px-4 text-body font-semibold text-on-accent transition-transform duration-150 ease-out active:scale-[0.98]"
             >
-              View
+              <span className="relative z-10">View</span>
             </button>
           </form>
         </div>

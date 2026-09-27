@@ -32,9 +32,9 @@ judging 16 to 20 September) as release
 Hackathon 2.0 submission is [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0)
 (`b81ed1f`). **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
 **https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
-519/519 service-free backend tests, 269/270 frontend tests (one pre-existing failure, P11), `tsc`
+524/524 service-free backend tests, 272/273 frontend tests (one pre-existing failure, P11), `tsc`
 clean, `eslint` 0 errors, end-to-end flows 46/46 (2026-09-14). What is still open is listed under
-[Pending — as of 2026-09-23](#pending--as-of-2026-09-23).
+[Pending — as of 2026-09-27](#pending--as-of-2026-09-27).
 
 **All 13 architecture layers are implemented.** Architecture conformance is **~91.5%** — the mean of
 the 13 per-layer scores in [Conformance](#architecture--implementation-conformance).
@@ -355,6 +355,7 @@ Methodology: [`docs/BENCHMARKS.md`](../BENCHMARKS.md).
 | D6 | **Which asset-list columns to render, and how** | `GET /assets/` ships `open_work_orders_count` + `compliance_gap_count` on every row | **Decided and built 2026-09-14:** both render on `/assets` as right-aligned sortable columns (**Open WOs**, **Compliance gaps**); zero stays muted, a gap takes the danger tone | Done |
 | D7 | **Should a total embedding failure raise instead of degrading silently?** | `_embed_ollama` returns `[]` rather than raising (`services/llm.py`) and `search_service` gathers with `return_exceptions=True`, so search silently degrades to ES + graph with one log line | **Decided 2026-08-23: leave it.** Changing failure semantics on the retrieval hot path is a bigger change than the symptom justifies. Recorded so it reads as a decision, not an oversight — do not "fix" it without re-opening the decision | Pending, B-1 |
 | D8 | **Do `e2e_shift_log.txt` and `kairos_ingest_test.pdf` count as corpus?** | Neither appears in `dataset/00_Reference/dataset_manifest.csv` **or anywhere under `dataset/`**; the manifest holds exactly the other 21 | **Decided 2026-08-23: they do not.** `e2e_` and `kairos_` added to the predicate — both name a file after this system or its harness, never after plant equipment, and both were verified against the whole vault to match only their two targets. A `_test\.ext` stem rule was **rejected**: it would also swallow a plausible real `hydro_test.pdf`. Linkage re-run in the same change: **16/21 (76%)**, four unexplained unchanged | Benchmarks, `RESULTS.md` §12 |
+| D9 | **Where does the showcase data layer live?** Plan (2026-09-27): about 60 events over 30 days, 15–25 documents, recurring-failure chains, plant state, more off-boarding programmes, loaded through the real API from a new `dataset/showcase/` so every page has content | (a) SITE_002 for part of it: gives `/management/cross-site` data and leaves SITE_001 (the benchmark site) untouched; (b) all on SITE_001 | Pages stay thin (5 events, 3 conflicts, 0 annotations/plant states/model-gate runs). Either way it loads into local stores first, and into cloud only on an explicit ask (🔴) | 2026-09-27 investigation |
 
 **D1 is decided (b) and implemented.** No open decision has a data-integrity consequence any more; D2, D6, D7 and D8
 are decided (do not re-open them without saying so); D3 is cosmetic and deliberately left.
@@ -504,7 +505,7 @@ a new PS criterion arrives without a harness.
 
 ## Pending
 
-### Pending — as of 2026-09-23
+### Pending — as of 2026-09-27
 
 Hackathon-specific work (Nebius x NVIDIA) is planned in [`nebius-prep.md`](./nebius-prep.md). That file
 holds the submission plan only; general project debt found while doing it is recorded here, not there.
@@ -522,10 +523,12 @@ Safety class as in [Next actions](#next-actions--in-order-with-their-safety-clas
 | P6 | **Server Elasticsearch snapshot is from 2026-09-13** (18 documents / 10 assets vs 20 / 11 locally — the QA test document and asset are missing) | 🟢 | Harmless: both are test data. Re-export with `make export-search-index` if the corpus changes |
 | P7 | **Stale measurements** — `run_retrieval_baseline.py` (predates the 2026-08-24 `/search` fix), `run_safety_eval.py` (not re-run since 2026-08-17), `run_cross_functional.py` (measured at n=37) | 🟡 | Re-run after judging, not during it (provider quota) |
 | P10 | **Two quarantine items from a QA sweep**: an elicitation response "QA: scoring on the seal face…" (engineer persona) and a voice note whose transcript is "." (field_worker persona). Deliberately **not** filtered: a "QA:" prefix can be a real quality-assurance note, and hiding an item from a review queue means it is never reviewed | 🔴 | Dispute or archive both through the quarantine review queue, which also exercises the governance flow. A write, so the user's call |
-| P11 | **`offboarding/page.test.tsx` fails** ("keeps identifiers honest and makes retirement timing explicit"). Pre-existing: fails with the 2026-09-22 changes stashed | 🟢 | Frontend-only; the other 269 vitest tests pass |
+| P11 | **`offboarding/page.test.tsx` fails** ("keeps identifiers honest and makes retirement timing explicit"). Pre-existing: fails with the 2026-09-22 changes stashed | 🟢 | Frontend-only; the other 272 vitest tests pass |
 | P12 | **`ARCHITECTURE.md` still lists the cascade as NIM → OpenRouter → Gemini → Ollama.** Left on purpose until the Nebius Token Factory tier's role is decided; every other doc describes the registry | 🟢 | Update §6 when the tier is keyed and promoted |
 | P13 | **The Token Factory key is live in the local `.env`.** Whenever the stack runs, Token Factory is tier 1 and every answer and brief spends Nebius credits (balance $29.50 + $1 trial on 2026-09-22). No call has been made yet, by user decision | 🟡 | Comment the `NEBIUS_TOKEN_FACTORY_API_KEY` line out to pause spending: an unkeyed tier is dropped from the cascade, so it reverts to NIM with no code change |
-| P14 | **The UI overhaul landed (uncommitted, 2026-09-23).** Square chrome + display type + hairline meshes, Phosphor icon set, sidebar-first shell (no desktop top bar; calendar and bell removed as dead chrome), `/system-benchmarks` and `/system-information` removed, login rebuilt, dark palette re-cut into three greys, `--on-danger` added, theme flip crossfades. Every reference swept: `layout.tsx`, `use-role.ts`, `system-tabs.tsx`, `FRONTEND.md`, `e2e-sweep.md`, `nebius-prep.md`, `PRESENTATION.md`, `BACKEND.md`, `FE.md`, `run_model_validation.py` | 🟢 | Route count: **48 → 46 page files** (44 `page.tsx` under `(app)` + `/login` + the landing); the e2e sweep numbers **42 live routes** (44 rows, two struck through) because it collapses some dynamic variants. Both WCAG fixes verified present (24px nav group headers, `--caution-ink` badge). Frontend suite re-run: 269/270 (P11 only), `tsc` clean, eslint 0 errors. **Still uncommitted** — review the diff before it lands |
+| P14 | **UI overhaul — first half committed and pushed as `97f72c1` (2026-09-22), CI green** (square chrome, display type, hairline meshes, Phosphor icon set, sidebar-first shell, `/system-benchmarks` + `/system-information` removed, login rebuilt, three-grey dark palette, `--on-danger`, crossfaded theme flip). **A second round is uncommitted (2026-09-27):** page-title sizes (`compact` is per-record views only), rail collapse aligned to 0px drift, rail group headings removed, landing corner ticks pulled out of the app, one `.fill-sweep` hover on every button (16 hand-rolled ones migrated to `Button`/`ButtonLink`), every user-visible `·` separator removed from the workspace (landing untouched), Governance KPI tiles deep-linked, plus two landing edits (Developers footer column removed, `#demo` YouTube player behind `DEMO_YOUTUBE_URL`) | 🟢 | Docs swept again on 2026-09-27 (FRONTEND.md rail + eyebrow + demo rules, ui-overhaul.md follow-ups, test counts). Review the uncommitted diff before it lands |
+| P15 | **Deploy the https-redirect fix (2026-09-27, uncommitted).** uvicorn `--forwarded-allow-ips "*"` + trailing slashes on `/search/`, `/audit-log/`, `/annotations/`, `POST /assets/`. Until deployed, the hosted Copilot, Audit Trail, annotations and asset creation fail with "Failed to fetch" | 🟡 | Rsync to EC2 → `docker compose -f docker-compose.yml --profile prod up -d --build kairos-backend-api` (the flag is in the image `CMD`, so a recreate alone keeps the old one); redeploy Vercel. Verify per `DEPLOY.md` § 11 (`location: https://`). Pitfall row: *Hosted "Failed to fetch"* |
+| P16 | **Re-date the demo before each event.** `make redate-demo` (dry run, today +73 days), then `APPLY=1` | 🔴 | Writes cloud Supabase + Neo4j: run by the user. Off-boarding retirement date (2026-09-30) expires otherwise. See `DATASET.md` § Keeping it current |
 | P8 | Backlog carry-overs: synthesis verdict (#8), form-parsing layout pass (#6), FastAPI major upgrade (#2), D3 `COMPONENT` labels, 7 eslint unused-var warnings | 🟢 | Unchanged; see [Next actions](#next-actions--in-order-with-their-safety-class) and the [Backlog](#improvement-backlog) |
 
 ### Reported UI/wiring issues — triaged and fixed 2026-08-23
@@ -1002,7 +1005,8 @@ recorded above.
 - **End-to-end flows:** `tools/e2e_flows.sh --mutate` **46/46** (2026-09-14).
 - **Accessibility audit (2026-09-22)**, WCAG 2.2 AA, measured in the browser on Overview, Copilot,
   Briefs, Asset detail, Quarantine and RCA, in light, dark and high-contrast modes. Two failures found
-  and fixed: nav group headers were 19-21px targets within 12px of the next link (2.5.8, now 24px), and
+  and fixed: nav group headers were 19-21px targets within 12px of the next link (2.5.8, fixed at
+  24px — the headings were then removed entirely on 2026-09-27, so the finding is moot), and
   the light-mode amber status badge was 4.35:1 (1.4.3, now 5.16:1 via `--caution-ink`). Clean: accessible
   names, form labels, alt text, heading order, duplicate ids, page language, skip link, visible focus
   ring, reduced motion. Contrast must be measured on a **fresh page load** per theme: switching theme
@@ -1012,7 +1016,7 @@ recorded above.
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **519 passed** across **45 files** (re-run 2026-09-22) — no stack / secrets / network.
+- **Service-free tier:** **524 passed** across **46 files** (re-run 2026-09-27) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md`, `docs/INFRA.md` and
   `.github/workflows/tests.yml` and **all four must be updated together** (they have drifted twice).
 - **Frontend:** **271 passed across 75 files — fully green** (re-run 2026-09-15), `tsc` clean, `eslint`
@@ -1109,6 +1113,8 @@ recorded above.
 | FE type drift (root of most bugs) | FE types were built speculatively and crashed on live data. Verify shapes against live `curl`; `x?.arr.length` still throws when `arr` undefined — guard `?? []`. Fixed: `compliance/dashboard.total_gaps` = `{critical,major,minor}` object (not a number); `SlaReport` = escalation report (`overdue_quarantine_items`, `overdue_*_total`, no on-time tallies); `CircuitBreakerState` = `{states[],halted_count}`, `halted` bool; `ValidationCorpusStats` has no `by_asset_class`. **Now guarded by `tests/test_contract.py`.** |
 | Blast-radius / topology are nested | `blast-radius/{id}` → `affected:[{edge,target}]`; `documents/{id}/topology` → nested `topology.{equipment_nodes,isolation_valves,isolation_boundaries,instrumentation_loops}`. Both flattened to the UI shape **inside the `api.ts` fetcher** (adapter). Guarded by `test_contract.py`. |
 | Service-worker refresh loop | `public/sw.js` registered **production-only** (`app-shell.tsx` gates on `NODE_ENV`, unregisters in dev); navigations network-first. A dev-cached shell + changed chunk hashes = infinite reload. Bump `SHELL` cache version to bust. |
+| **Hosted "Failed to fetch" on one call while the rest of the page works** | A collection route called without its trailing slash (`/search?q=`, `/audit-log?`, `/annotations`, `POST /assets`) gets a FastAPI `307` to `/search/`. Behind Caddy, uvicorn trusted forwarded headers from `127.0.0.1` only, so the redirect said **`http://`**; the https Vercel page blocked it as mixed content and `fetch` threw. Locally it is http→http, so it never reproduces there. Fixed 2026-09-27 at both ends: uvicorn runs with `--forwarded-allow-ips "*"` (port 8000 is loopback-only, so only Caddy reaches it) and the four calls carry the slash. Check with `curl -sI "https://kairos-deterium.duckdns.org/search?q=x"`: the `location` must be `https://`. |
+| "signal timed out" / "Plant state: Unavailable" right after `make dev` | Cold start: OPA decisions take >2 s while Turbopack/ES/Aura warm up, so reads blow the 4 s client budget. Not a bug; see `INFRA.md` § Before a demo. |
 | Turbopack dev 404s-everything | A tight reload loop can corrupt the dev route manifest → all `(app)/*` 404 while `/` 307s. `docker restart kairos-frontend` clears it; not a code bug. |
 | Turbopack dev serves a stale graph after a file vanishes | Deleting a route file (e.g. `(app)/template.tsx`) makes every `(app)/*` route 500 with *"Could not parse module … file not found"*; a `git stash`/`pop` round-trip leaves the old `globals.css` compiled. `docker restart kairos-frontend` clears both (seen 2026-09-22). If the served CSS is *still* old after a restart (Turbopack's on-disk cache survives it), `docker exec kairos-frontend rm -rf /app/.next` then restart. |
 | `next build` fails on `/_global-error` (`useContext` null) | Next 16.2.10's **default** global-error page fails to prerender. Fixed by a custom `src/app/global-error.tsx` (client, own `<html>/<body>`, **inline styles only** — no providers/tokens exist at that level). Keep it self-contained; don't import app components or `next/image` there. |

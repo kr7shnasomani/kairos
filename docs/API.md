@@ -1716,6 +1716,8 @@ Operator intelligence briefs assembled from 5 parallel queries (Neo4j graph + Qd
 
 Get pending briefs for the current user. Also returns site-wide briefs. Calls `record_push` per returned brief (counts against governor).
 
+Scoped by recipient, **with no role override**: an admin sees only briefs addressed to them or to `site-{site_id}`. The demo loader addresses its briefs to `engineer@`, `reliability@` and `field_worker@`, so an admin login shows an empty list; that is the scoping working, not missing data.
+
 **Auth required:** Yes
 
 **Query params:**

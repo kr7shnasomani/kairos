@@ -10,7 +10,7 @@ function AssetLink({ asset }: { asset: HierarchyAsset }) {
   return (
     <Link href={`/assets/${asset.asset_id}`} className="tabular font-semibold text-accent hover:underline">
       {asset.asset_id}
-      {asset.name && <span className="font-normal text-muted"> · {asset.name}</span>}
+      {asset.name && <span className="font-normal text-muted">, {asset.name}</span>}
     </Link>
   );
 }

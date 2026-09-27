@@ -6,7 +6,7 @@ import { use, useEffect, useState } from "react";
 import type { OperationalEvent, EventPriority } from "@/lib/types";
 import { getEvent, ackEvent } from "@/lib/api";
 import { getMe } from "@/lib/auth";
-import { Button, StatusBadge, EmptyState, PageHeader } from "@/components/ui";
+import { Button, ButtonLink, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { DetailSkeleton } from "@/components/skeleton";
 import { relativeTime, triggerLabel } from "@/lib/utils";
 
@@ -66,9 +66,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               lede={
                 <>
                   {event.asset_id && <span className="tabular text-accent">{event.asset_id}</span>}
-                  {event.asset_id && " · "}
+                  {event.asset_id && ", "}
                   {relativeTime(event.occurred_at)}
-                  {event.site_id && ` · ${event.site_id}`}
+                  {event.site_id && `, ${event.site_id}`}
                 </>
               }
               actions={
@@ -97,8 +97,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                   <h2 className="text-sm font-semibold text-ink">Capture knowledge from <span className="tabular">{event.payload.work_order_id}</span></h2>
                   <p className="mt-0.5 text-caption text-muted">Answer the micro-interview or record a voice note. Both go to quarantine for engineering review.</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link href={`/field/elicitation/${encodeURIComponent(event.payload.work_order_id)}`} className="inline-flex h-9 items-center rounded-lg bg-accent px-3.5 text-body font-semibold text-on-accent hover:brightness-105">Knowledge capture</Link>
-                    <Link href={`/field/voice/${encodeURIComponent(event.payload.work_order_id)}`} className="inline-flex h-9 items-center rounded-lg border border-line px-3.5 text-body font-semibold text-ink hover:bg-surface-2">Voice note</Link>
+                    <ButtonLink href={`/field/elicitation/${encodeURIComponent(event.payload.work_order_id)}`} variant="primary">Knowledge capture</ButtonLink>
+                    <ButtonLink href={`/field/voice/${encodeURIComponent(event.payload.work_order_id)}`}>Voice note</ButtonLink>
                   </div>
                 </section>
               )}

@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Tooltip, XAxis, YAxis } from "recharts";
 import { AXIS, ChartCard, GRID, TOOLTIP } from "@/components/charts";
-import { MetricCard, PageHeader, StatusBadge } from "@/components/ui";
+import { ButtonLink, MetricCard, PageHeader, StatusBadge } from "@/components/ui";
 import type { Fetched } from "@/lib/api";
 import { getComplianceDashboard, getConflicts, getEvents, getHealthDetailed, getQuarantine, getSlaReport } from "@/lib/api";
 import { label } from "@/lib/labels";
@@ -118,7 +118,7 @@ export default function ManagementPage() {
   return (
     <div data-testid="overview-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Overview · All functions"
+        eyebrow="Overview"
         title="Plant overview"
         lede="Situational awareness across knowledge, conflicts, and compliance."
         actions={
@@ -129,12 +129,9 @@ export default function ManagementPage() {
             >
               <StatusBadge tone={plantTone}>Plant state{plantState ? `: ${plantState}` : ""}</StatusBadge>
             </Link>
-            <Link
-              href="/management/cross-site"
-              className="inline-flex min-h-11 items-center border border-line px-3 text-caption font-semibold text-ink outline-offset-2 transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
-            >
+            <ButtonLink href="/management/cross-site" className="min-h-11 text-caption">
               Cross-site patterns
-            </Link>
+            </ButtonLink>
           </div>
         }
       />

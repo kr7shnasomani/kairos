@@ -274,13 +274,13 @@ function CoverageIndicator({ assetId }: { assetId: string }) {
     cov.coverage_type === "direct" ? "verified" : cov.coverage_type === "macro" ? "caution" : "danger";
   const label =
     cov.coverage_type === "direct"
-      ? `Direct sensors · ${cov.sensor_tags.slice(0, 2).join(", ")}${cov.sensor_tags.length > 2 ? "…" : ""}`
+      ? `Direct sensors, ${cov.sensor_tags.slice(0, 2).join(", ")}${cov.sensor_tags.length > 2 ? "…" : ""}`
       : cov.coverage_type === "macro"
       ? "Macro monitoring only"
       : "No sensor coverage";
 
   return (
-    <div className="absolute bottom-12 left-14 z-10">
+    <div className="absolute top-4 left-4 z-10">
       <StatusBadge tone={tone}>{label}</StatusBadge>
     </div>
   );

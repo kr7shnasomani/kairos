@@ -30,7 +30,7 @@ function GovernorBanner({ response }: { response: BriefsResponse }) {
           <p className="mt-0.5 text-caption text-muted">
             {gov.push_count_last_hour}/{gov.ceiling} pushes this hour
             {response.next_delivery_allowed_at && (
-              <> · next delivery {relativeTime(response.next_delivery_allowed_at)}</>
+              <>, next delivery {relativeTime(response.next_delivery_allowed_at)}</>
             )}
           </p>
         </div>
@@ -50,7 +50,7 @@ function GovernorBanner({ response }: { response: BriefsResponse }) {
             <li key={b.brief_id} className="flex items-baseline justify-between gap-3 text-caption">
               <span className="min-w-0 flex-1 truncate text-muted">
                 <span className="font-medium text-fg">{b.priority}</span>
-                {b.asset_id ? <> · {b.asset_id}</> : null} · {b.headline}
+                {b.asset_id ? <>, {b.asset_id}</> : null}, {b.headline}
               </span>
               <span className="shrink-0 text-muted">{relativeTime(b.delivered_at)}</span>
             </li>

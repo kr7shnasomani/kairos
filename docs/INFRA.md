@@ -219,6 +219,7 @@ make logs         # Tail all service logs
 make ps           # Container status
 make seed         # seed_regulations.py + seed_users.py
 make load-dataset # Load dataset/ through the real pipeline (ARGS=--fast to skip docs)
+make redate-demo  # Shift demo event dates so the newest is yesterday (dry run; APPLY=1 writes cloud)
 # Deletes ONLY the prefixes/ids named in purge_test_data.py — NOT `WO-*` or `DOC-*`.
 # Those wildcards are the mental model that once DETACH DELETEd four real documents:
 # real ids are `DOC-` + 12 random chars, so a bare `DOC-X` prefix matched ~1 in 36.
@@ -267,7 +268,7 @@ docker exec kairos-backend-api python scripts/seed_regulations.py
 # Run tests — full suite (needs the stack up; use local stores, never cloud)
 docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120
 
-# Run the service-free tests with NO stack running at all (519 tests, 45 files, no secrets, no network).
+# Run the service-free tests with NO stack running at all (524 tests, 46 files, no secrets, no network).
 # This is what CI's tier-1 `unit` job runs. Re-measured 2026-09-15. The list must match AGENTS.md,
 # docs/TESTS.md and .github/workflows/tests.yml.
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \
@@ -278,7 +279,7 @@ attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,
 quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
 form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
 ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
-document_extraction_view,image_utils,ocr_review_release,supabase_http}.py
+document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo}.py
 
 # Lint the backend exactly as CI does (pinned ruff + backend/ruff.toml)
 docker run --rm -v "$(pwd)/backend:/b" -w /b ghcr.io/astral-sh/ruff:0.16.0 check .
@@ -305,3 +306,11 @@ curl -X POST http://localhost:8090/eam/sync
 ```bash
 make dev → make init-all → make seed → make load-dataset
 ```
+
+### Before a demo: warm the stack
+
+The first minutes after `make dev` are CPU-bound (Turbopack compiling each route on first visit,
+Elasticsearch booting, cold Aura connections). OPA decisions then take >2 s, `_ask_opa` times out, and a page
+that fires several reads at once trips the frontend's 4 s budget ("signal timed out"). Wait for
+`curl -s localhost:8000/health/detailed` to report `"status":"ready"`, then open `/management` once before
+demoing. Nothing is broken; a retry succeeds once warm.

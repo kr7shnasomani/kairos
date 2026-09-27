@@ -177,8 +177,8 @@ Done 2026-09-22: all static routes (36 then, 34 after the two system pages were 
 state, no horizontal scroll, no rounded chrome left (radius 2–99px on any element wider than
 40px), and every page h1 at Instrument 500 / 40px (desktop). Screenshots reviewed for
 Overview, Governance, Assets, Compliance, Copilot and Graph in light, Overview in dark, the
-collapsed rail, 1920px (frame rails) and 375px. `tsc` clean, vitest 272/273: the one failure is
-the date-bound offboarding fixture, which fails on unchanged code too.
+collapsed rail, 1920px (frame rails) and 375px. `tsc` clean; vitest green apart from the date-bound offboarding fixture, which fails on
+unchanged code too (272/273 at the latest run, 2026-09-27).
 **Not done:** high-contrast palette screenshots; contrast re-measurement (every text/ground
 pair introduced reuses an already-measured token pair); dynamic `[id]` routes beyond the ones
 reached by clicking through.
@@ -252,6 +252,91 @@ explicit widths (headers and cells were clipping: "Complianc", "OEM manua"); sig
 lines per row (one line broke words mid-syllable at ~360px); health cells show the service name
 in full, with the redundant sixfold "Healthy" moved to `sr-only` (visible, and toned, the moment
 a service is degraded or down).
+
+### Follow-up: header scale, rail collapse, ticks, one hover idiom ✅ (2026-09-27)
+**Header scale.** Not a missing template — 41 of 44 pages already use `PageHeader`; `compact`
+(20px, for per-record views) was set on three *workspaces*: `/field/voice`, `/field/deviation`,
+`/compliance/audit-pack`. Dropped there, kept on the `[id]`/`[workOrderId]` views. `/login`'s h1
+gained `sm:text-hero`; the off-boarding session title (`text-subtitle`, body font) now uses the
+display face at `text-title`. `field/voice/page.test.tsx` pins the size so it cannot drift back.
+**Rule: `compact` is for per-record views only.**
+
+**Rail collapse.** Collapsing used to *grow* the two blocks above the nav — the brand row restacked
+to hold the toggle (56→102px) and the actions row stacked (52→96px) — pushing every icon ~90px
+down. Now the toggle lives in the rail foot (beside the account row expanded, under it collapsed:
+the foot may grow, it only costs scroll height) and the collapsed rail keeps Search alone
+(`[data-rail-ingest]` is hidden; Ingest stays on ⌘K and `/documents`). Both blocks are 56px + 52px
+in both states. Measured after: first nav icon at **120px expanded and collapsed**, 0px drift,
+no nav overflow at 1440x900 — re-confirmed after the section headings were removed.
+
+**Rail rows are the same height in both states.** Removing the headings was not enough: a row's
+height came from its *content*, and hiding the label dropped it from 19.5px (the label's line box)
+to 18px (the bare icon). That 1.5px compounded — the last icon landed 20px off its expanded
+position — and the collapsed rail also used a smaller section gap (0.5rem vs 1rem), adding 8px per
+group boundary. Both are gone: `[data-rail] .rail-link` has a `min-height` floor (2.25rem, 2.125rem
+under `max-height: 1020px`) and there is now one section gap for both states. Measured: **0px drift
+on every row**, engineer (14) and admin (16 + governor pill), expanded and collapsed, with no nav
+overflow at 1440x900. The Governor pill hides when collapsed — "0/6" with no label is a riddle, and
+its row is what tipped the collapsed admin rail into scrolling.
+
+**Section headings gone.** `OPERATE / ANALYZE / ASSURE / KNOWLEDGE` were collapsible buttons that
+`display:none`'d when the rail collapsed, so the icon column re-flowed on every toggle. Removed,
+along with the per-group collapse state. The grouping survives as spacing (`--rail-section-gap`,
+raised to 1rem now that ~90px of chrome is gone) and as each list's `aria-label`, and the ⌘K
+palette still groups results by the same `NAV` section names. Rail now has ~164px spare at
+1440x900 (was 72px).
+
+**Corner ticks.** Removed from `EmptyState` and the login panel — landing decoration, and both were
+already broken outside `.landing`: the EmptyState one painted *nothing* (`--lp-accent` is undefined
+there, so `.lp-tick--solid`'s background computed to transparent) and the login one rendered a
+*white* square (`.sidebar-scope` does not remap `--canvas`). `.lp-tick` stays in `globals.css` for
+the landing's own 6 call sites.
+
+**One hover idiom.** `.fill-sweep` in `globals.css`: a `::after` panel scaling from the left over
+240ms — the calm reading of the landing's 72-span pixel wipe, with no extra DOM, so icon-only
+squares get it too. It fills `--sweep` (`#0b1015`), deliberately **not** `--ink`, which is
+near-white in dark mode and would erase the label mid-sweep. Applied to `Button` variants
+`primary`/`danger` (replacing `hover:brightness-105`, which *lightened* the accent) and to the new
+`ButtonLink` (Next `<Link>` cannot come out of `<Button>`). 16 hand-rolled accent buttons migrated
+onto the two primitives, which also fixed two with no hover at all and two that snapped with no
+transition. The round record button keeps a colour change — a left-to-right sweep clips oddly on a
+circle.
+
+### Follow-up: separators, hover coverage, tile parity ✅ (2026-09-27)
+**No more `·` in the workspace** (the landing keeps its own, it is out of scope here). All 25 eyebrows are now the area alone (`Overview`, `Assure`, `Governance`) — the
+page title already names the page. The other ~84 in-app dots became commas, except label+value
+pairs which lost the separator entirely: `L3 Standard` (`authorityLabel`, feeds every
+AuthorityBadge), `Governor active`, `Low confidence 40%`, `Snapshot <date>`, `Read-only <role>`,
+`Overrides 7d`, and the datastore names shortened to `Neo4j` / `Qdrant` / `Redis` / `FastAPI`.
+The governance loading pill `···` is now `…`. Tests updated with the strings.
+
+**The sweep covers every button.** `ghost` was left out, so secondary actions like *Cross-site
+patterns* still did nothing on hover. All three variants sweep now, and `.fill-sweep:hover` flips
+`color` to `--on-sweep` (unlayered, so it beats the control's own `text-*` utility) — a ghost
+button's ink label has to invert once the ink is under it. Migrated the last hand-rolled
+secondaries: the Overview *Cross-site patterns* link, both `/assets` header actions
+(`identity-action.tsx`), the nonconformance RCA link.
+
+**The sweep inverts.** `--sweep` is the opposite of its ground, or it disappears into it:
+near-black on white, near-white on the dark canvas, and `.sidebar-scope` flips it too — an ink
+sweep on the ink rail swallowed the Ingest `+` whole.
+
+**KPI tiles hover the same everywhere.** Overview's tiles were links (so they lifted) while
+Governance's were inert. The four Governance tiles now deep-link to their queues
+(`/governance/conflicts`, `/quarantine`, `/sla`) and hover identically. Tiles with no destination
+stay inert on purpose — a hover that leads nowhere is a lie. Tile height 104px → 96px with tighter
+internal spacing; the skeleton follows it (zero layout shift, pinned by `ui-metric.test.tsx`).
+
+### Follow-up: two landing edits ✅ (2026-09-27)
+The landing is otherwise out of scope for this document, but two changes were made there on
+request: the **Developers** footer column was removed (grid narrowed 3 → 2 columns), and a
+**demo player** was added behind a single switch. Paste a YouTube link into `DEMO_YOUTUBE_URL`
+(`app/page.tsx`) and the `#demo` section, the header's Demo cell and the hero CTA's in-page scroll
+all appear; leave it empty and none of it renders and the CTA keeps leaving for
+`DEMO_FALLBACK_URL`. The player is a **facade** — the poster is the page's own `lp-media` panel and
+YouTube is contacted only on press (`youtube-nocookie`), so the embed costs nothing on first load.
+URL parsing lives in `lib/youtube.ts` with a test over all five link shapes, because a silent
+`null` would mean the section simply never appears.
 
 ## Guardrails (from CLAUDE.md, unchanged by this plan)
 Tokens only, no hex in markup. Tailwind v4 syntax. No new npm deps. `RefusalCard` stays the only

@@ -37,7 +37,6 @@ export default function VoiceCapturePage() {
   return (
     <div data-testid="field-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        compact
         className="mb-6"
         eyebrow="Field capture"
         title="Voice note"
@@ -67,7 +66,7 @@ export default function VoiceCapturePage() {
               <button
                 onClick={submit}
                 disabled={!tag.trim()}
-                className="h-[52px] w-full rounded-xl bg-accent text-subtitle font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-accent"
+                className="fill-sweep h-[52px] w-full bg-accent text-subtitle font-semibold text-on-accent transition-transform duration-150 ease-out active:scale-[0.99] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-accent"
               >
                 {tag.trim() ? "Submit for transcription" : "Enter a tag to submit"}
               </button>

@@ -46,6 +46,31 @@ registers a demo **off-boarding programme** (departing expert `ramesh.kumar@kair
 sessions) via the real `POST /elicitation/offboarding` — idempotent, so re-running it won't duplicate. The
 per-session interview questions are then generated asynchronously by the off-boarding Celery worker (NIM).
 
+### Keeping it current for a demo
+
+The four event JSONs carry fixed dates (2026-03-22, 2026-07-15) and the loader copies them verbatim, so as
+the calendar moves on the events age out of the RCA and recurring-failure windows (90/30 days) and the
+Overview trend ends in the past. Everything else the loader writes (SLA deadlines, brief times) is already
+relative to load time. Shift the data, not a clock:
+
+```bash
+make redate-demo           # dry run: prints the anchor, the shift and every before/after
+make redate-demo APPLY=1   # writes: cloud Supabase + Neo4j
+```
+
+One whole-day shift moves the newest **golden** event to "yesterday" and every other golden event by the
+same amount, so order, spacing and time of day are kept. Golden means the rows the loader created from these
+four files, matched with the loader's own mapping on (source system, event type, work order / PTW id / shift
+lead). Events created live during a demo, or by a QA sweep, never match, so they can neither become the
+anchor nor be pushed into the future. The off-boarding programme is shifted separately (first interview →
+yesterday). Re-running on the same day shifts by 0.
+
+Writes are ordered so a re-run after any failure is safe: Neo4j first with absolute values, then all golden
+events in one bulk upsert (one transaction); per off-boarding programme the retirement date, then its
+interviews in one upsert, with the retirement date put back if that fails. `APPLY=1` modifies the golden
+stores; no benchmark question pins an event date (checked 2026-09-27), but re-run the benchmark after the
+first apply.
+
 ## Using it as a benchmark
 
 Because `00_KAIROS_CANON.md` fixes every fact, it is the answer key for the Problem Statement's evaluation

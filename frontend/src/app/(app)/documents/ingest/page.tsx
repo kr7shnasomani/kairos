@@ -121,7 +121,7 @@ export default function IngestPage() {
         Documents
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Knowledge · Document ingestion" title="Ingest a document" lede="The entry point of the platform. Files are stored byte-for-byte in the immutable vault and run through the extraction pipeline. Identical files (same SHA-256) are de-duplicated, never re-stored." />
+      <PageHeader className="mt-4" eyebrow="Knowledge" title="Ingest a document" lede="The entry point of the platform. Files are stored byte-for-byte in the immutable vault and run through the extraction pipeline. Identical files (same SHA-256) are de-duplicated, never re-stored." />
 
       {!canIngest && (
         <div className="mt-5 rounded-xl border border-line bg-surface p-5 text-body text-muted">

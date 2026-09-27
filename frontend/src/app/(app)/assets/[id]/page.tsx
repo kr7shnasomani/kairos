@@ -37,7 +37,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           className="px-4 py-5 sm:px-5"
           eyebrow={a.asset_id}
           title={a.name}
-          lede={<>{a.equipment_class.replaceAll("_", " ")}{a.parent && <> · Parent {a.parent}</>}</>}
+          lede={<>{a.equipment_class.replaceAll("_", " ")}{a.parent && <>, Parent {a.parent}</>}</>}
           actions={
             <>
               <span className="inline-flex h-[22px] items-center gap-1.5 bg-surface-2 px-2 text-label font-semibold" style={{ color: a.criticalityColor }}>

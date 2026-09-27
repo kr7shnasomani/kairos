@@ -93,6 +93,6 @@ describe("KnowledgeGraph", () => {
 
     render(<KnowledgeGraph assetId="P-101" />);
 
-    expect((await screen.findByText("No sensor coverage")).parentElement).toHaveClass("bottom-12", "left-14");
+    expect((await screen.findByText("No sensor coverage")).parentElement).toHaveClass("top-4", "left-4");
   });
 });

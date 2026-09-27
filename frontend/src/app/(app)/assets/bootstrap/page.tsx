@@ -94,7 +94,7 @@ export default function BootstrapPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Operate · Asset register"
+        eyebrow="Operate"
         title="Asset identity confirmation"
         lede="Review provisional equipment records and approve only identities that belong to a canonical asset."
       />
@@ -157,7 +157,7 @@ export default function BootstrapPage() {
                   </div>
                   <div className="min-w-0 text-label text-muted">
                     <p className="truncate font-medium text-ink">{p.equipment_class.replaceAll("_", " ")}</p>
-                    <p className="mt-0.5 truncate">Source · {(p.eam_source || "manual").replaceAll("_", " ")}</p>
+                    <p className="mt-0.5 truncate">Source: {(p.eam_source || "manual").replaceAll("_", " ")}</p>
                   </div>
                   <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id || !me} onClick={() => confirm(p)}>
                     {busy === p.asset_id ? "Confirming…" : "Confirm identity"}

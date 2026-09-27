@@ -25,12 +25,21 @@ describe("Home", () => {
     for (const link of workspaceLinks) expect(link).toHaveAttribute("href", "/login");
     expect(screen.queryByRole("link", { name: /sign in/i })).not.toBeInTheDocument();
 
-    // The hero leads with the recording. It leaves the site, so it must say so
-    // to assistive tech and must not hand the opener a live window reference.
+    // The hero leads with the recording. Two valid shapes, and which one renders
+    // depends only on DEMO_YOUTUBE_URL: with a video configured the CTA scrolls to
+    // the in-page player; without one it leaves for the recording, and then it must
+    // say so to assistive tech and must not hand the opener a live window reference.
     const demo = screen.getByRole("link", { name: /watch demo/i });
-    expect(demo).toHaveAttribute("href", expect.stringContaining("http"));
-    expect(demo).toHaveAttribute("target", "_blank");
-    expect(demo).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+    const href = demo.getAttribute("href") ?? "";
+    if (href.startsWith("#")) {
+      expect(href).toBe("#demo");
+      expect(document.getElementById("demo")).not.toBeNull();
+      expect(demo).not.toHaveAttribute("target");
+    } else {
+      expect(href).toContain("http");
+      expect(demo).toHaveAttribute("target", "_blank");
+      expect(demo).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+    }
 
     // …and the path into the page itself is still there, unchanged.
     expect(screen.getByRole("link", { name: /see how it works/i })).toHaveAttribute("href", "#how");

@@ -185,10 +185,12 @@ export default function CopilotPage() {
           type="button"
           onClick={newChat}
           aria-label="Start a new chat"
-          className="absolute right-14 top-4 z-40 inline-flex h-8 items-center gap-1.5 border border-line px-3 text-caption font-medium text-muted transition-colors hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))] hover:bg-accent-soft hover:text-accent"
+          className="fill-sweep absolute right-14 top-4 z-40 inline-flex h-8 items-center gap-1.5 border border-line px-3 text-caption font-medium text-muted"
         >
-          <Icon name="plus" size={14} />
-          New chat
+          <span className="relative z-10 inline-flex items-center gap-1.5">
+            <Icon name="plus" size={14} />
+            New chat
+          </span>
         </button>
       )}
 

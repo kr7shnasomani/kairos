@@ -62,7 +62,7 @@ describe("unreported confidence is not zero confidence", () => {
 
   // Regression: the backend returns confidence: null whenever the synthesis output carries no
   // parseable CONFIDENCE marker — 130 of 573 non-refused answers in audit_log, ~23%. The client
-  // coerced that to 0, so a perfectly good answer rendered "Low confidence · 0%" and an empty
+  // coerced that to 0, so a perfectly good answer rendered "Low confidence 0%" and an empty
   // meter: a score the system never produced.
   it("does not call a null-confidence answer low confidence", () => {
     render(<Answer data={{ ...base, answer: "Seal replaced on 12 Mar.", confidence: null }} />);
@@ -83,7 +83,7 @@ describe("unreported confidence is not zero confidence", () => {
   it("still warns when the model really did report low confidence", () => {
     render(<Answer data={{ ...base, answer: "Possibly 16 bar.", confidence: 0.4 }} />);
 
-    expect(screen.getByText(/Low confidence · 40%/i)).toBeInTheDocument();
+    expect(screen.getByText(/Low confidence 40%/i)).toBeInTheDocument();
   });
 
   it("still renders a real meter when confidence is reported", () => {

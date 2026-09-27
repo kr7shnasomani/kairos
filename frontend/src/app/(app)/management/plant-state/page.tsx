@@ -85,7 +85,7 @@ export default function PlantStatePage() {
             <span className="text-body text-ink">{activeMeta!.desc}</span>
             <span className="tabular ml-auto text-label text-muted">
               {current.set_by && current.set_at
-                ? `Set by ${current.set_by} · ${fmtRelTime(current.set_at)}`
+                ? `Set by ${current.set_by}, ${fmtRelTime(current.set_at)}`
                 : "Site default"}
             </span>
           </div>

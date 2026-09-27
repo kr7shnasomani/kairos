@@ -150,7 +150,7 @@ function RegisterAssetForm({ userId, siteId }: { userId: string; siteId: string 
         <input required value={form.facility_id} onChange={update("facility_id")} placeholder="Facility code, e.g. RPC" className={FIELD} />
       </label>
       <div className="flex flex-col justify-end gap-1">
-        <span className="text-label text-muted">Site · <span className="tabular font-semibold text-ink">{siteId || "—"}</span> (from your account)</span>
+        <span className="text-label text-muted">Site, <span className="tabular font-semibold text-ink">{siteId || "—"}</span> (from your account)</span>
         <Button type="submit" variant="primary" className="h-11 md:h-9" disabled={busy || !siteId}>
           {busy ? "Registering…" : "Register asset"}
         </Button>
@@ -211,8 +211,8 @@ function BulkImportPanel({ siteId }: { siteId: string }) {
       {parsed && (
         <div className="grid gap-2">
           <p className="text-caption text-ink">
-            <span className="font-semibold">{parsed.file}</span> · {parsed.rows.length} row(s) ready
-            {parsed.errors.length > 0 && <span className="text-danger"> · {parsed.errors.length} row(s) need fixing</span>}
+            <span className="font-semibold">{parsed.file}</span>, {parsed.rows.length} row(s) ready
+            {parsed.errors.length > 0 && <span className="text-danger">, {parsed.errors.length} row(s) need fixing</span>}
           </p>
           {parsed.errors.length > 0 && (
             <ul className="list-disc space-y-0.5 pl-5 text-label text-danger">
@@ -230,8 +230,8 @@ function BulkImportPanel({ siteId }: { siteId: string }) {
       {result && (
         <p role="status" className="text-caption text-ink">
           <span className="font-semibold text-verified">{result.created} created</span>
-          {skipped > 0 && <span className="text-muted"> · {skipped} already registered or duplicated</span>}
-          {rejected > 0 && <span className="text-danger"> · {rejected} rejected (site or validation)</span>}
+          {skipped > 0 && <span className="text-muted">, {skipped} already registered or duplicated</span>}
+          {rejected > 0 && <span className="text-danger">, {rejected} rejected (site or validation)</span>}
         </p>
       )}
     </div>
@@ -267,7 +267,7 @@ export default function RegisterAssetPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Operate · Asset register"
+        eyebrow="Operate"
         title="Register assets"
         lede="Add equipment to the canonical registry one at a time, or import the golden record from your EAM system."
       />

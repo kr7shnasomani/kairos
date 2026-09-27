@@ -233,7 +233,7 @@ export function Answer({ data, query = "", streaming }: {
         <div className="rounded-lg border border-[color-mix(in_srgb,var(--caution)_35%,var(--line))] bg-[color-mix(in_srgb,var(--caution)_6%,var(--surface))] p-3.5">
           <div className="mb-2 flex items-center gap-2">
             <StatusBadge tone="caution">
-              Low confidence · {confidencePct}%
+              Low confidence {confidencePct}%
             </StatusBadge>
           </div>
           {SYNTHESIS_ENABLED && data.answer && (
@@ -268,7 +268,7 @@ export function Answer({ data, query = "", streaming }: {
             className="flex w-full items-center gap-1.5 text-micro font-bold uppercase tracking-[0.1em] text-muted hover:text-ink"
           >
             <Icon name="caret-right" size={12} className={cn("shrink-0 transition-transform", sourcesOpen && "rotate-90")} />
-            {data.refused ? "Sources — verify directly" : "Sources"} · {data.sources.length}
+            {data.refused ? "Sources — verify directly" : "Sources"}, {data.sources.length}
           </button>
           {sourcesOpen && (
           <div className="mt-2 space-y-2">

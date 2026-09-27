@@ -140,7 +140,7 @@ export default function EventsPage() {
   return (
     <div data-testid="events-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Operate · Live events"
+        eyebrow="Operate"
         title="Operational events"
         lede="Monitor the event sources that trigger proactive briefs and compound operational context."
         actions={canEmit && <Button variant="primary" className="h-11 sm:h-9" onClick={() => setShowEmitter((open) => !open)}>{showEmitter ? "Close emitter" : "Emit event"}</Button>}
@@ -176,7 +176,7 @@ export default function EventsPage() {
       <ChartContainer
         className="mt-4"
         title="Event volume"
-        sub="Events per day by priority · last 50 events"
+        sub="Events per day by priority, last 50 events"
         height={160}
         loading={loading}
         empty={trend.length === 0 && "No events in window"}

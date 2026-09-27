@@ -55,9 +55,9 @@ export default function VoicePage() {
           {blob && (
             <button
               onClick={submit}
-              className="h-[52px] w-full rounded-xl bg-accent text-subtitle font-semibold text-on-accent transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-accent"
+              className="fill-sweep h-[52px] w-full bg-accent text-subtitle font-semibold text-on-accent transition-transform duration-150 ease-out active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-accent"
             >
-              Submit for transcription
+              <span className="relative z-10">Submit for transcription</span>
             </button>
           )}
         </div>

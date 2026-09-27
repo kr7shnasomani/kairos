@@ -22,7 +22,7 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
 you will reset, never on the dataset you are about to demo or benchmark.
 
-### Tier 1 — service-free (519 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (524 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push.
 
@@ -35,10 +35,10 @@ attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,
 quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
 form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
 ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
-document_extraction_view,image_utils,ocr_review_release,supabase_http}.py
+document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo}.py
 ```
 
-All **45** files, **519 tests** (2026-09-22). The seven newest:
+All **46** files, **524 tests** (2026-09-27). Recent additions:
 `test_alias_expansion.py` — a query naming a confirmed alias (P-101) also searches its canonical asset.
 `test_ner_fallback.py` — NIM NER calls are capped at 4 concurrent; a timeout or 5xx is retried but a 4xx
 is not; a long document is extracted in chunks and merged, and a failed chunk keeps the others while
@@ -58,6 +58,10 @@ mixed UTC offsets by instant, and reads a naive timestamp as UTC.
 `test_supabase_http.py` — Supabase REST reads survive a dropped pooled HTTP/2 connection: a GET/HEAD that hits a
 dead connection is retried once, a second failure still raises, a write is never replayed, and every PostgREST
 session in the process goes through the retry transport.
+`test_redate_demo.py` — the demo re-date shift (`scripts/redate_demo.py`): only events the loader created from
+the dataset move (a live or QA event newer than the story neither anchors nor moves), the newest lands on
+"yesterday", spacing and time of day are kept, payload and Neo4j timestamps keep their source offset, and a
+same-day re-run shifts by 0.
 `test_synthesis_stream.py` also pins the streaming route's terminal events: a successful stream ends on `done` with
 no `error`, and a failed one ends on `error` without exposing the exception text.
 `test_image_utils.py` — the one shared NIM image downscale helper (OCR and P&ID): an image that fits after JPEG
@@ -141,7 +145,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 519 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 524 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud

@@ -7,9 +7,9 @@ import type { RcaPack } from "./types";
 // Canonical asset IDs so the RCA pack actually populates against live data.
 // (P-101/HX-301 are an alias / non-existent tag — they return an empty pack.)
 export const RCA_PRESETS = [
-  { asset_id: "EQ-101", failure_code: "SEAL-FAIL", label: "EQ-101 · mechanical seal failure" },
-  { asset_id: "HE-301", failure_code: "TUBE-FOUL", label: "HE-301 · tube fouling" },
-  { asset_id: "EQ-101", failure_code: "RELIEF-SET", label: "EQ-101 · relief-valve setpoint (safety-critical)" },
+  { asset_id: "EQ-101", failure_code: "SEAL-FAIL", label: "EQ-101, mechanical seal failure" },
+  { asset_id: "HE-301", failure_code: "TUBE-FOUL", label: "HE-301, tube fouling" },
+  { asset_id: "EQ-101", failure_code: "RELIEF-SET", label: "EQ-101, relief-valve setpoint (safety-critical)" },
 ];
 
 const SEAL_PACK: RcaPack = {

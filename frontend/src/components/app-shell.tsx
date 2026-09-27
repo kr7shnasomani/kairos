@@ -102,7 +102,7 @@ function GovernorPill({ userId }: { userId: string }) {
     <div
       title={`Governor: ${gov.push_count_last_hour}/${gov.ceiling} briefs/hr`}
       className={cn(
-        "rail-link mx-3 my-1 flex items-center justify-between rounded-lg px-2.5 py-1.5 text-label",
+        "rail-governor rail-link mx-3 my-1 flex items-center justify-between px-2.5 py-1.5 text-label",
         suppressed
           ? "bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-danger"
           : "bg-surface-2 text-muted",
@@ -110,7 +110,7 @@ function GovernorPill({ userId }: { userId: string }) {
     >
       {/* Collapsed the wording goes, the count stays — the ratio is the signal,
           and `title` above still carries the full sentence. */}
-      <span className="rail-label font-semibold">{suppressed ? "Governor · suppressed" : "Governor · active"}</span>
+      <span className="rail-label font-semibold">{suppressed ? "Governor suppressed" : "Governor active"}</span>
       <span className="tabular font-medium">{gov.push_count_last_hour}/{gov.ceiling}</span>
     </div>
   );
@@ -158,8 +158,6 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
   const pathname = usePathname();
   const [railCollapsed, toggleRail] = useRailCollapsed();
   const homeHref = role === "field_worker" ? "/briefs" : "/management";
-  // Collapse is per-group, default open, session-local (persistence = hydration churn for nothing).
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const shortcut = getSearchShortcut(typeof navigator === "undefined" ? undefined : navigator.platform);
   const sections = NAV
     .map((s) => ({ ...s, items: s.items.filter((it) => !it.roles || it.roles.includes(role)) }))
@@ -170,23 +168,11 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
       {/* Layout here is CSS, not `railCollapsed` — state is false on the first
           client render, so a state-driven row would paint the expanded layout
           inside a 68px rail for one frame on every load. */}
-      <div className="rail-brand-row flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-5">
+      {/* Fixed 56px in BOTH states. The collapse toggle lives at the foot precisely
+          so this row never has to grow to hold it: when it stacked here, collapsing
+          pushed the whole icon column ~90px down and nothing lined up any more. */}
+      <div className="rail-brand-row flex h-14 shrink-0 items-center gap-2 border-b border-line px-5">
         <BrandLink href={homeHref} />
-        {/* Exactly one toggle in the DOM. Collapsed it sits under the mark — beside
-            it there is no room. Placing it with state rather than CSS is what keeps
-            a second, hidden copy from shadowing it in the accessibility tree. */}
-        {collapsible && (
-          <button
-            type="button"
-            onClick={toggleRail}
-            aria-expanded={!railCollapsed}
-            aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
-            title={railCollapsed ? "Expand navigation" : "Collapse navigation"}
-            className="grid size-8 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <Icon name="chevron" className={cn("size-4 transition-transform duration-200 motion-reduce:transition-none", !railCollapsed && "rotate-180")} />
-          </button>
-        )}
       </div>
 
       {actions && (
@@ -207,65 +193,46 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
             onClick={actions.onCreate}
             aria-label="Ingest document"
             title="Ingest document"
-            className="grid size-9 shrink-0 place-items-center bg-accent text-on-accent transition-[filter] duration-150 ease-out hover:brightness-110"
+            data-rail-ingest
+            className="fill-sweep grid size-9 shrink-0 place-items-center bg-accent text-on-accent"
           >
-            <SharedIcon name="plus" className="size-4" />
+            <SharedIcon name="plus" className="relative z-10 size-4" />
           </button>
         </div>
       )}
 
+      {/* No section headings. They cost four rows of chrome, and collapsing the rail
+          hid them anyway, so the icon column re-flowed on every toggle. The grouping
+          survives as spacing plus each list's aria-label, and the ⌘K palette still
+          groups its results by the same NAV section names. */}
       <nav className="rail-nav flex-1 space-y-[var(--rail-section-gap,1.25rem)] overflow-y-auto px-3 pb-2 pt-5 scrollbar-none">
-        {sections.map((section) => {
-          const isOpen = !collapsed[section.group];
-          const list = (
-            <ul id={`nav-${section.group || "top"}`} className="space-y-1">
-              {section.items.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + "/");
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={onNavigate}
-                      aria-label={item.label}
-                      title={item.label}
-                      className={cn(
-                        "rail-link flex items-center gap-3 px-2.5 py-2 text-body transition-colors",
-                        // Square row with a 2px accent rule, the landing's active-cell mark.
-                        active
-                          ? "bg-surface-2 font-semibold text-ink shadow-[inset_2px_0_0_var(--accent)] [&>svg]:text-accent"
-                          : "text-muted hover:bg-surface-2 hover:text-ink",
-                      )}
-                    >
-                      <Icon name={item.icon} active={active} />
-                      <span className="rail-label">{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          );
-          if (!section.group) return <div key="top">{list}</div>;
-          return (
-            <div key={section.group}>
-              <button
-                type="button"
-                aria-expanded={isOpen}
-                aria-controls={`nav-${section.group}`}
-                onClick={() => setCollapsed((c) => ({ ...c, [section.group]: !c[section.group] }))}
-                // min-h-6: a 24px target (WCAG 2.5.8). At 19-21px the header sat within 12px of the
-                // first link below it, which the spacing exception does not cover.
-                className="rail-group-header flex min-h-6 w-full items-center gap-1 rounded px-2 pb-1.5 text-micro font-bold uppercase tracking-[0.1em] text-muted transition-colors hover:text-ink"
-              >
-                <Icon
-                  name="chevron"
-                  className={cn("size-3 transition-transform duration-150 ease-out", isOpen && "rotate-90")}
-                />
-                {section.group}
-              </button>
-              {isOpen && list}
-            </div>
-          );
-        })}
+        {sections.map((section) => (
+          <ul key={section.group || "top"} aria-label={section.group || undefined} className="space-y-1">
+            {section.items.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={onNavigate}
+                    aria-label={item.label}
+                    title={item.label}
+                    className={cn(
+                      "rail-link flex items-center gap-3 px-2.5 py-2 text-body transition-colors",
+                      // Square row with a 2px accent rule, the landing's active-cell mark.
+                      active
+                        ? "bg-surface-2 font-semibold text-ink shadow-[inset_2px_0_0_var(--accent)] [&>svg]:text-accent"
+                        : "text-muted hover:bg-surface-2 hover:text-ink",
+                    )}
+                  >
+                    <Icon name={item.icon} active={active} />
+                    <span className="rail-label">{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        ))}
 
       </nav>
 
@@ -273,12 +240,13 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
 
       {/* Account lives at the foot of the rail, as in Linear / Vercel / Notion.
           Settings, System Health (admins) and sign-out are inside the menu it opens. */}
+      <div className="rail-foot mx-3 mb-3 mt-2 flex items-center gap-2 border-t border-line pt-3">
       {actions ? (
         <button
           type="button"
           onClick={actions.onOpenUser}
           aria-label="Open user menu"
-          className="rail-link mx-3 mb-3 mt-2 flex items-center gap-3 border-t border-line px-2 pb-1 pt-3 text-left transition-colors hover:text-ink"
+          className="rail-link flex min-w-0 flex-1 items-center gap-3 px-2 py-1 text-left transition-colors hover:text-ink"
         >
           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-label font-bold text-ink">{actions.accountInitials}</span>
           <span className="rail-label min-w-0 flex-1 leading-tight">
@@ -288,12 +256,26 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
           <SharedIcon name="caret-up-down" className="rail-label size-4 shrink-0 text-muted" />
         </button>
       ) : (
-        <div className="mx-3 mb-4 mt-2 border-t border-line pt-2">
-          <Link href="/settings" onClick={onNavigate} aria-label="System Settings" title="System Settings" className="rail-link flex items-center gap-3 px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
-            <Icon name="settings" /><span className="rail-label">System Settings</span>
-          </Link>
-        </div>
+        <Link href="/settings" onClick={onNavigate} aria-label="System Settings" title="System Settings" className="rail-link flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
+          <Icon name="settings" /><span className="rail-label">System Settings</span>
+        </Link>
       )}
+      {/* Exactly one toggle in the DOM — a second, hidden copy would shadow it in
+          the accessibility tree. Collapsed, it drops under the account square:
+          growth at the foot costs scroll height, never icon alignment. */}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={toggleRail}
+          aria-expanded={!railCollapsed}
+          aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+          title={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+          className="grid size-8 shrink-0 place-items-center text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <Icon name="chevron" className={cn("size-4 transition-transform duration-200 motion-reduce:transition-none", !railCollapsed && "rotate-180")} />
+        </button>
+      )}
+      </div>
 
     </div>
   );

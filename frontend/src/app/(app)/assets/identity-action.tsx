@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui";
 import type { Role } from "@/lib/types";
 import { useRole } from "@/components/use-role";
-
-const ACTION = "inline-flex h-9 items-center rounded-lg border border-line px-3.5 text-body font-semibold text-ink transition-colors hover:bg-surface-2";
 
 /** Roles allowed to write asset master data — registering an asset and confirming a provisional
  *  identity or alias. Mirrors the API exactly: `POST /assets/`, `/assets/bulk` and the alias
@@ -18,11 +16,11 @@ export const MDM_ROLES: Role[] = ["engineer", "admin"];
 export function RegisterAssetAction() {
   const role = useRole();
   if (!MDM_ROLES.includes(role)) return null;
-  return <Link href="/assets/register" className={ACTION}>Register asset</Link>;
+  return <ButtonLink href="/assets/register">Register asset</ButtonLink>;
 }
 
 export function IdentityConfirmAction() {
   const role = useRole();
   if (!MDM_ROLES.includes(role)) return null;
-  return <Link href="/assets/bootstrap" className={ACTION}>Identity confirmation</Link>;
+  return <ButtonLink href="/assets/bootstrap">Identity confirmation</ButtonLink>;
 }

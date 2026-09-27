@@ -9,12 +9,12 @@ describe("MetricCard (KpiCard alias)", () => {
 
   it("loading skeleton and loaded card share the fixed min-height (zero layout shift)", () => {
     const loading = render(<MetricCard label="Assets" value={12} loading />);
-    expect(loading.container.firstElementChild).toHaveClass("min-h-[104px]");
+    expect(loading.container.firstElementChild).toHaveClass("min-h-[96px]");
     expect(screen.queryByText("Assets")).toBeNull();
     cleanup();
 
     const loaded = render(<MetricCard label="Assets" value={12} />);
-    expect(loaded.container.firstElementChild).toHaveClass("min-h-[104px]");
+    expect(loaded.container.firstElementChild).toHaveClass("min-h-[96px]");
     expect(screen.getByText("Assets")).toBeInTheDocument();
   });
 

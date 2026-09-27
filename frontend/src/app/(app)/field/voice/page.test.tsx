@@ -18,4 +18,11 @@ describe("VoiceCapturePage", () => {
     expect(screen.getByTestId("field-voice-context")).toHaveTextContent("Engineering review");
     expect(screen.getByLabelText(/Asset \/ work-order tag/)).toHaveClass("min-h-11");
   });
+
+  it("uses the full workspace title size, not the compact detail-view size", () => {
+    // `compact` is for per-record views (/assets/[id], /documents/[id]); this is a
+    // top-level page, and was 20px against every other page's 40px.
+    render(<VoiceCapturePage />);
+    expect(screen.getByRole("heading", { level: 1, name: "Voice note" })).toHaveClass("sm:text-hero");
+  });
 });

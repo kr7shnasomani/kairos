@@ -109,7 +109,7 @@ function TopologyPageInner() {
       <PageHeader
         compact
         className="mt-4 mb-5"
-        eyebrow="Knowledge · P&ID topology"
+        eyebrow="Knowledge"
         title={id}
         lede="Equipment, valves, instruments, and flow connections extracted from the P&ID drawing. Candidate topology until an engineer confirms it element by element — confirm or reject each element below."
       />
@@ -172,7 +172,7 @@ function TopologyPageInner() {
                 <p className="tabular mt-1 text-body font-semibold">
                   {topo.elements_verified} of {topo.elements_total} confirmed
                   {topo.elements_disputed > 0 && (
-                    <span className="text-danger"> · {topo.elements_disputed} disputed</span>
+                    <span className="text-danger">, {topo.elements_disputed} disputed</span>
                   )}
                 </p>
                 <p className="mt-2 text-label text-muted">

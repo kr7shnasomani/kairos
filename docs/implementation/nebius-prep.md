@@ -146,7 +146,7 @@ Done 21 Sep 2026. The design and the rules for adding a provider are documented 
 | Q3 | **Overview's "last 14 days" chart is flat at zero** on the demo data, whose events sit in July story time. Production-correct fix: when the window is empty, say so and show when the last event was ("No events in the last 14 days. Last event: 15 Jul"). Do **not** anchor the window to the dataset's dates: in production that would hide a genuinely quiet plant. | 1 to 2 h | Computed from the events the page already fetches, so no database change |
 | Q4 | **Done 22 Sep 2026.** **Login page cleanup.** Drop "Seeded users: admin, engineer, field_worker" (`app/login/page.tsx:132`) and relabel the demo button (`:127`). | 20 min | Stops the first screen reading as a dev build |
 | Q6 | **Done 22 Sep 2026.** **Explain Kairos's own concepts in place**: authority levels L1 to L5 on `AuthorityBadge`, blast radius, quarantine, candidate versus verified topology. Not industry terms like PTW or MoC, which plant users already know. | 1 to 2 h | A real need: these are this product's vocabulary, and the compliance and management personas are not engineers |
-| Q7 | **Done 22 Sep 2026** (compact-rhythm breakpoint 820px to 1020px, re-measured with 24px nav headers). **Nav overlap bug**: the "Governor, active" pill overlaps the Knowledge group at 1440x900, clipping "Documents". | 30 min | |
+| Q7 | **Done 22 Sep 2026** (compact-rhythm breakpoint 820px to 1020px, re-measured with 24px nav headers). **Nav overlap bug**: the "Governor, active" pill overlaps the Knowledge group at 1440x900, clipping "Documents". **Superseded 2026-09-27:** the nav headings are gone, rail rows have a `min-height` floor and the pill hides when collapsed; re-measured at 1440x900 as 0 overflow for both the engineer and the full admin rail, so the overlap cannot recur at that size. | 30 min | |
 | Q8 | **Resolved 22 Sep 2026, not a bug.** The lower Overview sections looked faded in an emulated, scaled browser window. In a normal window they fade in once scrolled into view, as designed. | done | |
 
 **Section 2 total: 1.5 to 3 days.**
@@ -229,18 +229,22 @@ write**, so the first real run needs an explicit go-ahead.
 **Where it stands.** A good foundation, so this is polish and information architecture, not a rebuild:
 about 150 design tokens with light and dark palettes, 21 shared primitives in `components/ui.tsx`,
 68 of 86 page files using them, 75 frontend test files, no hardcoded colours. The catch is scale:
-**48 routes, ~14k lines in pages, 2,234 `className` uses in page code**, so layout changes are
+**48 routes, ~14k lines in pages, 2,234 `className` uses in page code** (see the note below for
+the post-overhaul figures), so layout changes are
 page-by-page work.
 
-> These figures are a **2026-09-22 snapshot, taken before the overhaul began**, and the overhaul is
-> changing them (46 routes at the time of writing, two removed). Re-measure before quoting them; the
-> owning session's notes are in `ui-overhaul.md`.
+> These figures are a **2026-09-22 snapshot, taken before the overhaul began**, and the overhaul
+> changed them. As of 2026-09-27: **46 page files** (44 under `(app)` plus `/login` and the landing;
+> `/system-benchmarks` and `/system-information` were removed), which the e2e sweep numbers as **42
+> live routes** because it collapses some dynamic variants. Primitives grew by `ButtonLink` and the
+> `icon.tsx` set. Re-measure before quoting any of it; the owning session's notes are in
+> `ui-overhaul.md`.
 
 | Scope | Covers | Effort |
 |---|---|---|
 | **Tier 1** | Overview dashboard only: move "what needs me now" above the fold (attention items, briefs awaiting sign-off, riskiest assets), fix the dead chart (Q3) | 3 to 5 d |
 | **Tier 2** | The core daily-workflow screens: Overview, Copilot, Briefs, Asset detail, RCA, Quarantine. Chosen because users live there; the video happens to use the same ones | 8 to 12 d |
-| **Tier 3** | All 48 routes, navigation restructure, mobile field app | 20 to 30 d. **Not before 30 Oct** |
+| **Tier 3** | All routes (48 then, 46 now), navigation restructure, mobile field app | 20 to 30 d. **Not before 30 Oct** |
 
 | # | Item | Effort | Notes |
 |---|---|---|---|
@@ -313,7 +317,7 @@ engineer) runs on calendar time and should start whenever possible.
 | Q3 as first written (anchor the chart window to the dataset's dates) | Would hide a genuinely quiet period in production. Replaced by the honest empty-window message |
 
 Project debt found while doing this work (not hackathon-specific) is recorded in
-[`status.md` § Pending](./status.md#pending--as-of-2026-09-23), P10 to P14 (P9 is fixed), not repeated here.
+[`status.md` § Pending](./status.md#pending--as-of-2026-09-27), P10 to P14 (P9 is fixed), not repeated here.
 
 ## Decisions still open
 

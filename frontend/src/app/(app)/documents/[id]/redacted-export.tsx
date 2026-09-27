@@ -56,7 +56,7 @@ export function RedactedExport({ documentId }: { documentId: string }) {
           {counts.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {counts.map(([type, n]) => (
-                <span key={type} className="tabular rounded-md border border-line bg-surface-2 px-2 py-0.5 text-label text-muted">{type.replace(/_/g, " ")} · {n}</span>
+                <span key={type} className="tabular rounded-md border border-line bg-surface-2 px-2 py-0.5 text-label text-muted">{type.replace(/_/g, " ")}, {n}</span>
               ))}
             </div>
           )}

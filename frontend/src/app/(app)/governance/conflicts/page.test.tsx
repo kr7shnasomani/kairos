@@ -105,7 +105,7 @@ describe("parameter & sources column", () => {
 
     render(<ConflictsPage />);
 
-    await waitFor(() => expect(screen.getByText("DOC-AAA (L4) · DOC-BBB (L4)")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("DOC-AAA (L4), DOC-BBB (L4)")).toBeInTheDocument());
     expect(screen.queryByText(/—\s*vs\s*—/)).not.toBeInTheDocument();
   });
 

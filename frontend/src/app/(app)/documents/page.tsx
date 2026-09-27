@@ -1,7 +1,7 @@
 // Vault document list: every ingested source, active or superseded.
 import Link from "next/link";
 import { getDocuments, isForbidden } from "@/lib/api";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { ButtonLink, EmptyState, PageHeader } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 import { DocumentsTable } from "./_components/documents-table";
 
@@ -15,7 +15,7 @@ export default async function DocumentsPage() {
   return (
     <div data-testid="documents-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Knowledge · Evidence vault"
+        eyebrow="Knowledge"
         title="Documents"
         lede="Every source is stored byte-for-byte and never deleted. Superseding closes a validity window; it does not erase."
         actions={
@@ -26,12 +26,7 @@ export default async function DocumentsPage() {
             >
               Compare
             </Link>
-            <Link
-              href="/documents/ingest"
-              className="inline-flex h-9 items-center rounded-lg bg-accent px-3.5 text-body font-semibold text-on-accent transition-opacity hover:opacity-90"
-            >
-              Ingest document
-            </Link>
+            <ButtonLink href="/documents/ingest" variant="primary">Ingest document</ButtonLink>
           </>
         }
       />

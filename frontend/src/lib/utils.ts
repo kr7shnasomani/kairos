@@ -91,7 +91,7 @@ export function providerName(key: string): string {
 }
 
 export function authorityLabel(level: AuthorityLevel): string {
-  return `L${level} · ${AUTHORITY_NAMES[level]}`;
+  return `L${level} ${AUTHORITY_NAMES[level]}`;
 }
 
 // The five-level hierarchy from ARCHITECTURE.md (Layer 4). The short names above fit a badge; these

@@ -8,7 +8,7 @@
 .PHONY: help dev prod stop nuke logs ps \
         api workers connectors \
         init-neo4j init-qdrant init-all \
-        seed load-dataset purge-test-data wipe-local reset-local \
+        seed load-dataset redate-demo purge-test-data wipe-local reset-local \
         test test-api test-connectors \
         verify benchmark model-gate \
         lint format
@@ -134,6 +134,11 @@ seed:
 # Append ARGS=--fast to skip the document pipeline (structured backbone + events only).
 load-dataset:
 	docker compose exec kairos-backend-api python scripts/load_demo_dataset.py $(ARGS)
+
+# Shift the demo events so the newest reads as "yesterday" (keeps order and spacing). Dry run by
+# default; APPLY=1 WRITES TO THE CLOUD GOLDEN STORES — run it yourself, on demo day. See DATASET.md.
+redate-demo:
+	docker compose exec kairos-backend-api python scripts/redate_demo.py $(if $(APPLY),--apply,)
 
 # Delete integration-test residue (ASSET-TEST/DEDUP/EV/ACK-*, WO-*, DOC-*) from every store.
 purge-test-data:

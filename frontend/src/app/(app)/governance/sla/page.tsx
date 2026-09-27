@@ -93,7 +93,7 @@ export default function SlaPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance · Deadlines"
+        eyebrow="Governance"
         title="SLA escalations"
         lede="Where governance SLAs are breached right now: overdue conflicts and quarantine reviews, escalated for attention."
       />
@@ -109,7 +109,7 @@ export default function SlaPage() {
 
       {/* Breakdown + composition */}
       <div data-testid="sla-charts" className="mt-6 grid gap-6 lg:grid-cols-2">
-        <ChartContainer title="Overdue by category" sub="Conflicts by track · quarantine by input type" height={240} collapsible loading={loading} error={errorMsg} onRetry={retry} empty={!loading && !errorMsg && breakdown.length === 0 && "No overdue items."}>
+        <ChartContainer title="Overdue by category" sub="Conflicts by track, quarantine by input type" height={240} collapsible loading={loading} error={errorMsg} onRetry={retry} empty={!loading && !errorMsg && breakdown.length === 0 && "No overdue items."}>
           {rankedBars(breakdown, !reduced)}
         </ChartContainer>
         <ChartContainer title="Conflicts vs quarantine" sub="Share of the overdue backlog" height={240} collapsible loading={loading} error={errorMsg} onRetry={retry} empty={!loading && !errorMsg && donut.length === 0 && "No overdue items."}>

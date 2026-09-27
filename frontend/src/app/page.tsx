@@ -4,11 +4,27 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { dmSans, instrumentSans } from "./landing-fonts";
+import { youTubeId } from "@/lib/youtube";
+
+/**
+ * Demo recording.
+ *
+ * Put a YouTube link in `DEMO_YOUTUBE_URL` — watch, youtu.be, /embed/ or /shorts/
+ * form, all parse — and the player section appears on the page, the header grows a
+ * "Demo" cell, and the hero CTA scrolls to it instead of leaving the site. Leave it
+ * empty and none of that renders: the CTA falls back to `DEMO_FALLBACK_URL` and the
+ * page is exactly as it is today. Nothing else needs editing either way.
+ */
+const DEMO_YOUTUBE_URL = "";
+const DEMO_FALLBACK_URL = "https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view?usp=drive_link";
+
+const demoVideoId = youTubeId(DEMO_YOUTUBE_URL);
 
 // Every section on the page, in the order you meet them. The header is the only
 // map a first-time reader gets, so a section missing from it is a section they
 // never learn exists. Labels are the short form: eight cells have to share one row.
 const navLinks = [
+  ...(demoVideoId ? ([["Demo", "#demo"]] as const) : []),
   ["Problem", "#problem"],
   ["How it works", "#how"],
   ["Capabilities", "#capabilities"],
@@ -468,13 +484,7 @@ const footerColumns: { heading: string; links: [string, string][] }[] = [
   { heading: "How it works", links: [["System design", "#system"], ["Provenance", "#provenance"], ["Evals", "#evidence"], ["FAQ", "#faq"]] },
 ];
 
-const developers = ["Krishna Somani", "Arnav Bansal", "M Arshad"];
-
 const GITHUB_URL = "https://github.com/kr7shnasomani/kairos";
-// Demo recording. Currently a Drive link; swap in a YouTube URL when one exists
-// and nothing else needs to change.
-const YOUTUBE_DEMO_URL = "https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view?usp=drive_link";
-
 /* ── Capability mocks, one bespoke composition each ─────────────────────
    Shared atoms only; the layouts deliberately differ so the tab list reveals a
    genuinely different picture each time rather than the same card retitled. */
@@ -922,6 +932,47 @@ function Ticks({ solid = false, bottom = false }: { solid?: boolean; bottom?: bo
 }
 
 /**
+ * Demo player. A facade, not a bare iframe: the poster is the page's own media
+ * panel, so YouTube is contacted only once someone presses play. That keeps the
+ * third-party script (and its cookies) off first load, which is the difference
+ * between a fast landing page and a slow one. `youtube-nocookie` on top.
+ */
+function DemoPlayer({ videoId }: { videoId: string }) {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <div className="lp-card lp-media lp-dither relative mt-10 border border-transparent p-3 sm:p-6">
+      <div className="relative aspect-video overflow-hidden border border-white/20">
+        {playing ? (
+          <iframe
+            className="absolute inset-0 size-full"
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
+            title="Kairos demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPlaying(true)}
+            aria-label="Play the Kairos demo"
+            className="group absolute inset-0 grid place-items-center"
+          >
+            <span className="grid size-16 place-items-center bg-(--lp-accent-strong) text-white transition-transform duration-150 ease-out group-hover:scale-105 group-active:scale-95 sm:size-20">
+              <svg width="22" height="24" viewBox="0 0 22 24" fill="currentColor" aria-hidden="true">
+                <path d="M21 12 0 24V0z" />
+              </svg>
+            </span>
+            <span className="absolute bottom-4 left-4 text-[12px] uppercase tracking-[0.08em] text-white/80 sm:bottom-6 sm:left-6">
+              Play the demo
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The reference's primary button does not simply darken: it dissolves to black
  * cell by cell. An 18x4 grid of squares fades in with a stepped 90ms
  * transition and a staggered delay, giving a pixel-wipe.
@@ -1354,9 +1405,9 @@ export default function Home() {
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a
-                href={YOUTUBE_DEMO_URL}
-                target="_blank"
-                rel="noreferrer noopener"
+                href={demoVideoId ? "#demo" : DEMO_FALLBACK_URL}
+                target={demoVideoId ? undefined : "_blank"}
+                rel={demoVideoId ? undefined : "noreferrer noopener"}
                 className="group relative inline-flex min-h-11 min-w-[207px] items-center justify-center gap-2 overflow-hidden bg-(--lp-accent-strong) px-3 py-[15px] text-[14px] font-medium text-white transition-transform duration-150 ease-out active:scale-[0.98]"
               >
                 <PixelFill />
@@ -1379,6 +1430,27 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ── Demo: the product running, straight after the claim it makes ──
+          Renders only when DEMO_YOUTUBE_URL is set. Placed here on purpose: the
+          hero's primary CTA is "Watch demo", and a visitor who presses it should
+          arrive in one scroll, before the argument starts. */}
+      {demoVideoId && (
+        <section id="demo" className="lp-band">
+          <div className="lp-frame relative px-4 py-16 sm:px-6 sm:py-24">
+            <Ticks />
+            <Eyebrow>Demo</Eyebrow>
+            <h2 className="mt-5 max-w-3xl text-[36px] sm:text-[48px]">
+              The product, running.
+            </h2>
+            <p className="mt-5 max-w-xl text-[16px] leading-6 text-(--lp-muted)">
+              One pass through Kairos: a document goes into the vault, a question comes back with
+              its source, and a safety-critical question is refused rather than guessed.
+            </p>
+            <DemoPlayer videoId={demoVideoId} />
+          </div>
+        </section>
+      )}
 
       {/* ── The problem: stated before any product claim ────────────────── */}
       <section id="problem" className="bg-(--lp-dark) text-white">
@@ -2020,7 +2092,7 @@ export default function Home() {
       {/* ── Footer ──────────────────────────────────────────────────────── */}
       <footer className="bg-(--lp-bg)">
         <div className="lp-frame px-4 py-14 sm:px-6">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[2.5fr_repeat(3,0.6fr)]">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[2.5fr_repeat(2,0.6fr)]">
             <div>
               <div className="flex items-center gap-2.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2057,14 +2129,6 @@ export default function Home() {
               </div>
             ))}
 
-            <div>
-              <p className="lp-display text-[18px] text-(--lp-ink)">Developers</p>
-              <ul className="mt-4 space-y-2.5">
-                {developers.map((name) => (
-                  <li key={name} className="text-[14px] text-(--lp-muted)">{name}</li>
-                ))}
-              </ul>
-            </div>
           </div>
 
           <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-(--lp-line) pt-6">
@@ -2082,7 +2146,7 @@ export default function Home() {
                 <GithubIcon />
               </a>
               <a
-                href={YOUTUBE_DEMO_URL}
+                href={demoVideoId ? `https://www.youtube.com/watch?v=${demoVideoId}` : DEMO_FALLBACK_URL}
                 target="_blank"
                 rel="noreferrer noopener"
                 aria-label="Watch the Kairos demo"

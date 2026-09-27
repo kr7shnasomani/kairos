@@ -4,7 +4,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Docker
 
 **Local:** `http://localhost:3000` — served by `kairos-frontend` container.
 
-**Design system:** tokens and shared classes live in `frontend/src/app/globals.css`; primitives in `components/ui.tsx` + `ui-card.tsx`. The workspace follows the landing page's language (square chrome, Instrument display type, hairline `.mesh` grids, `lp-card`/`lp-cell` hovers, filled orange eyebrows); the why and the rules are in [`implementation/ui-overhaul.md`](implementation/ui-overhaul.md). Filled danger blocks take `text-on-danger`, never `text-white` (dark's red is light). Icons come only from `components/icon.tsx` (Phosphor Regular, inlined, MIT); never hand-draw an `<svg>` icon. Read both before building any new UI component.
+**Design system:** tokens and shared classes live in `frontend/src/app/globals.css`; primitives in `components/ui.tsx` + `ui-card.tsx`. The workspace follows the landing page's language (square chrome, Instrument display type, hairline `.mesh` grids, `lp-card`/`lp-cell` hovers, filled orange eyebrows); the why and the rules are in [`implementation/ui-overhaul.md`](implementation/ui-overhaul.md). Filled danger blocks take `text-on-danger`, never `text-white` (dark's red is light). **Landing demo video:** paste a YouTube link into `DEMO_YOUTUBE_URL` (`app/page.tsx`) and the `#demo` player section, the header's Demo cell and the hero CTA's in-page scroll all switch on; empty means none of it renders and the CTA leaves for `DEMO_FALLBACK_URL`. The player is a facade — YouTube is contacted only on press, via `youtube-nocookie`. URL parsing is `lib/youtube.ts` (tested). Eyebrows are the area alone (`Governance`, `Assure`) — no `Area · Topic` separators; the title names the page. `PageHeader`'s `compact` is for per-record views (`/assets/[id]`, `/documents/[id]`) only — a top-level page keeps the full 40px title. Filled actions use `Button`/`ButtonLink` (they carry the `.fill-sweep` hover); never hand-roll a `bg-accent` button. Icons come only from `components/icon.tsx` (Phosphor Regular, inlined, MIT); never hand-draw an `<svg>` icon. Read both before building any new UI component.
 
 ---
 
@@ -160,13 +160,26 @@ frontend/
 **Desktop sidebar** (316px, collapsible to 68px; slide-over drawer on mobile). There is **no desktop
 top bar**: the rail owns the global actions (sidebar-first, as in Linear / Vercel).
 
-- **Top:** Search (⌘K command palette) · **+ Ingest** (`/documents/ingest`)
+- **Top:** Search (⌘K command palette) + **Ingest** (`/documents/ingest`)
 - *(ungrouped)* Overview (`/management`, staff)
-- **Operate:** Briefs · Copilot · Assets · Events · **Voice · Deviation (admin + field_worker only)**
-- **Analyze:** RCA · Graph · Coverage
-- **Assure:** Compliance · Governance · Audit Trail
-- **Knowledge:** Documents · Projects · Off-Boarding
-- **Foot:** account row → menu with System Settings, System Health (**admin only**), Sign out
+- **Operate:** Briefs, Copilot, Assets, Events, **Voice and Deviation (admin + field_worker only)**
+- **Analyze:** RCA, Graph, Coverage
+- **Assure:** Compliance, Governance, Audit Trail
+- **Knowledge:** Documents, Projects, Off-Boarding
+- **Foot:** account row → menu with System Settings, System Health (**admin only**), Sign out; the
+  collapse toggle sits beside it
+
+**No group headings are rendered** (removed 2026-09-27). The grouping survives as spacing
+(`--rail-section-gap`) and as each list's `aria-label`, and the ⌘K palette still groups results by
+the same `NAV` section names.
+
+**Collapsing (68px) must not move anything.** Two rules make that true, and breaking either one
+re-flows the icon column: `[data-rail] .rail-link` carries a `min-height` floor (a row sized by its
+content is 1.5px shorter once the label is hidden, which compounds), and the section gap is the
+same in both states. The logo row is a fixed 56px because the toggle lives at the foot, not under
+the mark. Collapsed also hides Ingest (68px fits one square; ⌘K and `/documents` still reach it)
+and the Governor pill (`0/6` with no label is a riddle). Verified 0px drift on every row, engineer
+and admin, at 1440x900.
 
 Mobile keeps a top bar: menu · search · + Ingest · account.
 

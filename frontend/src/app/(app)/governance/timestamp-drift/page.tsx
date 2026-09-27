@@ -11,12 +11,12 @@ type Row = DriftItem & Record<string, unknown>;
 
 const COLUMNS: TableColumn<Row>[] = [
   { key: "compound_event_id", label: "Compound event", render: (r) => <span className="tabular font-semibold text-ink">{r.compound_event_id}</span> },
-  { key: "sources", label: "Source systems", render: (r) => <span className="text-caption">{r.sources.join(" · ")}</span> },
+  { key: "sources", label: "Source systems", render: (r) => <span className="text-caption">{r.sources.join(", ")}</span> },
   { key: "drift_minutes", label: "Drift", align: "right", sortable: true, render: (r) => <span className="tabular font-semibold text-caution">{r.drift_minutes} min</span> },
   {
     key: "canonical_timestamp", label: "Canonical time",
     render: (r) => r.canonical_timestamp
-      ? <span className="tabular text-caption" title={r.canonical_timestamp}>{fmtRelTime(r.canonical_timestamp)}<span className="text-muted"> · {r.canonical_source}</span></span>
+      ? <span className="tabular text-caption" title={r.canonical_timestamp}>{fmtRelTime(r.canonical_timestamp)}<span className="text-muted">, {r.canonical_source}</span></span>
       : <span className="text-muted">—</span>,
   },
   { key: "action", label: "Action", render: (r) => <StatusBadge tone={r.action === "conflict_opened" ? "caution" : "neutral"} dot={false}>{(r.action ?? "reported_only").replace(/_/g, " ")}</StatusBadge> },
@@ -30,7 +30,7 @@ export default function TimestampDriftPage() {
   return (
     <div data-testid="timestamp-drift-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Governance · Clock alignment"
+        eyebrow="Governance"
         title="Timestamp drift"
         lede="Clock disagreement between systems that recorded the same physical event. Occurred-versus-ingested gaps are history, not drift, and are never counted."
       />

@@ -310,28 +310,53 @@ export function Modal({
 
 type ButtonVariant = "primary" | "ghost" | "danger";
 
+/** One chrome for every button-shaped control, filled or not. `fill-sweep` (globals.css)
+ *  paints the hover wipe; the label has to ride above it, hence `ButtonLabel`. */
+const BUTTON_CHROME =
+  "fill-sweep inline-flex h-9 items-center justify-center gap-2 px-3.5 text-body font-semibold transition-[transform,background-color,border-color] duration-150 ease-out active:scale-[0.98]";
+
+const BUTTON_VARIANT: Record<ButtonVariant, string> = {
+  primary: "bg-accent text-on-accent",
+  danger: "bg-danger text-on-danger",
+  ghost: "border border-line text-ink",
+};
+
+function ButtonLabel({ children }: { children: React.ReactNode }) {
+  return <span className="relative z-10 inline-flex items-center gap-2">{children}</span>;
+}
+
 export function Button({
   variant = "ghost",
   className,
+  children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   return (
     <button
-      className={cn(
-        "inline-flex h-9 items-center justify-center gap-2 px-3.5 text-body font-semibold transition-[transform,background-color,border-color,filter] duration-150 ease-out active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-        variant === "primary"
-          ? "bg-accent text-on-accent hover:brightness-105 active:brightness-95"
-          : variant === "danger"
-            ? "bg-danger text-on-danger hover:brightness-105 active:brightness-95"
-            : "border border-line text-ink hover:bg-surface-2 active:brightness-95",
-        className,
-      )}
+      className={cn(BUTTON_CHROME, "disabled:pointer-events-none disabled:opacity-50", BUTTON_VARIANT[variant], className)}
       {...props}
-    />
+    >
+      <ButtonLabel>{children}</ButtonLabel>
+    </button>
   );
 }
 
-/** Honest data-source chip — shown when a page is rendering fixture/demo data. */
+/** Link that reads as a Button — same chrome, same hover sweep. Next's <Link>
+ *  cannot be produced by <Button>, which renders a real <button>. */
+export function ButtonLink({
+  variant = "ghost",
+  className,
+  children,
+  href,
+  ...props
+}: Omit<React.ComponentProps<typeof Link>, "href"> & { href: string; variant?: ButtonVariant }) {
+  return (
+    <Link href={href} className={cn(BUTTON_CHROME, BUTTON_VARIANT[variant], className)} {...props}>
+      <ButtonLabel>{children}</ButtonLabel>
+    </Link>
+  );
+}
+
 // ─── TrendDelta ──────────────────────────────────────────────────────────────
 
 /** Signed percent-change chip. `invert` for metrics where up is bad (gaps, overdue). */
@@ -443,7 +468,7 @@ export function KpiCard({
         {icon && <span className={cn("shrink-0", valueColor)} aria-hidden="true">{icon}</span>}
       </span>
       <span className="flex items-end justify-between gap-2">
-        <span className={cn("display mt-2 text-hero", valueColor)}>{display}</span>
+        <span className={cn("display mt-1.5 text-hero", valueColor)}>{display}</span>
         {spark && <Sparkline data={spark} className="text-accent opacity-70" />}
       </span>
       {(sub || delta !== undefined) && (
@@ -454,7 +479,7 @@ export function KpiCard({
       )}
     </>
   );
-  const base = "group relative flex min-h-[104px] w-full flex-col gap-1 overflow-hidden border border-line bg-surface px-5 py-4 text-left";
+  const base = "group relative flex min-h-[96px] w-full flex-col gap-0.5 overflow-hidden border border-line bg-surface px-5 py-4 text-left";
   // lp-cell: the landing's accent top bar + wash, so tiles also work inside a .mesh.
   const interactive = "lp-cell cursor-pointer";
 
@@ -709,7 +734,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
         return (
           <li key={ev.id} className="relative">
             <span
-              className={cn("absolute -left-[20px] top-[5px] size-2 rounded-full ring-2 ring-surface", dotColor)}
+              className={cn("absolute -left-[20px] top-[5px] size-2 ring-2 ring-surface", dotColor)}
               aria-hidden="true"
             />
             <div>
@@ -753,7 +778,7 @@ export function EvidenceLineage({
         aria-expanded={open}
         className="flex w-full items-center justify-between px-3 py-2 font-semibold text-muted hover:text-ink"
       >
-        <span>Evidence lineage · {total} item{total !== 1 ? "s" : ""}</span>
+        <span>Evidence lineage, {total} item{total !== 1 ? "s" : ""}</span>
         <Icon name="caret-down" size={14} className={cn("transition-transform", open && "rotate-180")} />
       </button>
 
@@ -900,7 +925,7 @@ export function RefusalCard({
 // ─── EmptyState (Task 4) ─────────────────────────────────────────────────────
 
 /** Icon + message + optional CTA for empty list / no results states. */
-/** Standard page header — eyebrow · title · lede · right-aligned actions.
+/** Standard page header — eyebrow, title, lede, right-aligned actions.
  *  One h1 voice across the app: display (28px) for workspaces, title (20px)
  *  via `compact` for detail views. Use this instead of hand-rolled headers
  *  so typography can't drift page-to-page. */
@@ -946,16 +971,12 @@ export function EmptyState({
   action?: { label: string; onClick: () => void } | { label: string; href: string };
 }) {
   return (
-    <div className="relative flex flex-col items-center gap-4 border border-line bg-surface-2 px-6 py-12 text-center">
-      <span className="lp-tick lp-tick--solid -left-[6px] -top-[6px]" aria-hidden="true" />
+    <div className="flex flex-col items-center gap-4 border border-line bg-surface-2 px-6 py-12 text-center">
       <p className="max-w-md font-display text-title font-medium leading-snug text-pretty text-ink">{message}</p>
       {action && ("href" in action ? (
-        <Link
-          href={action.href}
-          className="inline-flex h-9 items-center gap-2 bg-ink px-3.5 text-body font-medium text-canvas transition-[transform,background-color] duration-150 ease-out hover:bg-(--accent-fill) hover:text-on-accent active:scale-[0.98]"
-        >
+        <ButtonLink href={action.href} variant="primary">
           {action.label} <span aria-hidden="true">›</span>
-        </Link>
+        </ButtonLink>
       ) : (
         <Button variant="ghost" onClick={action.onClick}>
           {action.label}

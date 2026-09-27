@@ -88,6 +88,9 @@ kairos/                          # repo root
 │   │   │                             # DRY RUN by default — pass --apply to write. Idempotent (MERGE).
 │   │   │                             # Stamps Document.entity_backfill_at on a model-backed pass so a
 │   │   │                             # doc mentioning nobody is not re-extracted forever; --force resets.
+│   │   ├── redate_demo.py           # Shift demo event dates so the newest is "yesterday" (`make redate-demo`).
+│   │   │                             # Golden events only (matched via the loader's mapping). DRY RUN by
+│   │   │                             # default; --apply writes cloud Supabase + Neo4j. Safe to re-run.
 │   │   ├── purge_test_data.py       # Delete test-prefixed rows from all stores (`make purge-test-data`)
 │   │   └── wipe_local_stores.py     # Empty Neo4j + ES + Qdrant entirely (`make wipe-local` / `reset-local`)
 │   └── requirements.txt

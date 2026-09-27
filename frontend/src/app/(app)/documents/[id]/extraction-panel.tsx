@@ -35,7 +35,7 @@ export function ExtractionPanel({ documentId }: { documentId: string }) {
             <>
               <div className="flex flex-wrap items-center gap-2 text-caption text-muted">
                 <StatusBadge tone="info" dot={false}>{x.extraction_path === "ocr" ? "Read from image (OCR)" : "Native text"}</StatusBadge>
-                <span className="tabular">{x.entities.length} entities · {x.graph_edges_created} graph edges</span>
+                <span className="tabular">{x.entities.length} entities, {x.graph_edges_created} graph edges</span>
               </div>
               {x.entities.length === 0 ? (
                 <p className="mt-3 text-caption text-muted">No entities from this document are linked into the graph.</p>

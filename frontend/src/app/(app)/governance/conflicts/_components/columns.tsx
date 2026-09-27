@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Conflict } from "@/lib/types";
 import { relativeTime, slaCountdown } from "@/lib/utils";
-import { StatusBadge, type TableColumn } from "@/components/ui";
+import { Button, StatusBadge, type TableColumn } from "@/components/ui";
 
 /** Conflict re-mapped so it satisfies DataTable's Record constraint. */
 export type ConflictRow = Pick<Conflict, keyof Conflict>;
@@ -46,7 +46,7 @@ function contradiction(c: ConflictRow): { text: string; conflicting: boolean } |
   };
   const parts = [label(a), label(b)].filter((x): x is string => !!x);
   if (parts.length === 0) return null;
-  return { text: parts.join(" · "), conflicting: false };
+  return { text: parts.join(", "), conflicting: false };
 }
 
 function SlaChip({ c, nowMs }: { c: ConflictRow; nowMs: number }) {
@@ -107,13 +107,9 @@ export function buildColumns(nowMs: number, busy: string | null, onResolve: (c: 
         ) : r.track === "engineering" ? (
           <Link href="/governance/moc" className="whitespace-nowrap text-caption font-semibold text-accent hover:underline">MoC required ›</Link>
         ) : (
-          <button
-            onClick={() => onResolve(r)}
-            disabled={busy === r.conflict_id}
-            className="inline-flex h-8 items-center whitespace-nowrap rounded-lg bg-accent px-3 text-caption font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={() => onResolve(r)} disabled={busy === r.conflict_id} className="h-8 whitespace-nowrap px-3 text-caption">
             {busy === r.conflict_id ? "Resolving…" : "Resolve"}
-          </button>
+          </Button>
         ),
     },
   ];

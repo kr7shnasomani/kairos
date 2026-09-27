@@ -15,7 +15,7 @@ export default function CrossSiteAlertsPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Overview · All sites"
+        eyebrow="Overview"
         title="Cross-site pattern alerts"
         lede="Statistical signatures matched across sites — recurring failure precursors surfaced before they escalate."
       />

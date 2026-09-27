@@ -9,7 +9,7 @@ import type { TooltipContentProps } from "recharts";
 import { CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
 import { AXIS, ChartContainer, GRID, downsample } from "@/components/charts";
 import { ChartTooltip } from "@/components/charts/chart-tooltip";
-import { DataTable, EmptyState, MetricCard, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
+import { Button, DataTable, EmptyState, MetricCard, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
 import type { Fetched } from "@/lib/api";
 import { getModelGateHistory, runModelGate } from "@/lib/api";
 import { fmtNum, fmtPct, fmtRelTime } from "@/lib/format";
@@ -53,7 +53,7 @@ const TREND_SERIES = [
 /** Trend tooltip — all three series plus that run's corpus size in the label. */
 function TrendTip(props: Partial<TooltipContentProps<number | string, string>>) {
   const row = props.payload?.[0]?.payload as { day?: string; corpus_size?: number } | undefined;
-  const label = row?.day ? `${row.day} · corpus ${fmtNum(row.corpus_size)}` : props.label;
+  const label = row?.day ? `${row.day}, corpus ${fmtNum(row.corpus_size)}` : props.label;
   return <ChartTooltip {...props} label={label} valueFormat={(v) => `${fmtNum(v, 1)}%`} />;
 }
 
@@ -159,20 +159,16 @@ export default function ModelGatePage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance · Model validation"
+        eyebrow="Governance"
         title="Model Gate"
         lede="Precision / recall gate on the validation corpus. A failed run blocks model promotion. Runs are triggered manually or by the nightly Temporal workflow."
         actions={
           // Running the gate is admin-only on the backend (403 otherwise), so only
           // admins see the trigger. Everyone else views history read-only.
           isAdmin ? (
-            <button
-              onClick={handleRun}
-              disabled={running || queued}
-              className="inline-flex min-h-11 items-center rounded-lg bg-accent px-3.5 text-body font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
+            <Button variant="primary" onClick={handleRun} disabled={running || queued} className="min-h-11">
               {running ? "Triggering…" : queued ? "Running…" : "Run gate now"}
-            </button>
+            </Button>
           ) : undefined
         }
       />

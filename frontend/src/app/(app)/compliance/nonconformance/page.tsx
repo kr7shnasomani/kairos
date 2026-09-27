@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { getConflicts, getQuarantine, getEvents } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { relativeTime } from "@/lib/utils";
-import { Button, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
+import { Button, ButtonLink, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, type TableColumn } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 
 import { Icon } from "@/components/icon";
@@ -63,9 +63,9 @@ const COLUMNS: TableColumn<Nc>[] = [
   {
     key: "rca", label: "Actions",
     render: () => (
-      <Link aria-label="Root-cause analysis" href="/rca" className="inline-flex h-8 items-center whitespace-nowrap rounded-lg border border-line px-3 text-caption font-semibold text-ink transition-colors hover:border-accent hover:text-accent">
+      <ButtonLink aria-label="Root-cause analysis" href="/rca" className="h-8 whitespace-nowrap px-3 text-caption">
         Open RCA
-      </Link>
+      </ButtonLink>
     ),
   },
 ];
@@ -93,7 +93,7 @@ export default function NonConformancePage() {
       ncs.push({
         id: cf.conflict_id, source: "conflict", asset_id: cf.asset_id,
         title: `Conflict on ${cf.parameter}`,
-        detail: `${cf.track} track · severity ${cf.severity}`,
+        detail: `${cf.track} track, severity ${cf.severity}`,
         tone: cf.severity === "safety_critical" || cf.is_overdue ? "danger" : "caution",
         when: cf.created_at,
         origin: { href: "/governance/conflicts", label: "Conflict" },
@@ -139,7 +139,7 @@ export default function NonConformancePage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Assure · Non-conformances"
+        eyebrow="Assure"
         title="Non-conformance tracking"
         lede="Open non-conformances composed from unresolved conflicts, failed inspections, and disputed field inputs. Each links to its root-cause workspace and originating record."
       />

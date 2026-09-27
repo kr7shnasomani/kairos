@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BlastRadiusPanel } from "@/components/lazy";
-import { AuthorityBadge, Button, PageHeader, StatusBadge, statusTone } from "@/components/ui";
+import { AuthorityBadge, Button, ButtonLink, PageHeader, StatusBadge, statusTone } from "@/components/ui";
 import { RESOLVE_ROLES, useRole } from "@/components/use-role";
 import { getConflictDetail, resolveConflict } from "@/lib/api";
 import type { AuthorityLevel, ConflictSource } from "@/lib/types";
@@ -101,8 +101,8 @@ export default function ConflictDetailPage() {
         title={c.parameter.replace(/_/g, " ")}
         lede={<>
           {c.asset_id ? <Link href={`/assets/${c.asset_id}`} className="tabular font-semibold text-accent hover:underline">{c.asset_id}</Link> : "No asset"}
-          {" · raised "}{relativeTime(c.created_at)}
-          {sla && <> · <span className={`tabular font-semibold ${sla.tone}`}>{sla.label}</span></>}
+          {", raised "}{relativeTime(c.created_at)}
+          {sla && <>, <span className={`tabular font-semibold ${sla.tone}`}>{sla.label}</span></>}
         </>}
       />
 
@@ -129,7 +129,7 @@ export default function ConflictDetailPage() {
           ) : c.track === "engineering" ? (
             <>
               <p className="text-caption text-muted">Engineering-track conflicts close only through Management of Change sign-off.</p>
-              <Link href="/governance/moc" className="inline-flex h-9 items-center rounded-lg bg-accent px-3.5 text-body font-semibold text-on-accent hover:brightness-105">Open MoC queue</Link>
+              <ButtonLink href="/governance/moc" variant="primary">Open MoC queue</ButtonLink>
             </>
           ) : RESOLVE_ROLES.includes(role) ? (
             <>

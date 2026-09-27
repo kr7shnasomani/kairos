@@ -57,7 +57,6 @@ export default function DeviationPage() {
   return (
     <div data-testid="deviation-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        compact
         className="mb-6"
         eyebrow="Field capture"
         title="Physical deviation flag"

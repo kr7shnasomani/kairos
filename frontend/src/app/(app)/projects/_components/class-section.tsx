@@ -62,7 +62,7 @@ export function ClassSection({ group }: { group: ClassGroup }) {
                   <Link data-testid="evidence-id" href={`/documents/${d.document_id}`} className="tabular font-medium text-link hover:underline">
                     {d.document_id}
                   </Link>
-                  <Truncate text={`${d.file_name} · ${d.source_system}`} className="min-w-0 flex-1 text-ink" />
+                  <Truncate text={`${d.file_name}, ${d.source_system}`} className="min-w-0 flex-1 text-ink" />
                   <AuthorityBadge level={d.authority_level} />
                   {d.version_chain
                     ? <StatusBadge tone="info" dot={false}>rev</StatusBadge>
@@ -84,7 +84,7 @@ export function ClassSection({ group }: { group: ClassGroup }) {
             <div className="mt-3 rounded-lg border border-[color-mix(in_srgb,var(--caution)_30%,var(--line))] bg-[color-mix(in_srgb,var(--caution)_7%,var(--surface))] p-3">
               <p className="text-label font-semibold uppercase tracking-[0.08em] text-caution">Latest signal</p>
               <p className="mt-1 text-caption font-semibold text-ink">{triggerLabel(latest.event_type)}</p>
-              <p className="tabular mt-1 text-label text-muted">{latest.asset_id} · {relativeTime(latest.occurred_at)}</p>
+              <p className="tabular mt-1 text-label text-muted">{latest.asset_id}, {relativeTime(latest.occurred_at)}</p>
             </div>
             <ul className="mt-3 divide-y divide-line">
             {failures.slice(0, 8).map((e) => (

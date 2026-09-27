@@ -260,7 +260,7 @@ export default function OffboardingSessionPage() {
           <span className="tabular grid size-12 shrink-0 place-items-center rounded-full bg-accent-soft text-body font-bold text-accent">{emailInitials(programme.personnel_email)}</span>
           <div className="min-w-0 flex-1">
             <p className="text-label font-semibold uppercase tracking-[0.1em] text-accent">Expert handover</p>
-            <h1 className="truncate text-subtitle font-semibold text-ink">{programme.personnel_email}</h1>
+            <h1 className="display truncate text-title text-ink">{programme.personnel_email}</h1>
             <p className="mt-0.5 text-label text-muted">Retires {new Date(programme.retirement_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
           </div>
           <div className="min-w-40">

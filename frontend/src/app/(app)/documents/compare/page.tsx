@@ -61,7 +61,7 @@ function ComparePage() {
         Documents
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Knowledge · Immutable vault" title="Compare versions" lede="Walk the supersede chain and diff metadata across two versions. A superseded document is never presented as current. Supersession closes a validity window; it does not erase." />
+      <PageHeader className="mt-4" eyebrow="Knowledge" title="Compare versions" lede="Walk the supersede chain and diff metadata across two versions. A superseded document is never presented as current. Supersession closes a validity window; it does not erase." />
 
       <div data-testid="compare-toolbar" className="mt-6 rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
         <div className="mb-3">

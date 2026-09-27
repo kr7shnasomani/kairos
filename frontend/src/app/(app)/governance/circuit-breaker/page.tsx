@@ -25,7 +25,7 @@ const COLUMNS: TableColumn<BreakerRow>[] = [
   { key: "asset_class", label: "Asset class", sortable: true, render: (r) => <span className="font-semibold text-ink">{r.asset_class}</span> },
   { key: "halted", label: "Status", sortable: true, sortValue: (r) => (r.halted ? 1 : 0), render: (r) => <StatusBadge tone={r.halted ? "danger" : "verified"}>{r.halted ? "halted" : "ok"}</StatusBadge> },
   { key: "z_score", label: "z-score", sortable: true, sortValue: (r) => r.z_score ?? 0, render: (r) => <span className="tabular" style={{ color: `var(--${zTone(r)})` }}>{fmtNum(r.z_score, 1)}σ</span> },
-  { key: "override_count_7d", label: "Overrides · 7d", sortable: true, sortValue: (r) => r.override_count_7d ?? 0, render: (r) => <span className="tabular">{fmtNum(r.override_count_7d)}</span> },
+  { key: "override_count_7d", label: "Overrides 7d", sortable: true, sortValue: (r) => r.override_count_7d ?? 0, render: (r) => <span className="tabular">{fmtNum(r.override_count_7d)}</span> },
   { key: "reason", label: "Reason", render: (r) => <span className="block max-w-[220px] truncate text-muted" title={r.reason ?? undefined}>{r.reason ? triggerLabel(r.reason) : "—"}</span> },
 ];
 
@@ -55,7 +55,7 @@ export default function CircuitBreakerPage() {
         Governance
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Governance · Ingestion safeguard" title="Circuit Breaker" lede="Statistical process control gates that halt ingestion for an asset class when z-score anomalies exceed threshold. Halted classes require admin override or human-verified resolution." />
+      <PageHeader className="mt-4" eyebrow="Governance" title="Circuit Breaker" lede="Statistical process control gates that halt ingestion for an asset class when z-score anomalies exceed threshold. Halted classes require admin override or human-verified resolution." />
       {state.status === "error" && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--danger)_30%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_5%,var(--surface))] p-4 text-body text-ink">
           Couldn&rsquo;t load circuit-breaker state.
@@ -67,7 +67,7 @@ export default function CircuitBreakerPage() {
         <MetricCard label="Halted" value={cb ? halted.length : null} tone={halted.length > 0 ? "danger" : "verified"} sub={halted.length === 0 && cb ? "all paths open" : undefined} loading={loading} />
         <MetricCard label="Watched classes" value={cb ? states.length : null} loading={loading} />
         <MetricCard label="Max z-score" value={cb && maxZ !== null ? `${fmtNum(maxZ, 1)}σ` : null} tone={maxZ !== null && maxZ >= 2 ? "caution" : "neutral"} loading={loading} />
-        <MetricCard label="Overrides · 7d" value={cb ? overrides : null} tone={overrides > 0 ? "caution" : "neutral"} loading={loading} />
+        <MetricCard label="Overrides 7d" value={cb ? overrides : null} tone={overrides > 0 ? "caution" : "neutral"} loading={loading} />
       </div>
 
       <Card className="mt-4 p-4 shadow-sm">

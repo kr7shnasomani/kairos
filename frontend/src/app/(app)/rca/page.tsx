@@ -50,7 +50,7 @@ export default function RcaPage() {
 
   return (
     <div data-testid="rca-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader eyebrow="Analyze · Root cause" title="RCA workspace" lede="Assemble failure timelines, evidence-weighted hypotheses, and supporting documents for engineering review." />
+      <PageHeader eyebrow="Analyze" title="RCA workspace" lede="Assemble failure timelines, evidence-weighted hypotheses, and supporting documents for engineering review." />
 
       <form
         data-testid="rca-builder"

@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { getMe, login } from "@/lib/auth";
 
 import { Icon } from "@/components/icon";
+import { Button } from "@/components/ui";
 function workspacePath(role?: string) {
   return role === "field_worker" ? "/briefs" : "/management";
 }
@@ -68,8 +69,6 @@ export default function LoginPage() {
           data-testid="login-context"
           className="sidebar-scope relative hidden p-10 lg:flex lg:flex-col lg:justify-between"
         >
-          <span className="lp-tick -left-[5px] -top-[5px]" aria-hidden="true" />
-
           <div>
             <p className="inline-flex bg-accent px-2.5 py-1 text-label font-semibold uppercase tracking-[0.08em] text-on-accent">
               Evidence-linked operations
@@ -105,7 +104,7 @@ export default function LoginPage() {
         <section data-testid="login-form-panel" className="flex items-center justify-center border-line px-5 py-10 sm:px-10 lg:border-l">
           <div className="w-full max-w-sm">
             <Image src="/logo.png" alt="Kairos" width={40} height={40} priority className="size-10 object-cover" />
-            <h1 className="display mt-6 text-display text-ink">Sign in to Kairos</h1>
+            <h1 className="display mt-6 text-display text-ink sm:text-hero">Sign in to Kairos</h1>
             <p className="mt-2 text-body text-muted">The right knowledge, at the moment of action.</p>
 
             <form onSubmit={signIn} className="mt-8 flex flex-col gap-4">
@@ -140,22 +139,13 @@ export default function LoginPage() {
                   {error}
                 </p>
               )}
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-1 inline-flex min-h-11 items-center justify-center gap-2 bg-accent text-sm font-medium text-on-accent transition-[transform,filter] duration-150 ease-out hover:brightness-110 active:scale-[0.99] disabled:opacity-60"
-              >
+              <Button type="submit" variant="primary" disabled={busy} className="mt-1 min-h-11 w-full text-sm font-medium">
                 {busy ? "Signing in…" : "Sign in"}
                 {!busy && <span aria-hidden="true">›</span>}
-              </button>
-              <button
-                type="button"
-                onClick={tryDemo}
-                disabled={busy}
-                className="inline-flex min-h-11 items-center justify-center border border-line bg-surface text-sm font-medium text-ink transition-[transform,border-color,background-color] duration-150 ease-out hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--line))] hover:bg-surface-2 active:scale-[0.99] disabled:opacity-60"
-              >
+              </Button>
+              <Button type="button" onClick={tryDemo} disabled={busy} className="min-h-11 w-full bg-surface text-sm font-medium">
                 Explore the live demo
-              </button>
+              </Button>
             </form>
           </div>
         </section>

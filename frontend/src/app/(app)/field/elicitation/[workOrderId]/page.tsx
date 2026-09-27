@@ -260,7 +260,7 @@ export default function ElicitationPage() {
           <p className="tabular mt-1 text-title font-semibold">{workOrderId}</p>
           <div className="mt-4 border-t border-line pt-4">
             <p className="text-label font-semibold text-ink">Session progress</p>
-            <p className="mt-1.5 text-caption text-muted">Question {step + 1} of {questions.length} · {Object.keys(answers).length} answered</p>
+            <p className="mt-1.5 text-caption text-muted">Question {step + 1} of {questions.length}, {Object.keys(answers).length} answered</p>
           </div>
           <div className="mt-4 border-t border-line pt-4">
             <p className="text-label font-semibold text-ink">Offline ready</p>

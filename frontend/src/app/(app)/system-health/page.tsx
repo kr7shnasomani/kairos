@@ -24,10 +24,10 @@ const MODELS_LS_KEY = "kairos-health-models";
 const API_GROUPS: { group: string; layer: string; endpoint: string; probe: string }[] = [
   { group: "Health", layer: "Liveness", endpoint: "GET /health", probe: "/health/" },
   { group: "Authentication", layer: "Auth", endpoint: "GET /auth/me", probe: "/auth/me" },
-  { group: "Assets", layer: "L1 · MDM", endpoint: "GET /assets", probe: "/assets/?limit=1" },
-  { group: "Documents", layer: "L2–3 · Vault", endpoint: "GET /documents", probe: "/documents/?limit=1" },
-  { group: "Events", layer: "L8 · Operational", endpoint: "GET /events/plant-state", probe: "/events/plant-state/SITE_001" },
-  { group: "Briefs", layer: "L8 · Delivery", endpoint: "GET /briefs/governor/status", probe: "/briefs/governor/status" },
+  { group: "Assets", layer: "L1, MDM", endpoint: "GET /assets", probe: "/assets/?limit=1" },
+  { group: "Documents", layer: "L2–3, Vault", endpoint: "GET /documents", probe: "/documents/?limit=1" },
+  { group: "Events", layer: "L8, Operational", endpoint: "GET /events/plant-state", probe: "/events/plant-state/SITE_001" },
+  { group: "Briefs", layer: "L8, Delivery", endpoint: "GET /briefs/governor/status", probe: "/briefs/governor/status" },
   { group: "Governance", layer: "L7", endpoint: "GET /governance/circuit-breaker", probe: "/governance/circuit-breaker" },
   { group: "Compliance", layer: "Compliance", endpoint: "GET /compliance/frameworks", probe: "/compliance/frameworks" },
   { group: "Elicitation", layer: "L6", endpoint: "GET /elicitation/offboarding", probe: "/elicitation/offboarding" },
@@ -38,11 +38,11 @@ const API_GROUPS: { group: string; layer: string; endpoint: string; probe: strin
 // Rate-limited external model providers — opt-in monitoring only.
 // Display names come from providerName(), the one map the Copilot badge uses too.
 const MODELS: { key: string; sub: string }[] = [
-  { key: "tokenfactory", sub: "LLM synthesis · nemotron-3-super-120b" },
-  { key: "nim", sub: "LLM synthesis fallback · nemotron-3-super-120b" },
-  { key: "gemini", sub: "LLM fallback · gemini-2.5-flash-lite" },
-  { key: "jina", sub: "Embeddings · powers Search & RAG" },
-  { key: "groq", sub: "Whisper STT · voice notes" },
+  { key: "tokenfactory", sub: "LLM synthesis, nemotron-3-super-120b" },
+  { key: "nim", sub: "LLM synthesis fallback, nemotron-3-super-120b" },
+  { key: "gemini", sub: "LLM fallback, gemini-2.5-flash-lite" },
+  { key: "jina", sub: "Embeddings, powers Search & RAG" },
+  { key: "groq", sub: "Whisper STT, voice notes" },
 ];
 
 const TONE = { healthy: "verified", degraded: "caution", down: "danger" } as const;
@@ -342,7 +342,7 @@ export default function SystemHealthPage() {
                     <tr key={c.name} className="border-b border-line last:border-0">
                       <td className="px-4 py-3">
                         <p className="text-body font-medium text-ink">{c.name}</p>
-                        <p className="text-label text-muted">{c.protocol}{c.detail ? ` · ${c.detail}` : ""}</p>
+                        <p className="text-label text-muted">{c.protocol}{c.detail ? `, ${c.detail}` : ""}</p>
                       </td>
                       <td className="hidden px-4 py-3 md:table-cell"><code className="text-caption text-muted">{c.config_var}</code></td>
                       <td className="px-4 py-3 text-right">

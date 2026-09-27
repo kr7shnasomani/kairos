@@ -142,9 +142,9 @@ export function Composer({
           type="submit"
           disabled={!value.trim()}
           aria-label="Send"
-          className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent text-on-accent transition-opacity disabled:opacity-40"
+          className="fill-sweep grid size-11 shrink-0 place-items-center bg-accent text-on-accent disabled:opacity-40"
         >
-          <Icon name="paper-plane-right" size={17} />
+          <Icon name="paper-plane-right" size={17} className="relative z-10" />
         </button>
       </form>
     </div>

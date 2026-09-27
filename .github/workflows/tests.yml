@@ -127,7 +127,8 @@ jobs:
               tests/test_document_extraction_view.py \
               tests/test_image_utils.py \
               tests/test_ocr_review_release.py \
-              tests/test_supabase_http.py
+              tests/test_supabase_http.py \
+              tests/test_redate_demo.py
 
       # The benchmark grader is deterministic logic (negation handling, Wilson intervals, the
       # run-validity verdict) and needs no stack, no secrets and no network — so it belongs in

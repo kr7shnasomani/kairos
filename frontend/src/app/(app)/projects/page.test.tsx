@@ -61,6 +61,6 @@ describe("ProjectsPage", () => {
   it("shows the whole filename", async () => {
     render(<ProjectsPage />);
 
-    expect(await screen.findByTitle("seal_series_MS44_service_bulletin_r3.pdf · OEM_portal")).toBeInTheDocument();
+    expect(await screen.findByTitle("seal_series_MS44_service_bulletin_r3.pdf, OEM_portal")).toBeInTheDocument();
   });
 });

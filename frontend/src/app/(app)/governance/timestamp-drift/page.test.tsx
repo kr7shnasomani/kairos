@@ -28,7 +28,7 @@ describe("TimestampDriftPage", () => {
     render(<TimestampDriftPage />);
 
     expect(await screen.findByText("CE-9")).toBeInTheDocument();
-    expect(screen.getByText("SCADA · SAP PM")).toBeInTheDocument();
+    expect(screen.getByText("SCADA, SAP PM")).toBeInTheDocument();
     expect(screen.getByText("17.5 min")).toBeInTheDocument();
     expect(screen.getByText("Advisory")).toBeInTheDocument();
   });

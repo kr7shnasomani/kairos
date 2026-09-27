@@ -31,7 +31,7 @@ export function HealthStrip({ health, loading = false }: { health: HealthDetaile
           {services.map((s) => (
             <div
               key={s.name}
-              title={[s.details, s.latency_ms != null ? `${Math.round(s.latency_ms)} ms` : null].filter(Boolean).join(" · ") || undefined}
+              title={[s.details, s.latency_ms != null ? `${Math.round(s.latency_ms)} ms` : null].filter(Boolean).join(", ") || undefined}
               className="flex min-w-0 items-center gap-2 bg-surface px-3 py-2.5 text-caption"
             >
               <span

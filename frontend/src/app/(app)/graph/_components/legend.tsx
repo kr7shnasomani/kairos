@@ -17,7 +17,7 @@ export function GraphLegend() {
         <div key={label} className="flex items-center gap-1.5">
           {dashed
             ? <span className="inline-block h-2 w-6 border-t-2 border-dashed" style={{ borderColor: c }} />
-            : <span className="inline-block h-2 w-6 rounded-full" style={{ backgroundColor: c }} />}
+            : <span className="inline-block h-2 w-6" style={{ backgroundColor: c }} />}
           {label}
         </div>
       ))}

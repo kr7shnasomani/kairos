@@ -39,7 +39,7 @@ export function ResultHeader({ pack }: { pack: RcaPack }) {
           )}
         </div>
         <span className="tabular text-label text-muted">
-          {(pack.timeline ?? []).length} events · {(pack.hypotheses ?? []).length} hypotheses · {(pack.supporting_documents ?? []).length} sources
+          {(pack.timeline ?? []).length} events, {(pack.hypotheses ?? []).length} hypotheses, {(pack.supporting_documents ?? []).length} sources
         </span>
       </div>
     </Card>

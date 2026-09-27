@@ -141,7 +141,7 @@ export function VoiceRecorder({ onBlob, disabled }: Props) {
             "grid size-16 place-items-center rounded-full transition-transform focus-visible:outline-2 focus-visible:outline-accent active:scale-95",
             disabled
               ? "cursor-not-allowed bg-line text-muted"
-              : "bg-danger text-on-danger hover:opacity-90",
+              : "bg-danger text-on-danger transition-colors hover:brightness-90",
           )}
         >
           <Icon name="microphone" className="size-7" />

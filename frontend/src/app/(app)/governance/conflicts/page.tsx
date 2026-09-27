@@ -81,7 +81,7 @@ export default function ConflictsPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance · Human sign-off"
+        eyebrow="Governance"
         title="Conflicts"
         lede="Contradictions between sources, split by track. Administrative conflicts resolve here; engineering conflicts are safety-critical and route through Management of Change."
       />

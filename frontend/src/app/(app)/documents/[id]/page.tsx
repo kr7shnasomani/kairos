@@ -61,8 +61,8 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   const meta: { label: string; value: React.ReactNode }[] = [
     { label: "Type", value: triggerLabel(d.document_type) },
     { label: "Source system", value: d.source_system },
-    { label: "Ingested", value: `${relativeTime(d.ingested_at)} · ${d.ingested_by_name ?? d.ingested_by}` },
-    { label: "File", value: `${d.mime_type ?? "—"} · ${fmtSize(d.file_size_bytes)}` },
+    { label: "Ingested", value: `${relativeTime(d.ingested_at)}, ${d.ingested_by_name ?? d.ingested_by}` },
+    { label: "File", value: `${d.mime_type ?? "—"}, ${fmtSize(d.file_size_bytes)}` },
   ];
 
   return (
@@ -78,7 +78,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           ? <StatusBadge tone="neutral" dot={false}>Superseded</StatusBadge>
           : <StatusBadge tone="verified">Active</StatusBadge>}
         {d.handwriting_suspect && (
-          <StatusBadge tone="caution">Handwriting suspect · read from image</StatusBadge>
+          <StatusBadge tone="caution">Handwriting suspect, read from image</StatusBadge>
         )}
       </div>
       <PageHeader

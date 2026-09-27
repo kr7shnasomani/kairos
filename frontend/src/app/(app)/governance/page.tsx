@@ -108,7 +108,7 @@ export default function GovernancePage() {
   // the app-wide STATUS_TONE map. A zero count stays neutral on purpose — nothing
   // pending is not a state worth colouring.
   const statusFor = (key: SurfaceKey): { label: string; tone: ReturnType<typeof statusTone> } => {
-    if (loading) return { label: "···", tone: "neutral" };
+    if (loading) return { label: "…", tone: "neutral" };
     if (key === "conflicts") return { label: `${value("openConflicts")} open`, tone: overview?.openConflicts ? statusTone("open") : "neutral" };
     if (key === "quarantine") return { label: `${value("pendingQuarantine")} pending`, tone: overview?.pendingQuarantine ? statusTone("pending") : "neutral" };
     if (key === "moc") return { label: `${value("pendingMoc")} pending`, tone: overview?.pendingMoc ? statusTone("pending") : "neutral" };
@@ -131,13 +131,13 @@ export default function GovernancePage() {
   return (
     <div data-testid="governance-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Governance · Human sign-off"
+        eyebrow="Governance"
         title="Governance"
         lede="Where contradictions surface, unverified inputs are gated, and human authority decides what becomes canonical truth."
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-caption text-muted">
-        <span>Adjudication · oversight · safeguards</span>
+        <span>Adjudication, oversight, safeguards</span>
         {failed && (
           <button type="button" onClick={() => setReload((r) => r + 1)} className="font-medium text-accent hover:underline">
             Live counts unavailable — retry
@@ -146,10 +146,10 @@ export default function GovernancePage() {
       </div>
 
       <div data-testid="governance-summary" className="mesh stagger mt-6 grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Open conflicts" value={value("openConflicts")} sub="Awaiting decision" tone={overview?.openConflicts ? "danger" : "neutral"} loading={loading} />
-          <KpiCard label="Engineering track" value={value("engineeringConflicts")} sub="Human sign-off" tone={overview?.engineeringConflicts ? "caution" : "neutral"} loading={loading} />
-          <KpiCard label="Pending quarantine" value={value("pendingQuarantine")} sub="Unverified inputs" tone={overview?.pendingQuarantine ? "caution" : "neutral"} loading={loading} />
-          <KpiCard label="Overdue" value={value("overdue")} sub="Across active queues" tone={overview?.overdue ? "danger" : "neutral"} loading={loading} />
+          <KpiCard href="/governance/conflicts" label="Open conflicts" value={value("openConflicts")} sub="Awaiting decision" tone={overview?.openConflicts ? "danger" : "neutral"} loading={loading} />
+          <KpiCard href="/governance/conflicts" label="Engineering track" value={value("engineeringConflicts")} sub="Human sign-off" tone={overview?.engineeringConflicts ? "caution" : "neutral"} loading={loading} />
+          <KpiCard href="/governance/quarantine" label="Pending quarantine" value={value("pendingQuarantine")} sub="Unverified inputs" tone={overview?.pendingQuarantine ? "caution" : "neutral"} loading={loading} />
+          <KpiCard href="/governance/sla" label="Overdue" value={value("overdue")} sub="Across active queues" tone={overview?.overdue ? "danger" : "neutral"} loading={loading} />
       </div>
 
       <div className="mt-6 flex items-end justify-between gap-3">

@@ -230,8 +230,8 @@ export function BriefDetail({ brief }: { brief: Brief }) {
             <div className="flex items-center gap-2 text-body font-semibold text-verified">
               <Icon name="check" className="size-4" />
               {isPtw
-                ? `PTW signed off — acknowledged by ${brief.acknowledged_by_name ?? (engineerSig || "engineer")} · countersigned by ${brief.countersigned_by_name ?? me?.email ?? "second authority"}`
-                : `Acknowledged${engineerSig ? ` · signed ${engineerSig}` : ""}`}
+                ? `PTW signed off — acknowledged by ${brief.acknowledged_by_name ?? (engineerSig || "engineer")}, countersigned by ${brief.countersigned_by_name ?? me?.email ?? "second authority"}`
+                : `Acknowledged${engineerSig ? `, signed ${engineerSig}` : ""}`}
             </div>
             <p className="text-caption text-muted">Both identities and timestamps are logged in the audit trail.</p>
           </div>

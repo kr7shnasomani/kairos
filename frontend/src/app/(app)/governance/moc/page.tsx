@@ -94,7 +94,7 @@ export default function MocListPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance · Management of change"
+        eyebrow="Governance"
         title="Management of Change"
         lede="Auto-drafted EWR items for engineering-track conflicts. Approval here closes the validity window of the superseded edge and clears any affected downstream facts."
       />

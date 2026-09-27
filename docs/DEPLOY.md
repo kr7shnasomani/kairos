@@ -407,6 +407,17 @@ It should return JSON over a valid certificate.
 
 In a browser, open **https://kairos-deterium.duckdns.org/docs**. You should see Swagger UI with a padlock in the address bar.
 
+Check that redirects stay on HTTPS:
+
+```bash
+curl -sI "https://kairos-deterium.duckdns.org/search?q=x" | grep -i location
+```
+
+The `location` must start with `https://`. If it says `http://`, the API container is running without
+`--forwarded-allow-ips "*"` (set in `backend/Dockerfile`'s `CMD`), so FastAPI's trailing-slash redirects downgrade to
+HTTP and the browser blocks them: the Copilot shows "Failed to fetch". The flag is baked into the image, so
+rebuild, not just recreate: `docker compose -f docker-compose.yml --profile prod up -d --build kairos-backend-api`.
+
 ---
 
 ## 12. Connect the Vercel frontend

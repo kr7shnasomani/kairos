@@ -98,9 +98,8 @@ export default function AuditPackPage() {
       </div>
 
       <PageHeader
-        compact
         className="mt-4"
-        eyebrow="Assure · Audit preparation"
+        eyebrow="Assure"
         title="Audit-pack assembly"
         lede="Evidence organised by regulatory clause. This accelerates audit preparation; it is not automated compliance. Clauses below the confidence threshold are blocked and require human sign-off."
         actions={

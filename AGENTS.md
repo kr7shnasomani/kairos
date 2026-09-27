@@ -114,8 +114,8 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed → load-dataset`. Gotcha rebuilds: `--no-deps --build kairos-frontend` (new npm deps) · `--force-recreate kairos-backend-api` (NIM env).
 
 **Tests — Docker only, never the host.** Host package resolution differs from the pinned images and produces false results.
-- Service-free tier (**519 tests**, 45 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
-  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view,image_utils,ocr_review_release,supabase_http}.py`
+- Service-free tier (**524 tests**, 46 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
+  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo}.py`
 - Full suite (needs the stack; **local stores only, never cloud**): `docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120`
 
 ---
@@ -132,6 +132,9 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 - **Backend fixture fallbacks must be disclosed in the UI** (P&ID `topology_source: "demo_fixture"`). Never render one as extracted data.
 - **Safety-critical = `RefusalCard` only.** Never a hedged answer.
 - Every answer / brief / RCA hypothesis shows `sources[]` + `AuthorityBadge`. No claim without provenance.
+- **Eyebrows are the area alone** (`Governance`, `Assure`) and UI copy carries **no `·` separators** — use a comma, or drop the separator for label+value (`L3 Standard`).
+- **Filled and secondary actions use `Button` / `ButtonLink`** (`components/ui.tsx`) — they carry the shared `.fill-sweep` hover. Never hand-roll a `bg-accent` button.
+- `PageHeader`'s `compact` is for per-record views (`/assets/[id]`) only; a top-level page keeps the full title size.
 - No `console.log` in committed code.
 
 ### Backend

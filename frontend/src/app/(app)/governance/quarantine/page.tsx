@@ -96,7 +96,7 @@ export default function QuarantinePage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance · Human review"
+        eyebrow="Governance"
         title="Review queue"
         lede="Unverified field inputs awaiting human review. Promotion to the canonical graph is a one-way gate: nothing is auto-promoted, ever."
       />
@@ -135,7 +135,7 @@ export default function QuarantinePage() {
           active={typeFilter}
           onChange={setTypeFilter}
         />
-        {!canPromote && <span className="text-label text-muted">Read-only · {role}</span>}
+        {!canPromote && <span className="text-label text-muted">Read-only {role}</span>}
       </section>
 
       {error && (

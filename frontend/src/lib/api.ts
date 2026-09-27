@@ -587,7 +587,7 @@ export async function synthesize(
     const qs = new URLSearchParams({ q: query, limit: "6" });
     if (asOf) qs.set("as_of", asOf);
     const search = await getJson<{ results: Array<{ document_id: string; snippet?: string; title?: string; authority_level?: number; asset_id?: string | null; relevance_score?: number; vault_url?: string }> }>(
-      `/search?${qs.toString()}`, 12000,
+      `/search/?${qs.toString()}`, 12000,
     );
     const results = search.results ?? [];
     // Nothing governed to answer from. This is a real, honest outcome — an empty answer
@@ -992,12 +992,12 @@ export function createAnnotation(body: {
   span_start?: number;
   span_end?: number;
 }) {
-  return postJson<Annotation>("/annotations", body);
+  return postJson<Annotation>("/annotations/", body);
 }
 
 export async function getAnnotations(documentId: string): Promise<Fetched<Annotation[]>> {
   try {
-    const data = await getJson<Annotation[]>(`/annotations?document_id=${encodeURIComponent(documentId)}`);
+    const data = await getJson<Annotation[]>(`/annotations/?document_id=${encodeURIComponent(documentId)}`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -1590,7 +1590,7 @@ export async function getAuditLog(params: {
     // `metadata`. Adapt here (same pattern as blast-radius/topology) so every
     // consumer keeps a stable, unique key.
     type RawAuditEntry = AuditLogEntry & { id?: number; details?: Record<string, unknown> | null };
-    const raw = await getJson<{ items: RawAuditEntry[]; total: number }>(`/audit-log?${qs}`);
+    const raw = await getJson<{ items: RawAuditEntry[]; total: number }>(`/audit-log/?${qs}`);
     const items = raw.items.map((it, i) => ({
       ...it,
       log_id: it.log_id ?? String(it.id ?? i),
@@ -1608,11 +1608,11 @@ export async function getAuditLog(params: {
 // Backend /health/detailed returns { status, checks: { neo4j: "ok"|"error: …", … } }.
 // Adapt to the UI's { overall, services[] } shape here (same adapter pattern as blast-radius).
 const _SERVICE_LABELS: Record<string, string> = {
-  neo4j: "Neo4j · Knowledge graph",
-  qdrant: "Qdrant · Vector store",
-  elasticsearch: "Elasticsearch · Exact search",
-  redis: "Redis · Cache & streams",
-  temporal: "Temporal · Workflows",
+  neo4j: "Neo4j",
+  qdrant: "Qdrant",
+  elasticsearch: "Elasticsearch",
+  redis: "Redis",
+  temporal: "Temporal",
 };
 
 export async function getHealthDetailed(): Promise<Fetched<HealthDetailed | null>> {
@@ -1629,7 +1629,7 @@ export async function getHealthDetailed(): Promise<Fetched<HealthDetailed | null
       details: state === "ok" ? null : state,
     }));
     // The API itself answered, so it's up — surface it as the first service.
-    services.unshift({ name: "FastAPI · Core API", status: "healthy", details: null });
+    services.unshift({ name: "FastAPI", status: "healthy", details: null });
     const anyDown = services.some((s) => s.status !== "healthy");
     return {
       data: {
@@ -1679,7 +1679,7 @@ export function confirmAssetIdentity(body: {
   facility_id: string;
   confirmed_by_user_id: string;
 }) {
-  return postJson<{ asset_id: string; tag_number: string; status: "created" }>("/assets", body);
+  return postJson<{ asset_id: string; tag_number: string; status: "created" }>("/assets/", body);
 }
 
 // --- Identity confirmation queues (Layer 1) ---

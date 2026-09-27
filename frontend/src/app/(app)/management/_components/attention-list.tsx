@@ -22,7 +22,7 @@ function rank(sla: SlaReport | null, compliance: ComplianceDashboard | null): { 
   const conflicts = (sla?.overdue_conflicts ?? []).map((c): Row => ({
     key: `conflict-${c.conflict_id}`,
     tone: "danger",
-    title: `Overdue conflict · ${label(c.track)}`,
+    title: `Overdue conflict, ${label(c.track)}`,
     asset: c.asset_id,
     since: c.sla_deadline,
     href: "/governance/conflicts",
@@ -38,7 +38,7 @@ function rank(sla: SlaReport | null, compliance: ComplianceDashboard | null): { 
     // `item_id, asset_id, input_type, sla_due_at`, so `content` is always undefined — and were it
     // ever added to that select, `elicitation_response` rows store a JSON array string, so the
     // list would render raw `[{"answer": …}]`.
-    title: `Overdue quarantine · ${label(q.input_type)}`,
+    title: `Overdue quarantine, ${label(q.input_type)}`,
     asset: q.asset_id,
     since: q.sla_due_at,
     href: "/governance/quarantine",
