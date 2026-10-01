@@ -10,13 +10,21 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from api.dependencies import CurrentUserDep, SupabaseDep
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
+
+# Only these roles can add to the validation corpus, the ground truth the model gate scores against.
+# Any role may still record a correction; it just does not become ground truth.
+_CORPUS_ROLES = frozenset({"reliability", "admin"})
+
+# Corrections one user may submit per hour. Generous for a person fixing extractions, far below what
+# a loop needs to move the circuit breaker's Z-score.
+_ANNOTATIONS_PER_HOUR = 60
 
 
 class AnnotationRequest(BaseModel):
@@ -46,6 +54,34 @@ async def create_annotation(
     """
     annotated_by = current_user.get("user_id", "unknown")
 
+    # Rate limit and de-duplicate against this user's own earlier annotations. The table already
+    # holds everything needed (annotated_by, document_id, entity_text), so no new store is added.
+    hour_ago = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    recent = await asyncio.to_thread(
+        lambda: supabase.table("ner_annotations")
+        .select("id", count="exact")
+        .eq("annotated_by", annotated_by)
+        .gte("created_at", hour_ago)
+        .execute()
+    )
+    if (recent.count or 0) >= _ANNOTATIONS_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many corrections in the last hour. Try again later.",
+        )
+    prior_overrides: list[dict] = []
+    if not payload.is_correct:
+        prior = await asyncio.to_thread(
+            lambda: supabase.table("ner_annotations")
+            .select("entity_text")
+            .eq("annotated_by", annotated_by)
+            .eq("document_id", payload.document_id)
+            .eq("is_correct", False)
+            .limit(200)
+            .execute()
+        )
+        prior_overrides = prior.data or []
+
     # Insert annotation row
     result = await asyncio.to_thread(
         lambda: supabase.table("ner_annotations").insert({
@@ -61,8 +97,9 @@ async def create_annotation(
     )
     annotation_id = result.data[0]["id"]
 
-    # Feed validation corpus — confirmed correct entities are verified ground truth
-    if payload.is_correct:
+    # Feed validation corpus — confirmed correct entities are verified ground truth, so only the
+    # roles that own the model gate can contribute to it.
+    if payload.is_correct and current_user.get("role") in _CORPUS_ROLES:
         try:
             await asyncio.to_thread(
                 lambda: supabase.table("validation_corpus").insert({
@@ -79,18 +116,25 @@ async def create_annotation(
             log.warning("validation_corpus.insert_failed", document_id=payload.document_id, error=str(exc))
 
     quarantine_updated = False
+    # One user's repeat corrections on the same document add one override, and the same entity
+    # lowers its quarantine confidence once: each call used to count as a fresh signal.
+    first_for_document = not prior_overrides
+    first_for_entity = all(r.get("entity_text") != payload.entity_text for r in prior_overrides)
     if not payload.is_correct:
         # Find matching quarantine item by document_id + entity_text, lower confidence
-        q_result = await asyncio.to_thread(
-            lambda: supabase.table("quarantine_items")
-            .select("item_id, session_context, asset_id")
-            .filter("session_context", "cs", json.dumps({"document_id": payload.document_id}))
-            .eq("input_type", "deviation_flag")
-            .limit(50)
-            .execute()
-        )
+        q_rows: list[dict] = []
+        if first_for_entity:
+            q_result = await asyncio.to_thread(
+                lambda: supabase.table("quarantine_items")
+                .select("item_id, session_context, asset_id")
+                .filter("session_context", "cs", json.dumps({"document_id": payload.document_id}))
+                .eq("input_type", "deviation_flag")
+                .limit(50)
+                .execute()
+            )
+            q_rows = q_result.data or []
         matched_asset_id = None
-        for row in (q_result.data or []):
+        for row in q_rows:
             ctx = row.get("session_context") or {}
             entity = ctx.get("entity") or {}
             if entity.get("text") == payload.entity_text:
@@ -107,17 +151,18 @@ async def create_annotation(
                 quarantine_updated = True
                 break
 
-        # Circuit breaker: record annotation correction override
-        from api.services.circuit_breaker import CircuitBreakerService
-        cb = CircuitBreakerService(supabase)
-        ann_asset_class = "unknown"
-        if matched_asset_id:
-            asset_row = await asyncio.to_thread(
-                lambda: supabase.table("assets").select("equipment_class").eq("asset_id", matched_asset_id).execute()
-            )
-            if asset_row.data:
-                ann_asset_class = asset_row.data[0].get("equipment_class") or "unknown"
-        await cb.record_override(ann_asset_class, payload.document_id, "annotation_correction")
+        # Circuit breaker: record annotation correction override (once per user and document)
+        if first_for_document:
+            from api.services.circuit_breaker import CircuitBreakerService
+            cb = CircuitBreakerService(supabase)
+            ann_asset_class = "unknown"
+            if matched_asset_id:
+                asset_row = await asyncio.to_thread(
+                    lambda: supabase.table("assets").select("equipment_class").eq("asset_id", matched_asset_id).execute()
+                )
+                if asset_row.data:
+                    ann_asset_class = asset_row.data[0].get("equipment_class") or "unknown"
+            await cb.record_override(ann_asset_class, payload.document_id, "annotation_correction")
 
         # Audit trail
         await asyncio.to_thread(

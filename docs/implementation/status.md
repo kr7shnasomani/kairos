@@ -26,15 +26,13 @@
 
 ## Headline
 
-**Where things stand (2026-09-15).** Submitted to the AI Builders Hackathon (deadline 2026-09-15,
-judging 16 to 20 September) as release
-[`v2.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v2.0.0) (`c654615`); the earlier ET AI
-Hackathon 2.0 submission is [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0)
-(`b81ed1f`). **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
+**Where things stand (2026-09-15).** Current release is
+[`v2.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v2.0.0) (`c654615`); the earlier
+[`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0) (`b81ed1f`) is the first tagged release. **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
 **https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
-524/524 service-free backend tests, 272/273 frontend tests (one pre-existing failure, P11), `tsc`
+837 service-free backend tests (834 pass and 3 skip in the container, 2026-10-01), 326/326 frontend tests across 79 files (2026-10-01), `tsc`
 clean, `eslint` 0 errors, end-to-end flows 46/46 (2026-09-14). What is still open is listed under
-[Pending — as of 2026-09-27](#pending--as-of-2026-09-27).
+[Pending — as of 2026-09-28](#pending--as-of-2026-09-28).
 
 **All 13 architecture layers are implemented.** Architecture conformance is **~91.5%** — the mean of
 the 13 per-layer scores in [Conformance](#architecture--implementation-conformance).
@@ -381,12 +379,12 @@ invisible in the graph. The denylist stays, and widening it needs the same evide
 | 5 | ~~Decide D8~~ **Done 2026-08-23** — predicate widened, `run_kg_completeness.py` re-run (16/21), figures updated in one package | ✅ | — | — |
 | 6 | **Form-parsing layout pass** (Backlog #6) | 🟡 | nothing | ~1 d |
 | — | **Re-extract the 4 image documents** — would move the OCR gate, L3's score and linkage 16/21 → 20/21 | 🔴 | **D2 — do not do this** | — |
-| — | **FastAPI major upgrade** (Backlog #2) | 🟢 | see caution below | 1–2 d |
+| — | ~~**FastAPI major upgrade** (Backlog #2)~~ **Done 2026-10-01** — fastapi 0.135.1, starlette 1.7, anyio 4.14.2; `python-jose` (and its `ecdsa`) removed; `pip-audit` reports nothing | ✅ | — | — |
 
-**Caution on the FastAPI upgrade specifically.** It is code-only, but it carries real breakage risk
-across every router *and* there is **no current full-suite pass count** to catch a regression (D4) —
-the service-free tier is the only backstop, and it cannot exercise queries or routing. Do
-not start it casually. `ecdsa` has no released fix regardless, so it closes 7 of 8 advisories, not 8.
+**Caution that still applies to the FastAPI upgrade.** It was code-only but carries real breakage risk
+across every router, and there is **no current full-suite pass count** to catch a regression (D4):
+the service-free tier is the only backstop, and it cannot exercise queries or routing. Run the stack
+tier against local stores before relying on the bump.
 
 **What is already done and must not be re-opened:** the OCR parse and size-ceiling defects (fixed and
 live-verified 2026-08-23), the "no handwriting model" attribution (disproven — the model reads it at
@@ -398,6 +396,95 @@ test pollution filtered on read, **never** a cleanup script against a cloud stor
 with its reasoning in this file; check before re-filing any of them as a gap.
 
 ---
+
+## Security pass, 2026-10-01: apply in this order
+
+The fixes from the 2026-09-30 security review (including C1, the read-only demo role) are in the working tree and tested (service-free tier, plus Go and frontend suites). They are **not deployed**. Several need a cloud write or a server setting, in this order. Every finding of that review, with where it was fixed or why it was accepted, is listed below under [Accepted risks and deploy checklist](#accepted-risks-and-deploy-checklist-from-the-2026-09-30-security-review).
+
+1. `python scripts/migrate_roles_to_app_metadata.py` (dry run), then `--apply`. Additive. Must run **before** the new backend is deployed, or every existing user resolves as `field_worker`. Cloud write: needs an explicit decision.
+2. Apply `db/migrations/017_enable_rls_remaining_tables.sql` (RLS on 14 tables). Cloud write. The backend uses the service-role key, which bypasses RLS.
+3. Server `.env`: set `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` (the API refuses to boot without the first and the connector without the second; the MoC sender must now sign `"{timestamp}." + raw body` and send `X-Webhook-Timestamp` and `X-Webhook-Signature`). Keep `APP_ENV=production`: only the exact value `development` enables dev bypasses, and any other value is treated as hostile. Optionally add the `AWS_EC2_KNOWN_HOSTS` repo secret (`ssh-keyscan -H <host>`) so the deploy workflow pins the server's host key (`DEPLOY.md` §16).
+4. Create the read-only demo user (`demo@kairos.local`, role `demo` in `app_metadata`, password from `KAIROS_SEED_PASSWORD_DEMO`; `seed_users.py` does this and needs the variable set), and set `NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD` in Vercel. The login page no longer contains the admin password, so after that the admin password can be rotated along with the other four seeded passwords (the old values are in git history). Cloud writes.
+5. Supabase dashboard: disable open email signup.
+6. Deploy the backend, then the frontend. Stack tests (`tests/test_events.py`, `test_governance.py`) need updating for the new rules before they are run again; they write to cloud stores, so that is a separate decision.
+
+Not fixed, by design: see the accepted risks below.
+
+### Accepted risks and deploy checklist (from the 2026-09-30 security review)
+
+The review (static, branch `main` at `a1d7ed4`, 1 Critical, 7 High, 14 Medium, 16 Low) is summarised here, one line per finding, so nothing is lost when the review document is retired. **Fixed** means fixed in the working tree and pinned by a test (`tests/test_sec_*.py`, the three frontend `*.test.ts` files and the Go tests, see `TESTS.md`); **nothing is deployed yet**, so the steps above still apply.
+
+**Deferred**
+
+| # | Finding | Status |
+|---|---|---|
+| C1 | One-click demo login and public seeded passwords | **Fixed in code, needs the live steps in checklist step 4.** The demo button signs in as `demo@kairos.local` (role `demo`) with `NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD` and is hidden when they are unset; the role has an explicit allow-list in `infra/policies/kairos.rego` (`read_search`, `read_briefs`, `read_assets`, `read_documents`, `read_compliance`, `read_nonconformance`, `synthesize`) and the UI shows a "Read-only demo" strip with write controls hidden. The password half is done: seeded passwords now come from gitignored `.env` (`KAIROS_SEED_PASSWORD_*`, `seed_users.py`, `tests/conftest.py`, `tools/e2e_flows.sh`), and rotating the live accounts is checklist step 4 |
+
+**High**
+
+| # | Finding | Status |
+|---|---|---|
+| H1 | Role and `site_id` read from user-editable `user_metadata` | Fixed: `dependencies.resolve_token` reads `app_metadata` only; `seed_users.py` writes it; `scripts/migrate_roles_to_app_metadata.py` migrates existing users (step 1). Open signup is a live check below |
+| H2 | Any role could post operational events and plant critical briefs | Fixed: the six ingest routes need the new `ingest_event` action (OPA map, `kairos.rego`, `require_role` in `routers/events.py`) and are site-scoped |
+| H3 | Fabricated compliance evidence through `inspection-complete` | Fixed: `document_id` must be an `inspection_report` in the vault, the evidence edge confidence is capped at 0.85 (a reporter may only lower it), the route is gated as H2 |
+| H4 | Synthesis gate ran on client-supplied evidence and category | Fixed: the server retrieves the evidence and derives the category (`routers/search.py::_server_evidence`); request `context` and `query_category` are ignored |
+| H5 | Uploaders chose their own document's authority level | Fixed: levels 1 to 3 only for `reliability` and `admin`, others capped to 4 with `authority_capped` and an audit record; `document_type` allow-list, known `asset_id`, bounded `occurred_at` |
+| H6 | An engineer could supersede any document with no approval | Fixed: authority 1 to 3 needs `reliability` or `admin` and an approved MoC (`202 pending_moc_approval`, then repeat); self-supersede and inactive replacement refused |
+| H7 | MoC webhook signature optional | Fixed: boot refuses without `MOC_WEBHOOK_SECRET` outside development; HMAC over `"{ts}." + raw body`, 5-minute skew; replay of an approved MoC is 409. Whether production sets it is a live check below |
+
+**Medium**
+
+| # | Finding | Status |
+|---|---|---|
+| M1 | RLS off on 14 of 19 tables | Fixed in the repo (`db/schema.sql`, `db/migrations/017_enable_rls_remaining_tables.sql`); **not applied live** (step 2); live state is a live check below |
+| M2 | Filter injection through `site_id` in `GET /briefs/` | Fixed: `.in_()` over `_brief_recipients` |
+| M3 | Streaming synthesis wrote no audit row and no pending-MoC warning | Fixed: `_record_synthesis` shared by both routes |
+| M4 | LLM output trusted for safety decisions | Fixed: system-message rules, escaped `<document>` blocks, missing `CONFIDENCE` or a phantom citation refuses, lowest confidence wins, NER default 0.5, RCA citations checked. Residual (accepted): escaping reduces prompt injection, it cannot eliminate it, so no gate relies on what the model says about authority |
+| M5 | Safety classifier failed open; weak same-asset anchoring | Fixed: fail-closed `safety_parameter_unspecified`, every named asset (by tag or alias) must be anchored, confidence over anchored evidence |
+| M6 | Forged actor on audit and quarantine records | Fixed: the actor is always the token's `user_id` (acks, tag-out, deviation flag, elicitation) |
+| M7 | Any role could poison the validation corpus and trip the circuit breaker | Fixed: corpus inserts only for `reliability` and `admin`; one override per user and document; 60 corrections per user per hour |
+| M8 | Site boundary missing on many routes | Fixed: `scoped_asset`, `site_scope` on events, RCA pack, audit pack, coverage, aliases, plant state; single asset create is insert-only (409). The system is still single-site, so this is future-proofing |
+| M9 | Off-boarding data readable by every role | Fixed: staff and the person concerned only |
+| M10 | Shared devices kept one user's data after sign-out | Fixed: service worker is network-first with a per-user cache key, `LOGOUT` clears caches, the offline queue is tagged with the user and never replayed for another, sign-out clears the queue and Copilot history |
+| M11 | Size and cost exhaustion | Fixed: voice upload capped, PDF page, DPI and pixel caps, spreadsheet row and unzip caps, `BadFile` is not retried, request `max_length`s, Caddy `request_body` 30 MB |
+| M12 | Client names in service-role storage paths | Fixed in code (`safe_filename`, `_safe_segment`, `document_type` allow-list). **Unconfirmed:** whether the storage library resolves `../` was never tested, because that needs a write; verify on a throwaway Supabase project |
+| M13 | Pipeline used unconfirmed aliases; test-pattern names hide documents | Aliases fixed (confirmed only). **Accepted:** the explicit test-artifact flag needs a schema column and a backfill (a cloud write), so test-pattern names are still filtered on read by `services/corpus.py` |
+| M14 | Go connector unauthenticated, forwards as admin | Fixed: `X-Connector-Secret` on every route but `/health`, boot refuses missing or default secrets, dev port on `127.0.0.1`, escaped PI queries, body and response caps |
+
+**Low**
+
+| # | Finding | Status |
+|---|---|---|
+| L1 | Tokens in `localStorage`, no server-side logout | Half fixed: `POST /auth/logout` revokes the session and the frontend calls it. **Accepted:** HttpOnly cookies cannot work here, because the frontend (Vercel) and the API (EC2) are cross-site |
+| L2 | No security headers | Fixed: CSP, nosniff, referrer and permissions policy in `next.config.ts`, headers and body cap in the Caddyfile. **Accepted:** `script-src` keeps `'unsafe-inline'` (Next 16 emits inline bootstrap scripts that a hash cannot cover and a nonce would force per-request rendering) |
+| L3 | Unencoded route params in API paths | Fixed: `encodeURIComponent` throughout `api.ts` |
+| L4 | Internal key compared with `==` | Half fixed: `hmac.compare_digest`. Not done: one admin identity for the connector and workers, with no per-service key (a design change) |
+| L5 | `APP_ENV` string match fails open | Fixed: only the exact (normalised) `development` is development |
+| L6 | Error text leaked upstream detail | Fixed: generic login, refresh, DB and storage errors, detail logged |
+| L7 | `/health/detailed`, `/docs`, `/openapi.json` public | Half fixed: `/health/detailed` needs a sign-in. **Accepted:** `/docs` and `/openapi.json` stay public (the deploy and reviewers use them) |
+| L8 | NER ignored `NVIDIA_NIM_BASE_URL` | Fixed |
+| L9 | Export redaction gaps | Fixed: hyphenated Aadhaar, `+91` phone forms, names after honorifics and sign-off labels. Sending unredacted text to model providers is by design |
+| L10 | Uploaded content type served back from signed URLs | Fixed: allow-listed types, `download=` forces `Content-Disposition: attachment` |
+| L11 | Brief ack overwrote; feedback had no recipient check | Fixed: a second ack is 409, feedback needs read access to the brief |
+| L12 | P&ID element ids collided across drawings | Fixed: graph node id is `{document_id}:{element_id}` (`GraphService.topology_node_id`) |
+| L13 | Upload size checked after the body was spooled | Mitigated at the proxy (Caddy 30 MB); the handler also reads at most `MAX_UPLOAD_MB + 1` bytes |
+| L14 | Go connector echoed upstream errors and logged the PI URL | Fixed |
+| L15 | Actions pinned by tag | Fixed: SHA pins with the version in a comment, including `deploy-ec2.yml` |
+| L16 | Frontend image could not enable strict auth | Fixed: `NEXT_PUBLIC_AUTH_STRICT` build arg in the Dockerfile and compose |
+
+**Other accepted risks found while fixing**
+
+- **Acknowledgement race.** `POST /events/{id}/ack` is check-then-insert, so two simultaneous first acknowledgements can both write. A unique index on `audit_log` would close it and is a schema change.
+- **Service-worker caches survive session expiry, by design.** `expireSession` keeps them (and the offline queue) so a field worker whose session lapsed does not lose unsent writes. They are keyed per user, so the next person to sign in is never served them; explicit sign-out wipes everything.
+- **Duplicate-event race.** Two identical events racing inside one request's runtime can both run; the insert is idempotent on `event_id` and the brief cool-down absorbs the twin (`EventBusService.mark_seen`).
+
+**Live checks that cannot be made from the repo** (do them in the Supabase dashboard and on the server, then record the result here)
+
+1. **Open email signup** (H1): Authentication, Providers, Email. Disable it if it is on.
+2. **RLS state** (M1): Advisors, Security, or `select tablename, rowsecurity from pg_tables where schemaname='public'`. Expect 19 `true` once `017` is applied.
+3. **`MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` on the server** (H7, M14): `grep -c` the server `.env`; the API and connector will not start without them.
+4. **M12 storage-path traversal** on a throwaway Supabase project (see M12 above).
+5. After deploying, probe the live API with a restricted persona and confirm a 403 (`field_worker` on `POST /events/work-order`), as `AGENTS.md` asks.
 
 ## Improvement backlog
 
@@ -415,7 +502,7 @@ with its reasoning in this file; check before re-filing any of them as a gap.
 | # | Improvement | Why it matters | Est. |
 |---|---|---|---|
 | 15 | ~~**OCR confidence gating**~~ **Closed 2026-09-14 (D1 = b).** Any span the model scores under 0.7 holds the document at `review_required`, whatever the mean — `services/ocr.ocr_review_reason`, used by `document_pipeline.run_ocr`, tested against the corpus's worst scan (0.719 mean, held) and its handwritten notes (~0.90, pass). The two degraded corpus scans are held by it. A reviewer releases or rejects a held document from its detail page (`/ocr-review/release` · `/reject`). | — |
-| 2 | **Backend dependency advisories — 10 left, both blocked upstream** | Was 16 across 4 packages; **protobuf and setuptools cleared 2026-08-23** and their suppressions removed, so the gate now catches a regression in either. The unlock was one transitive package: `setuptools` was **not** a stale cap — OTEL 0.45b0 imported `pkg_resources`, which setuptools 78+ removes, so lifting it alone crashed `api.main` on import. OTEL ≥0.49b0 drops `pkg_resources` but needs protobuf 5, which `grpcio-tools 1.62.3` forbade; `qdrant-client` asks only for `grpcio-tools>=1.41.0` and `temporalio` declares `protobuf>=3.20` with no ceiling, so pinning **`grpcio-tools>=1.66`** moved protobuf to 5.29.6 and OTEL to 1.28.0/0.49b0 with **both clients untouched**. What is left is genuinely blocked, not deferred: **`starlette 0.37.2`** (7 advisories) is pinned transitively by `fastapi==0.111.1` (`>=0.37.2,<0.38.0`) and the fixes run 0.40.0 → 1.3.1, i.e. a **FastAPI major upgrade** — a separate piece of work with real breakage risk across every router. **`ecdsa 0.19.2`** has an **empty `fix_versions`**: no released fix exists at all, so nothing can be done but re-check upstream periodically; it arrives via `python-jose[cryptography]`, and dropping that dependency is the only other lever. Dependabot PR #22 (41-package group) remains the blunt alternative. | FastAPI major: 1–2 d |
+| 2 | ~~**Backend dependency advisories**~~ **Closed 2026-10-01: `pip-audit` reports none** (fastapi 0.135.1, starlette 1.7, anyio 4.14.2; python-jose and its `ecdsa` removed as unused; the CI audit now ignores nothing). History: 10 left, both blocked upstream | Was 16 across 4 packages; **protobuf and setuptools cleared 2026-08-23** and their suppressions removed, so the gate now catches a regression in either. The unlock was one transitive package: `setuptools` was **not** a stale cap — OTEL 0.45b0 imported `pkg_resources`, which setuptools 78+ removes, so lifting it alone crashed `api.main` on import. OTEL ≥0.49b0 drops `pkg_resources` but needs protobuf 5, which `grpcio-tools 1.62.3` forbade; `qdrant-client` asks only for `grpcio-tools>=1.41.0` and `temporalio` declares `protobuf>=3.20` with no ceiling, so pinning **`grpcio-tools>=1.66`** moved protobuf to 5.29.6 and OTEL to 1.28.0/0.49b0 with **both clients untouched**. What is left is genuinely blocked, not deferred: **`starlette 0.37.2`** (7 advisories) is pinned transitively by `fastapi==0.111.1` (`>=0.37.2,<0.38.0`) and the fixes run 0.40.0 → 1.3.1, i.e. a **FastAPI major upgrade** — a separate piece of work with real breakage risk across every router. **`ecdsa 0.19.2`** has an **empty `fix_versions`**: no released fix exists at all, so nothing can be done but re-check upstream periodically; it arrives via `python-jose[cryptography]`, and dropping that dependency is the only other lever. Dependabot PR #22 (41-package group) remains the blunt alternative. | — |
 
 ### Tier 2
 
@@ -505,31 +592,27 @@ a new PS criterion arrives without a harness.
 
 ## Pending
 
-### Pending — as of 2026-09-27
+### Pending — as of 2026-09-28
 
-Hackathon-specific work (Nebius x NVIDIA) is planned in [`nebius-prep.md`](./nebius-prep.md). That file
-holds the submission plan only; general project debt found while doing it is recorded here, not there.
+The Nebius Token Factory work is planned in [`nebius-prep.md`](./nebius-prep.md). That file
+holds that plan only; general project debt found while doing it is recorded here, not there.
 
 Safety class as in [Next actions](#next-actions--in-order-with-their-safety-class): 🟢 repo only ·
 🟡 provider quota or account settings · 🔴 writes to a cloud store (needs an explicit ask).
 
 | # | Item | Class | Notes |
 |---|---|---|---|
-| P1 | **Public demo login is admin.** The login page's "Explore the live demo" button (it signs in as admin) and the seeded persona passwords (in this repo and the public `deterium-kairos` copy) let anyone act as admin on the live data. | 🔴 | Accepted for the judging window (user decision 2026-09-15). Fix: a read-only `demo` role (one write-blocking check in the backend, admin-equivalent reads, the button pointed at it), then rotate the seeded passwords in Supabase Auth |
+| P1 | **Public demo login is admin.** The login page's "Explore the live demo" button (it signs in as admin) and the seeded persona passwords (in this repo and the public `deterium-kairos` copy) let anyone act as admin on the live data. | 🔴 | Accepted while the public deployment is live (user decision 2026-09-15). Fix: a read-only `demo` role (one write-blocking check in the backend, admin-equivalent reads, the button pointed at it), then rotate the seeded passwords in Supabase Auth |
 | P2 | **Vercel preview deployments are public.** Protection was turned off entirely with the CLI; production must be public, previews need not be | 🟡 | Vercel → `kairos` → Settings → Deployment Protection → Vercel Authentication → *Only Preview Deployments* |
-| P3 | **Regenerate the DuckDNS token** — it was shown in a screenshot during setup | 🟡 | duckdns.org; nothing in the repo uses it |
-| P4 | **Keep the EC2 instance running until AWS Zero to Shipped judging ends** (other hackathons need it to 2026-10-10, Zero to Shipped Gate 2 runs the week of 2026-10-12), then follow *Pause between events* in [`DEPLOY.md`](../DEPLOY.md); check the AWS Free plan end date before restarting | 🟡 | Running costs about $2.63/day of credit, stopped about $0.21/day. $182.24 left on 2026-09-22 lasts to about 2026-11-29 |
-| P5 | **Five open Dependabot PRs** — #52 (npm, 17 updates), #46 (vitest 5, major), #41 (docker), #40 (python, 37 updates), #23 (go). Held back to keep the submission tree unchanged during judging | 🟢 | Review and merge after judging; vitest 5 and the Python group need a full service-free and frontend run |
-| P6 | **Server Elasticsearch snapshot is from 2026-09-13** (18 documents / 10 assets vs 20 / 11 locally — the QA test document and asset are missing) | 🟢 | Harmless: both are test data. Re-export with `make export-search-index` if the corpus changes |
-| P7 | **Stale measurements** — `run_retrieval_baseline.py` (predates the 2026-08-24 `/search` fix), `run_safety_eval.py` (not re-run since 2026-08-17), `run_cross_functional.py` (measured at n=37) | 🟡 | Re-run after judging, not during it (provider quota) |
+| P4 | **Keep the EC2 instance running while the public deployment is in use**, then follow *Pause when idle* in [`DEPLOY.md`](../DEPLOY.md); check the AWS Free plan end date before restarting | 🟡 | Resized `m7i-flex.large` (8 GiB) → `c7i-flex.large` (4 GiB) on 2026-09-28 after capping the Elasticsearch heap at 512 MB (validated by a production load test, ~2.37 GiB real peak — see `DEPLOY.md` §2; a 2 GiB type was also tested and does not fit). Running now costs about $2.28/day of credit (was $2.63/day), stopped about $0.21/day (unchanged — disk + Elastic IP, not instance-type-dependent). $167.64 left on 2026-09-28 lasts to about 2026-12-10 |
+| P5 | **Five open Dependabot PRs** — #52 (npm, 17 updates), #46 (vitest 5, major), #41 (docker), #40 (python, 37 updates), #23 (go). Held back to keep the release tree unchanged while the public deployment is in use | 🟢 | Confirmed still open 2026-09-28. Review and merge later; vitest 5 and the Python group need a full service-free and frontend run |
+| P7 | **Stale measurements** — `run_retrieval_baseline.py` (predates the 2026-08-24 `/search` fix), `run_safety_eval.py` (not re-run since 2026-08-17), `run_cross_functional.py` (measured at n=37) | 🟡 | Re-run when provider quota allows |
 | P10 | **Two quarantine items from a QA sweep**: an elicitation response "QA: scoring on the seal face…" (engineer persona) and a voice note whose transcript is "." (field_worker persona). Deliberately **not** filtered: a "QA:" prefix can be a real quality-assurance note, and hiding an item from a review queue means it is never reviewed | 🔴 | Dispute or archive both through the quarantine review queue, which also exercises the governance flow. A write, so the user's call |
-| P11 | **`offboarding/page.test.tsx` fails** ("keeps identifiers honest and makes retirement timing explicit"). Pre-existing: fails with the 2026-09-22 changes stashed | 🟢 | Frontend-only; the other 272 vitest tests pass |
-| P12 | **`ARCHITECTURE.md` still lists the cascade as NIM → OpenRouter → Gemini → Ollama.** Left on purpose until the Nebius Token Factory tier's role is decided; every other doc describes the registry | 🟢 | Update §6 when the tier is keyed and promoted |
-| P13 | **The Token Factory key is live in the local `.env`.** Whenever the stack runs, Token Factory is tier 1 and every answer and brief spends Nebius credits (balance $29.50 + $1 trial on 2026-09-22). No call has been made yet, by user decision | 🟡 | Comment the `NEBIUS_TOKEN_FACTORY_API_KEY` line out to pause spending: an unkeyed tier is dropped from the cascade, so it reverts to NIM with no code change |
-| P14 | **UI overhaul — first half committed and pushed as `97f72c1` (2026-09-22), CI green** (square chrome, display type, hairline meshes, Phosphor icon set, sidebar-first shell, `/system-benchmarks` + `/system-information` removed, login rebuilt, three-grey dark palette, `--on-danger`, crossfaded theme flip). **A second round is uncommitted (2026-09-27):** page-title sizes (`compact` is per-record views only), rail collapse aligned to 0px drift, rail group headings removed, landing corner ticks pulled out of the app, one `.fill-sweep` hover on every button (16 hand-rolled ones migrated to `Button`/`ButtonLink`), every user-visible `·` separator removed from the workspace (landing untouched), Governance KPI tiles deep-linked, plus two landing edits (Developers footer column removed, `#demo` YouTube player behind `DEMO_YOUTUBE_URL`) | 🟢 | Docs swept again on 2026-09-27 (FRONTEND.md rail + eyebrow + demo rules, ui-overhaul.md follow-ups, test counts). Review the uncommitted diff before it lands |
-| P15 | **Deploy the https-redirect fix (2026-09-27, uncommitted).** uvicorn `--forwarded-allow-ips "*"` + trailing slashes on `/search/`, `/audit-log/`, `/annotations/`, `POST /assets/`. Until deployed, the hosted Copilot, Audit Trail, annotations and asset creation fail with "Failed to fetch" | 🟡 | Rsync to EC2 → `docker compose -f docker-compose.yml --profile prod up -d --build kairos-backend-api` (the flag is in the image `CMD`, so a recreate alone keeps the old one); redeploy Vercel. Verify per `DEPLOY.md` § 11 (`location: https://`). Pitfall row: *Hosted "Failed to fetch"* |
-| P16 | **Re-date the demo before each event.** `make redate-demo` (dry run, today +73 days), then `APPLY=1` | 🔴 | Writes cloud Supabase + Neo4j: run by the user. Off-boarding retirement date (2026-09-30) expires otherwise. See `DATASET.md` § Keeping it current |
-| P8 | Backlog carry-overs: synthesis verdict (#8), form-parsing layout pass (#6), FastAPI major upgrade (#2), D3 `COMPONENT` labels, 7 eslint unused-var warnings | 🟢 | Unchanged; see [Next actions](#next-actions--in-order-with-their-safety-class) and the [Backlog](#improvement-backlog) |
+| P12 | **`ARCHITECTURE.md` still lists the cascade as NIM → OpenRouter → Gemini → Ollama.** Left on purpose until the Nebius Token Factory tier's role is decided; every other doc describes the registry | 🟢 | Confirmed still present 2026-09-28 (`docs/ARCHITECTURE.md` §6). Update when the tier is keyed and promoted |
+| P13 | **The Token Factory key is live in the local `.env`.** Whenever the stack runs, Token Factory is tier 1 and every answer and brief spends Nebius credits (balance $29.50 + $1 trial on 2026-09-22). No call has been made yet, by user decision | 🟡 | Confirmed still set 2026-09-28. Comment the `NEBIUS_TOKEN_FACTORY_API_KEY` line out to pause spending: an unkeyed tier is dropped from the cascade, so it reverts to NIM with no code change |
+| P16 | **Re-date the demo before each event.** `make redate-demo` (dry run, today +73 days), then `APPLY=1` | 🔴 | Writes cloud Supabase + Neo4j: run by the user. **Off-boarding retirement date (2026-09-30) is 2 days out as of 2026-09-28** — run this soon. See `DATASET.md` § Keeping it current |
+| P17 | **`deploy-ec2.yml` (added 2026-09-27) is a no-op until deploy secrets exist.** Workflow triggers on every backend push but skips every step and reports green — by design, not broken | 🟡 | User will add `AWS_EC2_HOST`/`AWS_EC2_USER`/`AWS_EC2_SSH_KEY` repo secrets (dedicated deploy key, not `kairos-aws.pem`) and open the security group's SSH rule to `0.0.0.0/0` when ready. See `DEPLOY.md` § 16 |
+| P8 | Backlog carry-overs: synthesis verdict (#8), form-parsing layout pass (#6), D3 `COMPONENT` labels, 7 eslint unused-var warnings | 🟢 | Unchanged; see [Next actions](#next-actions--in-order-with-their-safety-class) and the [Backlog](#improvement-backlog) |
 
 ### Reported UI/wiring issues — triaged and fixed 2026-08-23
 
@@ -1016,10 +1099,10 @@ recorded above.
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **524 passed** across **46 files** (re-run 2026-09-27) — no stack / secrets / network.
+- **Service-free tier:** **837 tests** across **51 files** (834 passed, 3 skipped in the container, 2026-10-01; the 3 are `test_sec_infra.py` checks that read `infra/` and `.github/`, which the image does not mount) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md`, `docs/INFRA.md` and
   `.github/workflows/tests.yml` and **all four must be updated together** (they have drifted twice).
-- **Frontend:** **271 passed across 75 files — fully green** (re-run 2026-09-15), `tsc` clean, `eslint`
+- **Frontend:** **326 passed across 79 files, fully green** (measured 2026-10-01; `landing-figures.test.ts` needs `benchmark/` mounted at `/benchmark` when run in a container), `tsc` clean, `eslint`
   0 errors / 7 unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
   container, so the file could not collect. `docker compose up -d --force-recreate --no-deps
@@ -1101,6 +1184,14 @@ recorded above.
 | **A harness that reads Elasticsearch tells you nothing about the model** | `run_ocr_gate.py` makes **zero** model calls — it compares already-indexed text against a clean sibling. So fixing `services/ocr.py` alone did **not** move it — `UNSCOREABLE 4/4` was not a verdict on OCR quality, it was an indexing gap. There is no reprocess endpoint and `POST /documents/ingest` dedups on SHA-256, so a re-upload always returns `{"status": "duplicate"}` — closing this needed calling the pipeline activities directly, bypassing that endpoint. **D2 executed 2026-08-24** (see [D2 executed](#d2-ocr-backfill-executed--2-of-4-documents-fixed-2026-08-24)): 2/4 now scoreable, `run_kg_completeness.py` moved 16/21 → 18/21. The other 2 remain correctly capped — not a leftover bug, the span-confidence gate quarantining them is working as designed. |
 | **`CLAUDE.md` is a symlink to `AGENTS.md`** | They are one file (`CLAUDE.md -> AGENTS.md`). Editing either edits both, and `git status` only ever shows `AGENTS.md`. The "four lists that must stay in sync" for the service-free test tier are therefore really **three files**: `AGENTS.md`, `docs/TESTS.md`, `.github/workflows/tests.yml`. All three drift silently — nothing fails when they disagree, because CI runs its own copy of the list. |
 | **A gate run killed by the Celery soft time limit writes nothing at all** | `time_limit=600 / soft_time_limit=540` was calibrated when nearly every NER call failed fast on a 429, making a full run ~2.5 min. Once the calls actually reach the model each costs tens of seconds and a real run takes ~12 min, so two consecutive runs died on `SoftTimeLimitExceeded` with **no history entry** — strictly worse than recording a degraded one. Raised to 1860/1800 on 2026-08-23. Watch this if the corpus grows: the limit tracks `corpus_size × per-call latency`, and the failure mode is silent absence, not an error row. |
+
+### Infra · deploy
+
+| Area | Fix |
+|---|---|
+| **Never measure this stack's memory on a dev machine for a sizing decision** | Celery defaults its worker concurrency to `os.cpu_count()`. A laptop with more cores than the target EC2 instance spawns more Celery worker processes and reports inflated memory — an 8-core Mac measured "Celery: 721 MiB" where the real 2-vCPU production box uses 211 MiB. Always measure on the actual target instance (`docker stats` + `free -m` over SSH), not locally. See `DEPLOY.md` §2 for the corrected, production-measured table. |
+| **Production's `docker-compose.yml` is a manual copy, not git-pulled** | Local repo changes to `docker-compose.yml` do not reach the server automatically — `deploy-ec2.yml` is a no-op until deploy secrets exist (P17). A local fix (e.g. the Elasticsearch heap cap, P4) can sit unapplied on production indefinitely unless someone SSHes in and re-copies the file. Check production's actual running config, don't assume it matches the repo. |
+| **2 GiB does not fit this stack — don't re-investigate without new evidence** | Tested directly on production 2026-09-28: real peak memory under load is ~2.37 GiB, already over a 2 GiB instance before any real search/ingestion traffic. Offloading the smallest services (Redis, OPA, Go connector, Caddy — under 20% combined) doesn't help: even removing all of them leaves ~1.95 GiB, still over 2 GiB, while adding cross-network latency to things that need to stay fast (auth on every request, Celery's broker, Temporal's own database) or can't run on a serverless/free-tier host at all (persistent background workers). Reaching 2 GiB needs removing real functionality (Temporal or elicitation), not right-sizing. |
 
 ### Frontend — build & runtime
 

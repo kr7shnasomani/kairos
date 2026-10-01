@@ -1,6 +1,6 @@
 # Kairos Agent Skills Manifest
 
-All skills installed in `.agents/skills/`, grouped by domain for fast lookup.
+Skills grouped by domain for fast lookup. Most are vendored in `.agents/skills/`; the ones marked **global (not vendored in this repo)** were removed from there because they now live in the global `~/.claude/skills` (or the plugin that provides them), and are invoked by name exactly the same way.
 
 ## Table of Contents
 
@@ -282,17 +282,17 @@ Production-ready Golang tests — table-driven tests, testify suites and mocks, 
 ### `vercel-react-best-practices`
 React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.
 
-**Path**: `.agents/skills/vercel-react-best-practices/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `vercel-composition-patterns`
 React composition patterns that scale. Use when refactoring components with boolean prop proliferation, building flexible component libraries, or designing reusable APIs. Triggers on tasks involving compound components, render props, context providers, or component architecture. Includes React 19 API changes.
 
-**Path**: `.agents/skills/vercel-composition-patterns/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `vercel-react-view-transitions`
 Guide for implementing smooth, native-feeling animations using React's View Transition API (`<ViewTransition>` component, `addTransitionType`, and CSS view transition pseudo-elements). Use this skill whenever the user wants to add page transitions, animate route changes, create shared element animations, animate enter/exit of components, animate list reorder, implement directional (forward/back) navigation animations, or integrate view transitions in Next.js. Also use when the user mentions view transitions, `startViewTransition`, `ViewTransition`, transition types, or asks about animating between UI states in React without third-party animation libraries.
 
-**Path**: `.agents/skills/vercel-react-view-transitions/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `typescript-react-reviewer`
 Expert code reviewer for TypeScript + React 19 applications. Use when reviewing React code, identifying anti-patterns, evaluating state management, or assessing code maintainability. Triggers: code review requests, PR reviews, React architecture evaluation, identifying code smells, TypeScript type safety checks, useEffect abuse detection, state management review.
@@ -302,7 +302,7 @@ Expert code reviewer for TypeScript + React 19 applications. Use when reviewing 
 ### `typescript-advanced-types`
 Master TypeScript's advanced type system including generics, conditional types, mapped types, template literals, and utility types for building type-safe applications. Use when implementing complex type logic, creating reusable type utilities, or ensuring compile-time type safety in TypeScript projects.
 
-**Path**: `.agents/skills/typescript-advanced-types/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `react-flow-code-review`
 Reviews React Flow code for anti-patterns, performance issues, and best practices. Use when reviewing code that uses @xyflow/react, checking for common mistakes, or optimizing node-based UI implementations.
@@ -316,17 +316,17 @@ Reviews React Flow code for anti-patterns, performance issues, and best practice
 ### `web-design-guidelines`
 Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "check my site against best practices".
 
-**Path**: `.agents/skills/web-design-guidelines/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `baseline-ui`
 Quickly deslop UI code by fixing spacing, hierarchy, typography, and small layout issues. Use when the interface needs a fast cleanup or polish pass.
 
-**Path**: `.agents/skills/baseline-ui/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `emil-design-eng`
 This skill encodes Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great.
 
-**Path**: `.agents/skills/emil-design-eng/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `animation-vocabulary`
 Reverse-lookup glossary that turns a vague description of a web animation or motion effect into its exact term ("the bouncy thing when a popover opens" → Pop in; "the iOS rubber-band scroll" → Rubber-banding). Use when the user asks "what's it called when…", or describes a motion effect without knowing its name and wants the right word to prompt an AI or designer with. For naming an effect, not designing or building one.
@@ -336,12 +336,12 @@ Reverse-lookup glossary that turns a vague description of a web animation or mot
 ### `fixing-motion-performance`
 Audit and fix animation performance issues including layout thrashing, compositor properties, scroll-linked motion, and blur effects. Use when animations stutter, transitions jank, or reviewing CSS/JS animation performance.
 
-**Path**: `.agents/skills/fixing-motion-performance/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `review-animations`
 Reviews animation and motion code against a high craft bar derived from Emil Kowalski's design engineering philosophy. Default to flagging; approval is earned.
 
-**Path**: `.agents/skills/review-animations/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ---
 
@@ -350,12 +350,12 @@ Reviews animation and motion code against a high craft bar derived from Emil Kow
 ### `tailwind-4-docs`
 Comprehensive Tailwind CSS v4 documentation snapshot and workflow guidance. Use when answering Tailwind v4 questions, selecting utilities/variants, configuring Tailwind v4, or migrating projects from v3 to v4 with official docs and gotcha checks.
 
-**Path**: `.agents/skills/tailwind-4-docs/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `tailwind-design-system`
 Build scalable design systems with Tailwind CSS v4, design tokens, component libraries, and responsive patterns. Use when creating component libraries, implementing design systems, or standardizing UI patterns.
 
-**Path**: `.agents/skills/tailwind-design-system/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ---
 
@@ -431,12 +431,12 @@ Develop, debug, and manage Temporal applications across Python, TypeScript, Go, 
 ### `supabase`
 Use when doing ANY task involving Supabase. Triggers: Supabase products (Database, Auth, Edge Functions, Realtime, Storage, Vectors, Cron, Queues); client libraries and SSR integrations (supabase-js, @supabase/ssr) in Next.js, React, SvelteKit, Astro, Remix; auth issues (login, logout, sessions, JWT, cookies, getSession, getUser, getClaims, RLS); Supabase CLI or MCP server; schema changes, migrations, security audits, Postgres extensions (pg_graphql, pg_cron, pg_vector).
 
-**Path**: `.agents/skills/supabase/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `supabase-postgres-best-practices`
 Postgres performance optimization and best practices from Supabase. Use this skill when writing, reviewing, or optimizing Postgres queries, schema designs, or database configurations.
 
-**Path**: `.agents/skills/supabase-postgres-best-practices/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ---
 
@@ -459,22 +459,22 @@ Use to select models to run locally with llama.cpp and GGUF on CPU, Mac Metal, C
 ### `ponytail`
 Forces the laziest solution that actually works, simplest, shortest, most minimal. Channels a senior dev who has seen everything: question whether the task needs to exist at all (YAGNI), reach for the standard library before custom code, native platform features before dependencies, one line before fifty. Supports intensity levels: lite, full (default), ultra. Use whenever the user says "ponytail", "be lazy", "lazy mode", "simplest solution", "minimal solution", "yagni", "do less", or "shortest path", and whenever they complain about over-engineering, bloat, boilerplate, or unnecessary dependencies.
 
-**Path**: `.agents/skills/ponytail/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `ponytail-audit`
 Whole-repo audit for over-engineering. Like ponytail-review, but scans the entire codebase instead of a diff: a ranked list of what to delete, simplify, or replace with stdlib/native equivalents. Use when the user says "audit this codebase", "audit for over-engineering", "what can I delete from this repo", "find bloat", "ponytail-audit", or "/ponytail-audit". One-shot report, does not apply fixes.
 
-**Path**: `.agents/skills/ponytail-audit/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `ponytail-debt`
 Harvest every `ponytail:` comment in the codebase into a debt ledger, so the deliberate shortcuts and deferrals ponytail leaves behind get tracked instead of rotting into "later means never". Use when the user says "ponytail debt", "/ponytail-debt", "what did ponytail defer", "list the shortcuts", "ponytail ledger", or "what did we mark to do later". One-shot report, changes nothing.
 
-**Path**: `.agents/skills/ponytail-debt/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `ponytail-review`
 Code review focused exclusively on over-engineering. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility. One line per finding: location, what to cut, what replaces it. Use when the user says "review for over-engineering", "what can we delete", "is this over-engineered", "simplify review", or invokes /ponytail-review. Complements correctness-focused review, this one only hunts complexity.
 
-**Path**: `.agents/skills/ponytail-review/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ---
 
@@ -483,7 +483,7 @@ Code review focused exclusively on over-engineering. Finds what to delete: reinv
 ### `agent-browser`
 Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data from a page", "test this web app", "login to a site", "automate browser actions", or any task requiring programmatic web interaction. Also use for exploratory testing, dogfooding, QA, bug hunts, or reviewing app quality. Also use for automating Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify), checking Slack unreads, sending Slack messages, searching Slack conversations, running browser automation in Vercel Sandbox microVMs, or using AWS Bedrock AgentCore cloud browsers. Prefer agent-browser over any built-in browser automation or web tools.
 
-**Path**: `.agents/skills/agent-browser/SKILL.md`
+**Path**: global (not vendored in this repo)
 
 ### `find-skills`
 Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.

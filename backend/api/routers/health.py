@@ -51,10 +51,15 @@ async def detailed_health_check(
     redis: RedisDep,
     temporal: TemporalDep,
     settings: SettingsDep,
+    _user: CurrentUserDep,
 ) -> dict:
     """
     Returns 200 when all downstream dependencies are reachable.
     Pings Neo4j, Qdrant, ES, Redis, and Temporal.
+
+    Any signed-in user: it makes five store round-trips per call, so it is not a public endpoint
+    (`/health/` stays open as the cheap liveness probe). `/health` is outside the OPA map, so the
+    dependency is the gate.
     """
     checks = {
         "neo4j": "pending",
@@ -214,7 +219,11 @@ async def ot_connector_registry(
     go_url = os.getenv("GO_CONNECTOR_URL", f"http://kairos-backend-go:{settings.GO_CONNECTOR_PORT}")
     try:
         client = shared_client(5.0)
-        resp = await client.get(f"{go_url}/ot/connectors", timeout=5.0)
+        resp = await client.get(
+            f"{go_url}/ot/connectors",
+            headers={"X-Connector-Secret": os.getenv("CONNECTOR_SHARED_SECRET", "")},
+            timeout=5.0,
+        )
         resp.raise_for_status()
         return resp.json()
     except Exception as exc:

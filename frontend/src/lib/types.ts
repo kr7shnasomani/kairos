@@ -3,7 +3,7 @@
 // Mirrors the roles in infra/policies/kairos.rego. `compliance` is a read-only auditor
 // (search + compliance cockpit + audit trail, no writes); it existed in OPA long before the
 // frontend knew about it, so a compliance user used to redirect-loop at login.
-export type Role = "admin" | "engineer" | "field_worker" | "reliability" | "compliance";
+export type Role = "admin" | "engineer" | "field_worker" | "reliability" | "compliance" | "demo";
 
 export interface User {
   user_id: string;

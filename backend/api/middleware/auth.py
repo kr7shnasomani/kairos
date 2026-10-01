@@ -25,7 +25,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         log.info(
             "http.request",
             method=request.method,
-            path=request.url.path,
+            path=request.scope["path"],
             status_code=response.status_code,
             duration_ms=round(duration_ms, 2),
             user_id=user_id,

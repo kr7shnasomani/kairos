@@ -216,10 +216,14 @@ async def _route_events(monkeypatch, fake_stream):
         parse_synthesis_response = staticmethod(lambda answer: {"answer": answer})
         synthesize_stream = fake_stream
 
+    async def _no_evidence(*_a, **_k):
+        return [], None, []
+
     monkeypatch.setattr(search_router, "LLMService", _FakeLLM)
+    monkeypatch.setattr(search_router, "_server_evidence", _no_evidence)
     response = await search_router.synthesize_stream(
         SynthesizeRequest(query="what failed on EQ-101?", context=[]),
-        current_user={"user_id": "u-1"}, settings=settings, driver=None,
+        current_user={"user_id": "u-1"}, settings=settings, supabase=None, driver=None, qdrant=None, es=None,
     )
     body = "".join([c if isinstance(c, str) else c.decode() async for c in response.body_iterator])
     return [line.split(":", 1)[1].strip() for line in body.splitlines() if line.startswith("event:")], body
@@ -228,7 +232,7 @@ async def _route_events(monkeypatch, fake_stream):
 async def test_a_successful_stream_ends_on_done_without_an_error_event(monkeypatch):
     """Regression: the `error` yield once sat outside the except block, so every successful stream
     ended `done` → `error` and the client threw away a good answer."""
-    async def _ok(self, query, context, category):
+    async def _ok(self, query, context, category, **_):
         yield "delta", {"text": "Mechanical seal"}
         yield "done", {"answer": "Mechanical seal", "sources": context}
 
@@ -237,7 +241,7 @@ async def test_a_successful_stream_ends_on_done_without_an_error_event(monkeypat
 
 
 async def test_a_failed_stream_ends_on_error_without_exposing_the_exception(monkeypatch):
-    async def _boom(self, query, context, category):
+    async def _boom(self, query, context, category, **_):
         yield "status", {"stage": "retrieving"}
         raise RuntimeError("internal host nim-internal:8443 refused")
 

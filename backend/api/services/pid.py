@@ -23,6 +23,7 @@ import structlog
 
 from api.services.http import shared_client
 from api.services.image_utils import shrink_image_for_nim_b64
+from api.services.ocr import capped_dpi
 
 log = structlog.get_logger(__name__)
 
@@ -155,10 +156,19 @@ class PIDService:
                 import fitz
 
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
-                if doc.page_count == 0:
-                    return None
-                png = doc[0].get_pixmap(dpi=_PID_DPI).tobytes("png")
-                doc.close()
+                try:
+                    if doc.page_count == 0:
+                        return None
+                    rect = doc[0].rect
+                    # Drawings are large sheets; the shared ceiling keeps one page from becoming a
+                    # multi-gigabyte bitmap (an A0 sheet at 150 DPI already exceeds the pixel cap).
+                    dpi = capped_dpi(rect.width, rect.height, _PID_DPI)
+                    if dpi is None:
+                        log.warning("pid.page_size_rejected", width_pt=rect.width, height_pt=rect.height)
+                        return None
+                    png = doc[0].get_pixmap(dpi=dpi).tobytes("png")
+                finally:
+                    doc.close()
                 return (png, "image/png")
             except Exception as exc:
                 log.error("pid.rasterize_failed", error=str(exc))

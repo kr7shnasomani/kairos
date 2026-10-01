@@ -63,6 +63,9 @@ services:
       target: runner
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_AUTH_STRICT: ${NEXT_PUBLIC_AUTH_STRICT:-false}
+        NEXT_PUBLIC_DEMO_EMAIL: ${NEXT_PUBLIC_DEMO_EMAIL:-}
+        NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-}
     image: kairos-frontend:local
     container_name: kairos-frontend
     ports:
@@ -92,6 +95,7 @@ services:
       <<: *backend-env
       PYTHONPATH: /app
       OT_CONNECTOR_URL: http://kairos-backend-go:8090
+      CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-kairos-connector-dev-secret}
     env_file: [.env]
     volumes:
       - ./fixtures:/app/fixtures
@@ -129,6 +133,7 @@ services:
     environment:
       <<: *backend-env
       GO_CONNECTOR_URL: http://kairos-backend-go:8090
+      CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-kairos-connector-dev-secret}
     env_file: [.env]
     volumes:
       - ./fixtures:/app/fixtures
@@ -215,6 +220,8 @@ services:
     environment:
       FASTAPI_URL: http://kairos-backend-api:8000
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-kairos-internal-dev-key}
+      # Every route except /health needs this in X-Connector-Secret. Production refuses the dev value.
+      CONNECTOR_SHARED_SECRET: ${CONNECTOR_SHARED_SECRET:-kairos-connector-dev-secret}
       EAM_FIXTURE_PATH: /app/fixtures/sample_assets.json
     env_file: [.env]
     depends_on:
@@ -298,7 +305,7 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
-      ES_JAVA_OPTS: "-Xms1g -Xmx1g"   # Xms == Xmx: avoid heap-resize pauses (ES bootstrap warning)
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"   # Xms == Xmx: avoid heap-resize pauses (ES bootstrap warning)
     volumes:
       - kairos-elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:

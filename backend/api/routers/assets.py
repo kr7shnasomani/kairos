@@ -28,6 +28,8 @@ from api.services.ot_coverage import OtCoverageService
 log = structlog.get_logger(__name__)
 router = APIRouter()
 
+_SITE_ASSET_CAP = 10000
+
 
 async def resolve_canonical_asset_id(asset_id: str, graph: GraphService, supabase) -> str | None:
     """Resolve a tag to its canonical asset_id.
@@ -50,6 +52,20 @@ async def resolve_canonical_asset_id(asset_id: str, graph: GraphService, supabas
     if res.data:
         return res.data[0]["canonical_asset_id"]
     return None
+
+
+async def scoped_asset(graph: GraphService, asset_id: str, current_user: dict) -> dict:
+    """The asset node, or 404 when it does not exist **or** sits on a site the caller may not see.
+
+    One 404 for both, so the response does not reveal that another site holds that id. `site_scope`
+    returns None for admin (every site) and the caller's own site otherwise, and fails closed for an
+    account with no site.
+    """
+    asset = await graph.get_asset(asset_id)
+    site = site_scope(current_user, None)
+    if not asset or (site is not None and asset.get("site_id") != site):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    return asset
 
 
 def partition_import_rows(
@@ -253,6 +269,7 @@ async def create_asset(
     AI-inferred identities are never accepted — confirmed_by_user_id is mandatory.
     Uses MERGE in Neo4j so duplicate registrations are idempotent.
     """
+    site_scope(current_user, payload.site_id)  # a non-admin may only register assets on their own site
     asset_id = payload.asset_id or f"ASSET-{shortuuid.uuid()[:8].upper()}"
     now = datetime.now(UTC).isoformat()
     # Who confirmed the identity comes from the session, never from the request body — the body
@@ -261,6 +278,13 @@ async def create_asset(
     confirmed_by = current_user.get("user_id") or payload.confirmed_by_user_id
 
     graph = GraphService(driver)
+    # Registering is create-only. Neo4j's ON CREATE keeps the old node, but the Supabase write used
+    # to `upsert`, so re-posting an id from another site rewrote that site's row while the graph kept
+    # the old values, leaving the two stores disagreeing. An existing id on a different site is
+    # refused here; an id already in Supabase is refused by the insert below.
+    existing = await graph.get_asset(asset_id)
+    if existing and existing.get("site_id") != payload.site_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Asset '{asset_id}' is already registered.")
     await graph.create_asset_node({
         "asset_id": asset_id,
         "tag_number": payload.tag_number,
@@ -288,9 +312,14 @@ async def create_asset(
         "identity_confirmed_by": confirmed_by,
         "identity_confirmed_at": now,
     }
-    await asyncio.to_thread(
-        lambda: supabase.table("assets").upsert(supabase_row).execute()
-    )
+    try:
+        await asyncio.to_thread(lambda: supabase.table("assets").insert(supabase_row).execute())
+    except Exception as exc:
+        if "23505" in str(exc):  # unique_violation: the id is already registered
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=f"Asset '{asset_id}' is already registered."
+            ) from exc
+        raise
 
     await asyncio.to_thread(
         lambda: supabase.table("audit_log").insert({
@@ -437,6 +466,15 @@ async def asset_coverage(
     """
     svc = CoverageService(driver, settings.NEO4J_DATABASE, supabase)
     items = await svc.asset_coverage()
+    site = site_scope(current_user, None)
+    if site:
+        # The coverage rows carry no site, so keep the ones whose asset is on the caller's site.
+        # ponytail: one capped page of the site's asset ids; push the site into the Cypher in
+        # CoverageService when a site can hold more than this many assets.
+        site_ids = {
+            a["asset_id"] for a in (await GraphService(driver).list_assets(site_id=site, limit=_SITE_ASSET_CAP))["assets"]
+        }
+        items = [i for i in items if i["asset_id"] in site_ids]
     return {"items": items, "total": len(items), "excluded_test_assets": await svc.excluded_test_assets()}
 
 
@@ -462,6 +500,7 @@ async def list_provisional_assets(current_user: CurrentUserDep, supabase: Supaba
 @router.get("/aliases/pending", summary="Unconfirmed tag-alias candidates proposed by extraction (Layer 1)")
 async def list_pending_aliases(current_user: CurrentUserDep, supabase: SupabaseDep) -> dict:
     """Alias candidates the NER pipeline proposed and no human has confirmed or rejected."""
+    site = site_scope(current_user, None)
     result = await asyncio.to_thread(
         lambda: supabase.table("asset_alias_map")
         .select("alias, canonical_asset_id, confidence, alias_source, created_at")
@@ -471,6 +510,17 @@ async def list_pending_aliases(current_user: CurrentUserDep, supabase: SupabaseD
         .execute()
     )
     items = result.data or []
+    if site and items:
+        # The alias map has no site column: keep candidates whose canonical asset is on the caller's site.
+        on_site = await asyncio.to_thread(
+            lambda: supabase.table("assets")
+            .select("asset_id")
+            .eq("site_id", site)
+            .in_("asset_id", list({i["canonical_asset_id"] for i in items}))
+            .execute()
+        )
+        allowed = {r["asset_id"] for r in (on_site.data or [])}
+        items = [i for i in items if i["canonical_asset_id"] in allowed]
     return {"items": items, "total": len(items)}
 
 
@@ -478,6 +528,7 @@ async def list_pending_aliases(current_user: CurrentUserDep, supabase: SupabaseD
 async def reject_asset_alias(
     asset_id: str,
     alias: str,
+    driver: Neo4jDep,
     supabase: SupabaseDep,
     current_user: dict = Depends(require_role("admin", "engineer")),
 ) -> dict:
@@ -487,6 +538,7 @@ async def reject_asset_alias(
     withdrawing one is a different decision than turning down a proposal. The row is removed (it is an
     extraction guess, not vault evidence) and the rejection is audited.
     """
+    await scoped_asset(GraphService(driver), asset_id, current_user)
     existing = await asyncio.to_thread(
         lambda: supabase.table("asset_alias_map")
         .select("alias")
@@ -532,9 +584,7 @@ async def get_asset(
 ) -> dict:
     """Returns the canonical asset node with live operational enrichment."""
     graph = GraphService(driver)
-    asset = await graph.get_asset(asset_id)
-    if not asset:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    asset = await scoped_asset(graph, asset_id, current_user)
 
     wo_future = asyncio.to_thread(
         lambda: supabase.table("operational_events")
@@ -598,12 +648,14 @@ async def get_asset(
 async def get_asset_aliases(
     asset_id: str,
     current_user: CurrentUserDep,
+    driver: Neo4jDep,
     supabase: SupabaseDep,
 ) -> list:
     """
     Returns all known naming variants for a canonical asset ID from the alias map.
     Used by the extraction pipeline to resolve tag references in documents.
     """
+    await scoped_asset(GraphService(driver), asset_id, current_user)
     result = await asyncio.to_thread(
         lambda: supabase.table("asset_alias_map")
         .select("*")
@@ -617,6 +669,7 @@ async def get_asset_aliases(
 async def confirm_asset_alias(
     asset_id: str,
     alias: str,
+    driver: Neo4jDep,
     supabase: SupabaseDep,
     current_user: dict = Depends(require_role("admin", "engineer")),
 ) -> dict:
@@ -631,6 +684,7 @@ async def confirm_asset_alias(
 
     Idempotent: re-confirming an already-confirmed alias is a no-op, not an error.
     """
+    await scoped_asset(GraphService(driver), asset_id, current_user)
     existing = await asyncio.to_thread(
         lambda: supabase.table("asset_alias_map")
         .select("alias, canonical_asset_id, confirmed")
@@ -680,6 +734,7 @@ async def get_asset_hierarchy(
     PARENT_OF relationships in Neo4j (up to 10 levels).
     """
     graph = GraphService(driver)
+    await scoped_asset(graph, asset_id, current_user)
     hierarchy = await graph.get_asset_hierarchy(asset_id)
     if not hierarchy:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
@@ -690,6 +745,7 @@ async def get_asset_hierarchy(
 async def get_asset_ot_coverage(
     asset_id: str,
     current_user: CurrentUserDep,
+    driver: Neo4jDep,
     supabase: SupabaseDep,
 ) -> dict:
     """
@@ -699,6 +755,7 @@ async def get_asset_ot_coverage(
     verified returns `coverage_type: "none"` — the honest answer, not a guess. Layer 10 uses this
     to decide whether a repair can be judged by telemetry or needs human closeout attestation.
     """
+    await scoped_asset(GraphService(driver), asset_id, current_user)
     return await OtCoverageService(supabase).asset_coverage(asset_id)
 
 
@@ -729,6 +786,7 @@ async def get_asset_knowledge(
     canonical = await resolve_canonical_asset_id(asset_id, graph, supabase)
     if not canonical:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    await scoped_asset(graph, canonical, current_user)
 
     as_of_dt: datetime | None = None
     if as_of:

@@ -51,6 +51,42 @@ def test_non_safety_queries_are_not_classified(query):
     assert classify(query) is None
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Can HE-302 handle 45 bar?",
+        "What pressure does HE-302 withstand?",
+        "How tight should the P-101 flange bolts be?",
+        "What is the rated current of motor M-12?",
+        "At what temperature does K-101 shut down?",
+        # Fail-closed extras: a bare quantity with a unit, no tag needed.
+        "Is 120 psi acceptable on the feed line?",
+        "Will the seal survive 150 degC?",
+        "What is the max voltage for EQ-102?",
+    ],
+)
+def test_parameter_questions_that_fit_no_list_fail_closed(query):
+    """Security review M5: each of these used to return None and skip the gate entirely."""
+    assert classify(query) in SAFETY_CRITICAL_CATEGORIES
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Who last worked on pump P-101?",
+        "When was HE-302 last inspected?",
+        "How many work orders were raised for K-101?",
+        "Show the work order history for HE-302",
+        "Which bulletin covers the pressure change for HE-302?",
+        "Which seal part number superseded FSL-2240A?",
+        "What improvement does seal part FSL-2240B have over FSL-2240A?",
+        "What are the known aliases for pump EQ-101?",
+    ],
+)
+def test_benign_intents_naming_a_tag_are_still_not_classified(query):
+    assert classify(query) is None
+
+
 def test_relief_setting_wins_over_generic_pressure():
     """Ordering guard: 'relief set pressure' contains 'pressure' but is not MAWP."""
     assert classify("relief valve set pressure on the separator") == "pressure_relief_setting"
@@ -82,7 +118,7 @@ async def test_authoritative_evidence_clears_the_gate(monkeypatch):
 
     llm = LLMService(settings)
     monkeypatch.setattr(
-        llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": "MAWP is 24 bar", "sources": ctx})
+        llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": CONTRACT_24, "sources": ctx})
     )
     result = await llm.synthesize(
         query="max allowable pressure for HE-301",
@@ -91,11 +127,17 @@ async def test_authoritative_evidence_clears_the_gate(monkeypatch):
     )
     assert not result.get("refused")
     assert result.get("refusal_reason") is None
-    assert result["answer"] == "MAWP is 24 bar"
+    assert "MAWP is 24 bar" in result["answer"]
 
 
 async def _answer(payload):
     return payload
+
+
+# A contract-conformant model answer. The post-synthesis gate refuses a safety-critical answer that
+# omits its CONFIDENCE line (security review M4), so a stub that clears the gate must carry one.
+CONTRACT_X = "ANSWER: x\nCONFIDENCE: 0.9\nSOURCES_USED: 1"
+CONTRACT_24 = "ANSWER: MAWP is 24 bar\nCONFIDENCE: 0.9\nSOURCES_USED: 1"
 
 
 # Stand-in cascade for the tests below: three tiers, no keys that could reach a real endpoint.
@@ -181,7 +223,7 @@ async def test_offtopic_authoritative_source_no_longer_clears_the_gate(monkeypat
     from api.config import settings
 
     llm = LLMService(settings)
-    monkeypatch.setattr(llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": "x", "sources": ctx}))
+    monkeypatch.setattr(llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": CONTRACT_X, "sources": ctx}))
 
     ctx = [
         {"document_id": "DOC-PTW", "text": "permit to work V-247", "authority_level": 4,
@@ -201,7 +243,7 @@ async def test_on_topic_authoritative_source_still_clears_the_gate(monkeypatch):
     from api.config import settings
 
     llm = LLMService(settings)
-    monkeypatch.setattr(llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": "x", "sources": ctx}))
+    monkeypatch.setattr(llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": CONTRACT_X, "sources": ctx}))
 
     ctx = [
         {"document_id": "DOC-OEM", "text": "HE-3xx max operating pressure 16.2 bar", "authority_level": 3,
@@ -219,7 +261,7 @@ async def test_context_without_relevance_scores_keeps_previous_behaviour(monkeyp
     from api.config import settings
 
     llm = LLMService(settings)
-    monkeypatch.setattr(llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": "x", "sources": ctx}))
+    monkeypatch.setattr(llm, "_synthesize_cascade", lambda prompt, ctx: _answer({"answer": CONTRACT_X, "sources": ctx}))
 
     ctx = [{"document_id": "DOC-SOP", "text": "site procedure", "authority_level": 4},
            {"document_id": "DOC-REG", "text": "regulation", "authority_level": 1}]

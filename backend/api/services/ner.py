@@ -18,7 +18,9 @@ from api.services.http import shared_client
 
 log = structlog.get_logger(__name__)
 
-_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+# Entities the model returns without a usable score. Below the 0.7 quarantine threshold on purpose:
+# a missing or garbled score must send the entity to review, not into the graph (security review M4).
+_DEFAULT_ENTITY_CONFIDENCE = 0.5
 
 # NIM queues concurrent calls per key. A 21-document reload fired ~18 extractions at once; the
 # last 4 waited past the 60 s cap and fell to the regex path, which only finds ASSET_TAG
@@ -173,6 +175,12 @@ class NERService:
         the configured model is unreachable, scoring the regex fallback instead).
         """
         self._nim_key = os.getenv("NVIDIA_NIM_API_KEY", "")
+        # The same setting synthesis honours. This used to be hard-coded to NVIDIA's public endpoint,
+        # so a deployment pointed at a private gateway still sent its key and document text there.
+        self._nim_url = (
+            os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1").rstrip("/")
+            + "/chat/completions"
+        )
         self._nim_model = model or os.getenv("NVIDIA_NIM_NER_MODEL", "meta/llama-3.2-11b-vision-instruct")
         self._ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self._ollama_ner_model = os.getenv("OLLAMA_NER_MODEL", "llama3.1:8b")
@@ -247,7 +255,7 @@ class NERService:
         client = shared_client(self._timeout)
         async with _nim_slot():
             resp = await client.post(
-                _NIM_URL,
+                self._nim_url,
                 headers={"Authorization": f"Bearer {self._nim_key}"},
                 json={
                     "model": self._nim_model,
@@ -280,6 +288,16 @@ class NERService:
         except Exception as exc:
             log.warning("ner.ollama_failed", error=str(exc), exc_type=type(exc).__name__)
             return None
+
+    @staticmethod
+    def _entity_confidence(raw: Any) -> float:
+        """The model's own 0..1 score, or `_DEFAULT_ENTITY_CONFIDENCE` when it is missing, not a number,
+        or out of range. One garbled score used to raise and discard the whole document's entities."""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return _DEFAULT_ENTITY_CONFIDENCE
+        return value if 0.0 <= value <= 1.0 else _DEFAULT_ENTITY_CONFIDENCE  # NaN fails the range test
 
     @staticmethod
     def _salvage_objects(content: str) -> list[dict[str, Any]]:
@@ -364,7 +382,7 @@ class NERService:
             for item in raw:
                 if not isinstance(item, dict) or "text" not in item or "entity_type" not in item:
                     continue
-                confidence = float(item.get("confidence", 0.85))
+                confidence = self._entity_confidence(item.get("confidence"))
                 entity = {
                     "text": item["text"],
                     "entity_type": item["entity_type"],

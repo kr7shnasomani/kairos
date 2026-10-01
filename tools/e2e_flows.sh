@@ -30,14 +30,17 @@ fail=0
 ok()  { pass=$((pass + 1)); echo "  PASS  $1"; }
 bad() { fail=$((fail + 1)); echo "  FAIL  $1"; }
 
+# Passwords come from the environment, else from the repo's gitignored .env (KAIROS_SEED_PASSWORD_<ROLE>).
+# Never hardcode them here: this file is public.
 password_for() {
-  case "$1" in
-    admin) echo 'KairosAdmin123!' ;;
-    engineer) echo 'KairosEngineer123!' ;;
-    reliability) echo 'KairosReliability123!' ;;
-    compliance) echo 'KairosCompliance123!' ;;
-    field_worker) echo 'KairosField123!' ;;
-  esac
+  local name val
+  name="KAIROS_SEED_PASSWORD_$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
+  val="${!name:-}"
+  if [ -z "$val" ] && [ -f "$(dirname "$0")/../.env" ]; then
+    val=$(grep -E "^${name}=" "$(dirname "$0")/../.env" | head -1 | cut -d= -f2-)
+  fi
+  [ -n "$val" ] || { echo "Set $name in .env (see .env.example)" >&2; exit 2; }
+  printf '%s' "$val"
 }
 
 login() {

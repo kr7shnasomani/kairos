@@ -1,6 +1,6 @@
 # Kairos — API Reference
 
-> **For AI coding agents:** Every HTTP endpoint is documented here. Base URL: `http://localhost:8000`. All endpoints except `/health` and `POST /auth/login` require `Authorization: Bearer <access_token>`.
+> **For AI coding agents:** Every HTTP endpoint is documented here. Base URL: `http://localhost:8000`. All endpoints except `/health/`, `/docs`, `/openapi.json`, `POST /auth/login` and `POST /auth/refresh` require `Authorization: Bearer <access_token>`.
 >
 > Also read `docs/BACKEND.md` for architecture, service internals, and non-negotiable rules before modifying any endpoint.
 
@@ -30,21 +30,22 @@
 
 **Prefix:** `/auth`
 
-Supabase issues ES256 JWTs. Tokens expire after 1 hour. Role is stored in `user_metadata.role`, not the top-level Supabase role.
+Supabase issues ES256 JWTs. Tokens expire after 1 hour. Role and site are stored in `app_metadata` (`role`, `site_id`), which users cannot edit, not in `user_metadata` and not the top-level Supabase role. Seed passwords come from `KAIROS_SEED_PASSWORD_*` in `.env` (gitignored).
 
 **Test credentials (seed via `docker exec kairos-backend-api python scripts/seed_users.py`):**
 
-| Email | Password | Role |
+| Email | Password (env var in `.env`) | Role |
 |-------|----------|------|
-| `admin@kairos.local` | `KairosAdmin123!` | `admin` |
-| `engineer@kairos.local` | `KairosEngineer123!` | `engineer` |
-| `field_worker@kairos.local` | `KairosField123!` | `field_worker` |
-| `reliability@kairos.local` | `KairosReliability123!` | `reliability` |
-| `compliance@kairos.local` | `KairosCompliance123!` | `compliance` |
+| `admin@kairos.local` | `KAIROS_SEED_PASSWORD_ADMIN` | `admin` |
+| `engineer@kairos.local` | `KAIROS_SEED_PASSWORD_ENGINEER` | `engineer` |
+| `field_worker@kairos.local` | `KAIROS_SEED_PASSWORD_FIELD_WORKER` | `field_worker` |
+| `reliability@kairos.local` | `KAIROS_SEED_PASSWORD_RELIABILITY` | `reliability` |
+| `compliance@kairos.local` | `KAIROS_SEED_PASSWORD_COMPLIANCE` | `compliance` |
+| `demo@kairos.local` | `KAIROS_SEED_PASSWORD_DEMO` | `demo` |
 
-**Dev mode:** When `APP_DEBUG=True` **and** `APP_ENV != "production"`, any request without an `Authorization` header is treated as `{user_id: "dev-user", role: "engineer", site_id: "SITE_001"}`. Both conditions are required — see `Settings.dev_bypass_allowed`.
+**Dev mode:** When `APP_DEBUG=True` **and** `APP_ENV == "development"` (the only value that enables any dev bypass; `production`, `staging` or a typo all count as non-development, and the value is trimmed and lower-cased), any request without an `Authorization` header is treated as `{user_id: "dev-user", role: "engineer", site_id: "SITE_001"}`. Both conditions are required — see `Settings.dev_bypass_allowed`. The same rule governs the OPA pass-through, the per-IP rate limit (`RATE_LIMIT_PER_MINUTE`, off only in development) and the boot guard that refuses default secrets.
 
-**Service bypass:** Bearer token matching `INTERNAL_API_KEY` (default: `kairos-internal-dev-key`) returns a service admin account without calling Supabase. Used by the Go connector and Celery workers.
+**Service bypass:** Bearer token matching `INTERNAL_API_KEY` (default: `kairos-internal-dev-key`, compared in constant time) returns a service admin account without calling Supabase. Used by the Go connector and Celery workers.
 
 **Token verification has exactly one implementation:** `dependencies.resolve_token`, which delegates to Supabase and is shared by the route dependency and the OPA middleware. Never decode these JWTs by hand — they are **ES256**, so an HS256 decode silently rejects every one of them.
 
@@ -63,7 +64,9 @@ Supabase issues ES256 JWTs. Tokens expire after 1 hour. Role is stored in `user_
 
 `field_worker` gets **403** on all six. `/search`, `/briefs`, `/assets`, `/elicitation` and `/annotations` reads stay open to every authenticated role. Two deliberate exemptions: **`OPTIONS`** is never gated (the CORS preflight carries no token, and this middleware is outermost), and **`/events/plant-state`** is exempt from `read_events` because every persona's app shell renders plant state.
 
-**Site scope is derived from the token, not the query string.** `site_id` on `GET /assets/` and the two `/compliance` reads narrows within the caller's own site; requesting another site is a **403**, and an account with no `site_id` gets nothing rather than everything. `admin` keeps the cross-site view.
+**Site scope is derived from the token, not the query string.** `site_id` on `GET /assets/` and the two `/compliance` reads narrows within the caller's own site; requesting another site is a **403**, and an account with no `site_id` gets nothing rather than everything. `admin` keeps the cross-site view. The same scoping applies by id: every `/assets/{asset_id}/...` read and the alias confirm and reject routes return one `404` for an asset that does not exist **or** sits on another site (the response does not reveal which); `GET /assets/coverage` and `/assets/aliases/pending` keep only the caller's site; `GET /events/` and `GET /events/{event_id}` filter on `site_id`; `POST /search/rca-pack` and `GET /compliance/audit-pack` drop other sites' evidence; and event ingest routes refuse a payload whose `site_id` or asset belongs to another site.
+
+**Event ingest needs `ingest_event`.** `POST /events/work-order`, `/ptw`, `/shift-handover`, `/alarm`, `/tag-out` and `/inspection-complete` are listed by route in the OPA action map and granted to `engineer`, `reliability`, `admin` and the internal key (which resolves to admin). `field_worker` and `compliance` get `403`. They create critical-priority briefs and compliance evidence. Field-worker flows (`deviation-flag`, `{event_id}/ack`) and the engineer-only `plant-state` stay on the generic write action. `POST /governance/moc/webhook` is the one write exempt from OPA, because it is authenticated by its own HMAC (section 8). OPA is asked about `request.scope["path"]`, never a path rebuilt from the `Host` header.
 
 ---
 
@@ -77,7 +80,7 @@ Exchange email + password for a JWT pair.
 ```json
 {
   "email": "admin@kairos.local",
-  "password": "KairosAdmin123!"
+  "password": "<KAIROS_SEED_PASSWORD_ADMIN>"
 }
 ```
 
@@ -91,7 +94,7 @@ Exchange email + password for a JWT pair.
 }
 ```
 
-**Errors:** `401` invalid credentials, `400` malformed payload
+**Errors:** `401` invalid credentials (the same generic `Invalid credentials` whether the account exists or not; the upstream reason is logged, never returned), `400` malformed payload
 
 > **Critical:** This handler uses a fresh anon Supabase client (never the service-role client). Using the service-role client for auth operations contaminates its session and causes RLS violations on all subsequent table writes.
 
@@ -108,7 +111,17 @@ Exchange a refresh token for a new JWT pair.
 { "refresh_token": "<token>" }
 ```
 
-**Response `200`:** Same shape as `/auth/login`.
+**Response `200`:** Same shape as `/auth/login`. A bad refresh token is a `401` with the generic `Invalid refresh token`.
+
+---
+
+### `POST /auth/logout`
+
+Revoke the caller's Supabase session server side (`scope="local"`: this device only, so signing out of one browser does not sign the shared demo account out of the others). Deletes the session behind the access token, which also kills its refresh token, and drops the token from the verified-token cache.
+
+**Auth required:** a Bearer token must be presented (`401` `Bearer token required` without one), but it is not verified: an expired token has nothing left to revoke and the client must still be able to finish signing out. This route is outside the OPA map.
+
+**Response `200`:** `{ "status": "ok" }`. Revocation is best effort; a failure is logged (`auth.logout_revoke_failed`) and still returns `ok`.
 
 ---
 
@@ -158,7 +171,7 @@ Liveness probe. Returns 200 if the API process is running.
 
 Readiness probe. Checks all 5 downstream services concurrently.
 
-**Auth required:** No
+**Auth required:** Yes, any signed-in user (`CurrentUserDep`). It makes five store round-trips per call, so it is not public; `/health/` stays open as the cheap liveness probe. `/health` is outside the OPA map, so the dependency is the gate. `/docs` and `/openapi.json` stay public. The deploy workflow therefore checks `/health`, not `/health/detailed`.
 
 **Response `200`:**
 ```json
@@ -231,7 +244,7 @@ Asset MDM: Neo4j (graph) + Supabase (relational) + Elasticsearch (search). Asset
 
 Register a new canonical asset.
 
-**Auth required:** Yes — `admin` or `engineer`
+**Auth required:** Yes — `admin` or `engineer`. A non-admin may only register an asset on their own site (`site_scope`: another site is `403`).
 
 **Request body:**
 ```json
@@ -271,6 +284,8 @@ Key fields:
   "status": "created"
 }
 ```
+
+**Errors:** `409` `Asset '<id>' is already registered.` Registration is create-only: the Supabase write is an `insert` (a unique violation is the `409`), and an id that already exists in the graph on a different site is refused before anything is written. Re-posting an id used to upsert the Supabase row while Neo4j kept the old node, leaving the two stores disagreeing.
 
 ---
 
@@ -610,30 +625,38 @@ Documents are **immutable**. Once ingested, they can only be superseded (version
 
 Ingest a document into the vault and trigger the full pipeline: OCR → NER → graph linking → vector indexing → text indexing.
 
-**Auth required:** Yes (`engineer` or `admin`)
+**Auth required:** Yes (`engineer`, `reliability` or `admin`; OPA action `ingest_document`)
 
 **Request:** `multipart/form-data`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `file` | binary | Yes | PDF, PNG, JPG, TIFF |
-| `document_type` | string | Yes | `procedure`, `regulation`, `engineering_drawing`, `maintenance_record`, `ptw`, `incident_report`, `material_certificate`, `datasheet` |
-| `authority_level` | int 1–5 | Yes | 1=Regulatory, 2=Engineering, 3=OEM, 4=Procedure, 5=Field |
-| `asset_ids` | string (JSON array) | No | `'["P-101","V-201"]'` |
-| `source_system` | string | Yes | e.g. `SAP_DMS`, `SharePoint` |
-| `access_tags` | string (JSON array) | No | e.g. `'["confidential","process"]'` |
-| `occurred_at` | ISO8601 string | No | Source document date (used for timestamp drift detection) |
+| `file` | binary | Yes | Max `MAX_UPLOAD_MB` (25 MB); Caddy refuses anything over 30 MB first |
+| `document_type` | string | Yes | One of `oem_manual`, `procedure`, `inspection_report`, `ptw`, `shift_log`, `regulation`, `pid_drawing` (7 values, `DOCUMENT_TYPES`). Anything else is `422`: the value becomes a storage path segment and feeds brief and compliance matching |
+| `authority_level` | int 1–5 | No (default 4) | 1=Regulatory, 2=Engineering, 3=OEM, 4=Procedure, 5=Field. Levels 1 to 3 may only be asserted by `reliability` or `admin`; for any other role the level is **capped to 4**, never rejected (see below) |
+| `asset_id` | string | No | Canonical asset id to link the document to; an unknown id is `422` |
+| `source_system` | string | No | Default `manual_upload`, e.g. `SAP_DMS`, `SharePoint` |
+| `occurred_at` | ISO8601 string | No | Source document date; sets `valid_from` and feeds timestamp drift detection. More than a day in the future, or more than 30 years in the past, is `422` |
+
+**Content type.** The stored `mime_type` is the upload's content type only if it is a format the pipeline can read (`text/plain`, `text/markdown`, `text/csv`, `application/pdf`, PNG, JPEG, TIFF, WebP, the `.xlsx`, `.xls` and `.ods` spreadsheet types, `message/rfc822`, `application/mbox`, `text/rfc822-headers`). Anything else, notably `text/html` and `image/svg+xml`, is stored as `application/octet-stream`, because the stored type is served back through signed URLs. The storage path is built from vetted parts only (`{document_type}/{document_id}/{safe_filename}`: directory parts dropped, `[A-Za-z0-9._-]` kept, never dot-led); the original name is kept as `file_name`.
 
 **Response `202`:**
 ```json
 {
-  "document_id": "doc-uuid",
-  "job_id": "job-uuid",
-  "workflow_id": "temporal-workflow-id",
   "status": "accepted",
-  "message": "Ingestion pipeline started"
+  "document_id": "DOC-ABC123DEF456",
+  "job_id": "job-uuid",
+  "sha256": "…",
+  "vault_path": "procedure/DOC-ABC123DEF456/sop.pdf",
+  "authority_level": 4,
+  "authority_requested": 2,
+  "authority_capped": true,
+  "workflow": "triggered",
+  "message": "Document queued for extraction. Poll /documents/DOC-ABC123DEF456/status for progress."
 }
 ```
+
+`authority_capped` is `true` when the stored level differs from the one requested. The `audit_log` `document_ingested` row records `authority_level` (stored), `authority_requested`, `authority_asserted_by` (the uploader) and `uploader_role`, so a capped upload is disclosed rather than silent. `workflow` is `triggered`, or `workflow_pending` when Temporal was down (vault row and job are committed and the workflow can be re-triggered). Storage and registration failures return a fixed message (`Vault storage upload failed.`), not the upstream exception text.
 
 SHA-256 deduplication: if an identical file was previously ingested, returns the existing `document_id` with `status: "duplicate"`.
 
@@ -688,6 +711,8 @@ string, so it opens without a header. The frontend "Open artifact" button fetche
   "expires_in": 3600
 }
 ```
+
+The signed URL carries `download=<safe filename>`, so the storage server answers with `Content-Disposition: attachment` and an artifact is never rendered inside the storage origin, whatever content type it was uploaded with.
 
 **Errors:** `404` document not found · `422` artifact path unavailable · `502` signing failed
 
@@ -911,7 +936,7 @@ PERSON names come from the Person nodes the pipeline already linked to the docum
 (`MENTIONS_PERSON`) — the same NER output, computed once at ingestion, so an export takes well
 under a second instead of re-running NER for up to two minutes. A document with no graph edges
 falls back to live `NERService`. Structured identifiers (email, phone, Aadhaar, PAN,
-employee ID, shift ID) are matched by pattern in `services/pii.py`. Masks are **stable
+employee ID, shift ID) are matched by pattern in `services/pii.py`: Aadhaar as `1234 5678 9012`, `1234-5678-9012` or unspaced; Indian mobile numbers with an optional `+91`, `(+91)`, `91` or `0` prefix, optionally split 5+5; and PERSON names the NER model never saw (it reads only the first part of a document) by context, either after an honorific (`Mr`, `Mrs`, `Ms`, `Dr`, `Shri`, `Smt`, `Er` and similar) or after a sign-off label (`Operator:`, `Prepared by`, `Approved by`, `Witnessed by`, `Performed by`, `Name` and similar). Masks are **stable
 pseudonyms** within a document — the same name is always `[PERSON_1]` — so cross-references
 in the text survive redaction, which a blanket `[REDACTED]` would destroy.
 
@@ -943,7 +968,7 @@ never the matched values.
 
 Mark a document as superseded by a newer version. Closes `valid_to` on all Neo4j KNOWLEDGE_EDGE relationships sourced from this document.
 
-**Auth required:** Yes (`engineer` or `admin`)
+**Auth required:** Yes (any role OPA lets through the generic write action; authority 1 to 3 documents are further gated, see below)
 
 Also flags the old version `status: "superseded"` in **Elasticsearch and every Qdrant chunk**, so it
 stops surfacing in default retrieval (ARCHITECTURE.md §8). Nothing is deleted from either store — a
@@ -955,6 +980,24 @@ time-travel query (`as_of`) still reaches it.
   "new_document_id": "doc-new-uuid"
 }
 ```
+
+**Gate for authority 1 to 3 (regulatory, engineering, OEM).** Closing the validity window on these facts changes what briefs and safety answers rely on, so only `reliability` and `admin` may request it (any other role: `403`), and the first request only creates a MoC in `pending_approval`:
+
+**Response `202`:**
+```json
+{
+  "status": "pending_moc_approval",
+  "old_document_id": "doc-old-uuid",
+  "new_document_id": "doc-new-uuid",
+  "moc_required": true,
+  "moc_id": "MOC-SUP-3F9A1C2B7D",
+  "message": "Approve the MoC, then repeat this request to apply the supersession."
+}
+```
+
+Nothing is closed, flagged or re-indexed yet; the old document stays current. The `moc_id` is deterministic for the (old, new) pair (`MOC-SUP-` plus a SHA-256 prefix), so repeating the request finds the same record. Approve it with `POST /governance/moc/{moc_id}/approve`, then **repeat the same request** to apply the supersession, which returns the `200` below. A rejected MoC makes the repeat a `409`. Documents below authority 3 supersede immediately.
+
+Always: a document cannot supersede itself (`400`), the replacement must exist (`404`) and be `active` (`409`).
 
 **Response `200`:**
 ```json
@@ -1047,7 +1090,7 @@ Search within a specific asset's knowledge. Same engines but asset pre-filtered.
 
 ### `POST /search/synthesize`
 
-**Phase 2.** Synthesize a natural-language answer from retrieved context using NVIDIA NIM (primary) or Ollama (fallback). Never originates knowledge — assembles only what was retrieved and passed in `context`.
+**Phase 2.** Synthesize a natural-language answer from retrieved context using NVIDIA NIM (primary) or Ollama (fallback). Never originates knowledge — assembles only what the **server** retrieved.
 
 **Auth required:** Yes
 
@@ -1055,24 +1098,13 @@ Search within a specific asset's knowledge. Same engines but asset pre-filtered.
 ```json
 {
   "query": "What is the maximum allowable pressure for P-101?",
-  "context": [
-    {
-      "document_id": "doc-oisd-6.4",
-      "title": "OISD-117 Section 6.4",
-      "snippet": "Maximum allowable working pressure: 12.5 bar at 180°C",
-      "authority_level": 1,
-      "confidence": 0.98
-    }
-  ],
-  "query_category": "max_allowable_pressure"
+  "as_of": "2026-01-01T00:00:00Z"
 }
 ```
 
-`query_category` is optional. **When omitted, the endpoint derives it** from the query text
-via `LLMService.classify_query_category` — a deterministic keyword classifier covering the six
-safety-critical categories. Classifying server-side means the safety gate applies to every
-caller (frontend, benchmark, anything added later) rather than only to callers that remember
-to set it; previously nothing in the system set it, so the gate never fired.
+`query` is required (max 2000 characters). `as_of` is optional (ISO8601, max 64 characters; a bad value is `422`) and time-travels the retrieval. **`context` and `query_category` are still accepted (so older clients keep working, `context` capped at 50 items) but are ignored.** The server runs its own hybrid search for the query (top 6, quarantine excluded, `_server_evidence` in `routers/search.py`), derives the safety category itself with `LLMService.classify_query_category`, and for isolation questions adds engineer-verified P&ID topology. The gate used to read `authority_level`, `confidence` and the category from the request body, so any signed-in role could clear it with a made-up document. A client category that differs from the derived one is logged (`synthesis.client_category_ignored`) and not used. The classifier fails closed: a question that reads like a safety parameter but fits no named category (a number with an engineering unit, "can HE-302 handle 45 bar?", "how tight should the flange bolts be?") lands in `safety_parameter_unspecified` and is gated like the rest.
+
+Prompt-injection hardening: the rules go in a system message, and the query and every retrieved document are escaped and wrapped in tags as untrusted data. A document's index, authority and id come only from its tag attributes, never from text inside it. When the model echoes several `CONFIDENCE:` lines the lowest wins, and `sources_used` citing a source number the answer was not given is dropped.
 
 When **every** provider tier fails and any returned `HTTP 429`, the response carries
 `rate_limited: true` and a `message` naming the exhausted providers. An exhausted quota is an
@@ -1094,9 +1126,11 @@ safety-critical query. On refusal the response carries `refused: true`, `answer:
 the retrieved sources for direct verification.
 
 Only **relevant, same-asset** evidence may clear the gate. An authoritative document about a
-*different* asset cannot vouch for this answer — pass `relevance_score` on each context item to get
-that tighter behaviour; context without it keeps the looser rule, so hand-assembled callers are not
-silently re-scoped.
+*different* asset cannot vouch for this answer, and **every** asset the question names must be
+vouched for by evidence filed under it (an asset can be named by tag or by a confirmed alias such
+as "Feed Pump A"): the gate takes the worst-covered asset's best authority and lowest best
+confidence. Server-retrieved evidence is always scored, so the looser unscored branch is not
+reachable from HTTP.
 
 **The gate runs twice — once on the evidence, once on the result.** The pre-gate above cannot know
 whether the model actually found the parameter. Observed live: a torque query for a non-existent
@@ -1104,11 +1138,12 @@ asset retrieved an unrelated authority-3 bulletin, cleared the pre-gate, and the
 answered *"not specified in the provided source documents"* — which rendered as a **hedged
 low-confidence answer**, the one outcome the architecture forbids for a safety-critical parameter.
 So a synthesized answer whose *own* self-reported `CONFIDENCE:` is below threshold is converted into
-a refusal. A response with no parse markers carries no self-assessment and is **not** refused —
-a false refusal is its own safety failure, because it trains operators to route around the gate.
+a refusal. This gate **fails closed**: an answer with no parseable `CONFIDENCE:` line, or one citing a
+source number outside the evidence, is refused too, because a prompt-injected document is exactly what asks the model to
+leave the line out.
 
 **Safety-critical categories (refusal when confidence < 0.7):**
-`max_allowable_pressure` · `isolation_interlock_sequence` · `torque_specification` · `electrical_rating` · `pressure_relief_setting` · `safety_shutdown_setpoint`
+`max_allowable_pressure` · `isolation_interlock_sequence` · `torque_specification` · `electrical_rating` · `pressure_relief_setting` · `safety_shutdown_setpoint` · `safety_parameter_unspecified` (the fail-closed catch-all)
 
 **Response `200` — normal:**
 ```json
@@ -1168,14 +1203,14 @@ has been raised yet.
 }
 ```
 
-An `audit_log` entry is written on every synthesis call.
+An `audit_log` entry is written on every synthesis call, streamed or not (`query`, `query_category`, `sources_used`, `evidence_document_ids`, `confidence`, `refused`, `model`). In Phase 1 (`KAIROS_PHASE < 2`) the endpoint returns the server-retrieved sources with `answer: null` and a message.
 
 ---
 
 ### `POST /search/synthesize/stream`
 
 Same answer as `POST /search/synthesize`, delivered progressively as Server-Sent Events. Identical
-request body, and the terminal payload has the same shape as `SynthesizeResponse`.
+request body (the same server-side retrieval, `context` and `query_category` ignored), and the terminal payload has the same shape as `SynthesizeResponse`, including `pending_moc`. The `done` payload is a whitelist of those fields (the provider's raw response never reaches the client), and the stream writes the same audit row as the non-streaming route; it once had neither the audit row nor the MoC disclosure.
 
 A **separate** endpoint rather than a flag on the existing one: the `ANSWER:/CONFIDENCE:/…` parse
 contract has two consumers (`routers/search.py`, `workflows/elicitation_workflow.py`) and a measured
@@ -1303,6 +1338,7 @@ Combined evidence is passed to `LLMService.rca_synthesize()`. Falls back to raw 
 - `synthesis_available: false` when NIM/Ollama is unavailable — timeline and documents still returned.
 - `refused: true` with empty `hypotheses` when the failure code is safety-critical.
 - Every call writes an `audit_log` entry with `action=rca_pack_generated`.
+- `failure_code` is capped at 200 characters. A caller on another site than the asset gets `404 Asset not found` (an asset with no registry row fails closed for non-admins; admin sees every site). A hypothesis may cite only document ids the model was shown; any other id is dropped. A missing or unparseable `CONFIDENCE` counts as low, so a safety-keyword failure code is refused rather than answered.
 
 ---
 
@@ -1310,11 +1346,16 @@ Combined evidence is passed to `LLMService.rca_synthesize()`. Falls back to raw 
 
 **Prefix:** `/events`
 
-Event ingestion for CMMS work orders, Permit-to-Work, shift handovers, DCS alarms, equipment tag-outs, and inspections. All events:
-1. Deduplicated via 10-minute Redis TTL key (same `asset_id` + `event_type`)
-2. Written to `operational_events` (Supabase)
-3. Published to the appropriate Redis Stream
-4. Trigger brief assembly asynchronously
+Event ingestion for CMMS work orders, Permit-to-Work, shift handovers, DCS alarms, equipment tag-outs, and inspections. The six ingest routes need the `ingest_event` action (`engineer`, `reliability`, `admin`, and the internal key, which is admin); `field_worker` and `compliance` get `403`. They also enforce site scope: a non-admin whose token site differs from the payload's `site_id` gets `403`, and an asset on another site is the same `404 ... is not registered.` as an unknown one. Each event:
+1. Is checked for a duplicate (read-only) against a 10-minute Redis key: `asset_id` + `event_type`, or the business id (`work_order_id`, `ptw_id`, `alarm_id`, inspection type) when the event carries one
+2. Is written to `operational_events` (Supabase) through one helper, `_store_event`
+3. Is published to the appropriate Redis Stream
+4. Triggers brief assembly asynchronously
+5. Is recorded as seen (`mark_seen`) **last**, so an ingest that fails part-way stays retryable instead of reading as `deduplicated` on the retry
+
+**Duplicate `event_id`.** `event_id` is client supplied, so the insert is not an upsert. A repeat of the same event (same type, asset, site and payload) is accepted as a retry and carries on; a duplicate `event_id` with a different payload, asset, site or type is **`409`** `An event with this event_id already exists.` and the stored row is untouched.
+
+**The actor is the token, not the body.** `performed_by` on tag-out and inspection events is a source-system claim only: the audit actor and quarantine submitter are the token's `user_id` (tag-out keeps the claim as `details.reported_performed_by`). `reported_by` is no longer accepted on deviation flags and `user_id`, `role`, `acknowledged_at` and `signature` are ignored on acknowledgements.
 
 ---
 
@@ -1337,7 +1378,7 @@ Ordered by `occurred_at` descending. Returns `event_id`, `event_type`, `event_su
 
 Ingest a CMMS work order.
 
-**Auth required:** Yes
+**Auth required:** Yes (`ingest_event`: `engineer`, `reliability`, `admin`)
 
 **Request body:**
 ```json
@@ -1387,7 +1428,7 @@ Brief assembly is delayed by `LATE_ARRIVAL_WINDOW_MINUTES` (default 5 min) via `
 
 Ingest a Permit-to-Work event.
 
-**Auth required:** Yes
+**Auth required:** Yes (`ingest_event`)
 
 **Request body:**
 ```json
@@ -1405,7 +1446,7 @@ Ingest a Permit-to-Work event.
 }
 ```
 
-PTW events always receive `priority: critical`. The EEMUA 191 governor always delivers PTW briefs regardless of push count. PTW handler also revokes any pending delayed WO brief for the same asset before assembling immediately.
+PTW events always receive `priority: critical`. The EEMUA 191 governor always delivers PTW briefs regardless of push count. The PTW handler assembles immediately and leaves other events' pending briefs alone (they go to other recipients).
 
 **Response `202`:** Same shape as work order.
 
@@ -1415,7 +1456,7 @@ PTW events always receive `priority: critical`. The EEMUA 191 governor always de
 
 Ingest a shift handover event.
 
-**Auth required:** Yes
+**Auth required:** Yes (`ingest_event`)
 
 **Request body:**
 ```json
@@ -1437,7 +1478,7 @@ Ingest a shift handover event.
 
 Ingest an alarm acknowledgment.
 
-**Auth required:** Yes (`field_worker` or higher — OPA exempts non-sensitive event writes)
+**Auth required:** Yes (`ingest_event`: `engineer`, `reliability`, `admin`. This used to be open to `field_worker`.)
 
 **Request body:**
 ```json
@@ -1462,7 +1503,7 @@ Ingest an alarm acknowledgment.
 
 Ingest an equipment tag-out event. Used when a physical tag-out (lockout/tagout) is applied to an asset.
 
-**Auth required:** Yes
+**Auth required:** Yes (`ingest_event`)
 
 **Request body:**
 ```json
@@ -1480,7 +1521,8 @@ Ingest an equipment tag-out event. Used when a physical tag-out (lockout/tagout)
 **Side effects:**
 - Inserts into `operational_events` and publishes to `kairos:events:tag_out` stream
 - Writes `audit_log` entry with `action=equipment_tag_out`
-- Triggers delayed brief assembly (same countdown as WO)
+- Triggers delayed brief assembly (same countdown as WO). It does not hold a pending slot: a tag-out neither cancels nor is cancelled by another event's brief
+- The `audit_log` actor is the caller's `user_id`; the body's `performed_by` is kept as `details.reported_performed_by`
 
 **Response `202`:**
 ```json
@@ -1499,7 +1541,7 @@ Ingest an equipment tag-out event. Used when a physical tag-out (lockout/tagout)
 
 Ingest an inspection completion event. Optionally creates a Neo4j knowledge edge if a supporting document is provided. Low-confidence findings (<0.7) are automatically quarantined.
 
-**Auth required:** Yes
+**Auth required:** Yes (`ingest_event`)
 
 **Request body:**
 ```json
@@ -1519,7 +1561,10 @@ Ingest an inspection completion event. Optionally creates a Neo4j knowledge edge
 
 `result` values: `passed | failed | conditional`
 
+`document_id`, when given, must be an existing vault document of type `inspection_report`, otherwise **`422`** `document_id must be an inspection_report already in the vault.` The edge is compliance evidence, so it cannot point at an id the caller made up. `confidence` is **capped**: the reporter may lower it (below 0.7 routes the finding to quarantine) but the evidence edge never exceeds `INSPECTION_EVIDENCE_CONFIDENCE` (0.85) and stays `unverified` until a human verifies it. `performed_by` is optional and informational.
+
 **Side effects:**
+- The event is stored first, as the system of record, so a retry after a later failure finishes the job
 - If `document_id` provided: creates `INSPECTION_RECORD` Neo4j edge with all 6 required properties
 - If `confidence < 0.7`: inserts into `quarantine_items` with `input_type=field_observation`
 - If `result = "failed"` or `findings` non-empty: triggers immediate brief assembly
@@ -1546,14 +1591,13 @@ Ingest an inspection completion event. Optionally creates a Neo4j knowledge edge
 
 Report a physical deviation from the last known state for an asset. Freezes all unacknowledged briefs for the asset until resolved. Carries a 24-hour SLA (overrides default 5-day quarantine SLA).
 
-**Auth required:** Yes
+**Auth required:** Yes (any authenticated role; this is the field-worker flow and stays on the generic write action). The reporter is always the token's `user_id`.
 
 **Request body:**
 ```json
 {
   "asset_id": "P-101",
   "description": "Bypass valve observed open — not reflected in DCS state",
-  "reported_by": "tech-uuid",
   "affected_topology_path": "P-101 → XV-101 → V-201"
 }
 ```
@@ -1612,7 +1656,7 @@ Resolve a physical deviation flag. Unfreezes briefs and optionally creates an Mo
 
 Set the current plant operating state for a site. Non-critical briefs are suppressed during `turnaround`, `shutdown`, or `emergency` states.
 
-**Auth required:** Yes — `engineer` or `admin`
+**Auth required:** Yes — `engineer` or `admin`. An engineer may only set their own site's state (`403` otherwise).
 
 **Request body:**
 ```json
@@ -1644,7 +1688,7 @@ Set the current plant operating state for a site. Non-critical briefs are suppre
 
 Get the current plant operating state for a site.
 
-**Auth required:** Yes
+**Auth required:** Yes. Admin may read any site; everyone else only their own (`site_scope`).
 
 **Response `200`:**
 ```json
@@ -1680,27 +1724,24 @@ Get a single operational event with event correlation metadata.
 
 `compound_event_id` and `correlated_event_ids` are set when this event was correlated with other same-asset events within `DEDUP_WINDOW_MINUTES`.
 
-**`404`** if not found.
+**`404`** if not found, or if it sits on another site than the caller's (admin sees every site).
 
 ---
 
 ### `POST /events/{event_id}/ack`
 
-Acknowledge receipt of an operational event.
+Acknowledge receipt of an operational event. Writes a server-signed `brief_acknowledged` row to `audit_log`.
 
 **Auth required:** Yes
 
-**Request body:**
+**Request body:** only `notes` is read. `user_id`, `role`, `acknowledged_at` and `signature` are accepted so older clients still parse, and ignored: who, in what role, when and the HMAC-SHA256 signature all come from the verified token and the server clock.
 ```json
-{
-  "user_id": "tech-uuid",
-  "role": "field_worker",
-  "signature": "John Smith",
-  "notes": "Acknowledged, will investigate"
-}
+{ "notes": "Acknowledged, will investigate" }
 ```
 
-**Response `200`:** `{"event_id": "...", "ack_recorded": true}`
+**Response `200`:** `{"status": "acknowledged", "event_id": "...", "user_id": "<token user>"}`. Repeating it returns the first acknowledgement with `"repeat": true` and writes nothing (one per user per event).
+
+**Errors:** `404` the event does not exist or is on another site. `403` `Not a recipient of this event.`: staff (`engineer`, `reliability`, `admin`) may acknowledge any event on their site; any other role only if it is the recipient (themselves or their `site-{site_id}` address) of a brief that event triggered. The repeat check is check-then-insert, so two simultaneous first acknowledgements can both write; a unique index on `audit_log` would close that and is a schema change.
 
 ---
 
@@ -1708,7 +1749,7 @@ Acknowledge receipt of an operational event.
 
 **Prefix:** `/briefs`
 
-Operator intelligence briefs assembled from 5 parallel queries (Neo4j graph + Qdrant vectors + Elasticsearch + Supabase event history + regulatory graph). Governed by EEMUA 191: hard ceiling ≤6 push events/operator/hour, 4-hour asset cool-down per (recipient, asset) pair.
+Operator intelligence briefs assembled from 5 parallel queries (Neo4j graph + Qdrant vectors + Elasticsearch + Supabase event history + regulatory graph). Governed by EEMUA 191: hard ceiling ≤6 push events/operator/hour, 4-hour cool-down per (recipient, asset, trigger event type).
 
 ---
 
@@ -1807,7 +1848,7 @@ Get current push governor state for the authenticated user.
 
 ### `GET /briefs/{brief_id}`
 
-Get a specific brief. Recipient-scoped: returns the brief only if it's addressed to the caller (`recipient_user_id == user_id`) **or to their site** (`recipient_user_id == site-{site_id}`) — otherwise `404`. Site-wide briefs (recipient `site-{site_id}`) are readable by any user at that site; without the site clause they were unopenable by anyone. Same scoping applies to `POST /briefs/{brief_id}/ack`.
+Get a specific brief. Recipient-scoped: returns the brief only if it's addressed to the caller (`recipient_user_id == user_id`) **or to their site** (`recipient_user_id == site-{site_id}`) — otherwise `404`. Site-wide briefs (recipient `site-{site_id}`) are readable by any user at that site; without the site clause they were unopenable by anyone. Same scoping applies to `POST /briefs/{brief_id}/ack`. The one extension: a **PTW brief** (`requires_countersignature`) is also readable by any staff role (`engineer`, `reliability`, `admin`), because a permit is a posted safety document and the countersigner is not the recipient. The list endpoint filters with `.in_("recipient_user_id", ...)` over the same recipient set (never an `.or_()` filter string built from the `site_id` claim, which could smuggle in a condition of its own).
 
 **Auth required:** Yes
 
@@ -1827,6 +1868,8 @@ would let one user sign as another, which is exactly what an acknowledgment reco
 For PTW briefs (`requires_countersignature: true`) this records the **first** signature only.
 `acknowledged_at` is deliberately left null and the response status is `pending_countersignature` —
 the brief is not complete until a second, distinct authority countersigns (see below).
+
+**An acknowledgement is final.** A second `POST /briefs/{brief_id}/ack` on an already acknowledged brief is **`409`** `Brief '<id>' is already acknowledged.` Re-acking used to overwrite `acknowledged_by` (for a PTW, swapping the acknowledger the countersigner is checked against) and replace the signed audit row.
 
 **Response `200`:**
 ```json
@@ -1900,6 +1943,8 @@ Submit feedback on brief accuracy.
 When `rating = "incorrect"`: writes `confidence_recheck_queued` to `audit_log` with `source_document_ids`.
 
 **Response `200`:** `{"brief_id": "...", "feedback_recorded": true, "confidence_recheck_queued": true}`
+
+Same visibility rule as reading the brief: feedback on a brief the caller cannot open is `404`.
 
 ---
 
@@ -2206,9 +2251,16 @@ In-app MoC sign-off (engineer/admin authority — mirrors OPA `can_resolve_moc`)
 
 Receive an MoC resolution webhook from the plant MoC system.
 
-**Auth required:** Yes (`admin` or service key)
+**Auth required:** HMAC, not a user token. The plant's MoC system has no Kairos login, so this one route is exempt from OPA (`_SIGNED_WEBHOOKS`) and its signature is mandatory wherever auth is enforced.
 
-Optionally verifies HMAC-SHA256 signature via `X-Webhook-Signature` header when `MOC_WEBHOOK_SECRET` is configured.
+**Signature (`verify_moc_webhook`).** Two headers are required:
+
+| Header | Value |
+|---|---|
+| `X-Webhook-Timestamp` | unix seconds the sender signed at |
+| `X-Webhook-Signature` | hex HMAC-SHA256, keyed by `MOC_WEBHOOK_SECRET`, over `"{timestamp}." + raw request body` |
+
+The signature covers the body bytes exactly as received (the old check re-serialised the parsed JSON and did not cover a timestamp). A timestamp more than **5 minutes** from the server clock, either way, is `401` `Stale webhook timestamp`, so a captured body cannot be replayed later; a missing header is `401`; a bad signature is `401`. With no `MOC_WEBHOOK_SECRET` the route is `503` anywhere auth is enforced, and the only unsigned path is development (`APP_ENV=development` with `APP_DEBUG`). Outside development the API refuses to boot without the secret. A body that is not a JSON object is `400`. An already approved MoC is `409` (final, like the in-app approve route; this also stops an in-window replay flipping it to rejected).
 
 **Request body:**
 ```json
@@ -2690,8 +2742,8 @@ Submit Q&A responses. Stored in `quarantine_items` for expert review before grap
 
 Questions are a `string[]`, so the question **text** is the identifier. `question_index` is
 accepted as an alternative for callers holding the position instead; supply one or the other.
-`submitted_by` is **optional** — it defaults to the authenticated user, matching
-`POST /elicitation/offboarding/{session_id}/responses`.
+`submitted_by` is accepted for older clients and **ignored**: the submitter is always the authenticated user,
+as on `POST /elicitation/offboarding/{session_id}/responses`.
 
 > Corrected 2026-08-16. This block previously documented `session_id` and `question_id`, neither of
 > which the endpoint has ever accepted. The request model was also an untyped `list[dict[str, str]]`,
@@ -2722,8 +2774,10 @@ Submit a voice note for a work order. Transcribed via Groq Whisper, NER extracte
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `file` | binary | Yes | Audio file (WAV, MP3, M4A, FLAC) |
-| `submitted_by` | string | Yes | User ID of submitter |
+| `file` | binary | Yes | Audio file (WAV, MP3, M4A, FLAC). Over `MAX_UPLOAD_MB` is `413`, read in 1 MB chunks so an unsized upload is never held whole in memory |
+| `submitted_by` | string | No | Ignored: the submitter is the authenticated user |
+
+The object path is `voice_notes/{work_order_id}/{sha8}_{name}` with both segments reduced to `[A-Za-z0-9._-]` (directory parts and leading dots dropped), so a name such as `../../x` cannot escape the folder.
 
 **Processing pipeline:**
 1. SHA-256 dedup check — returns existing item if same audio file submitted twice
@@ -2899,7 +2953,7 @@ Submit responses for one session item. Stores in `quarantine_items` with `input_
 }
 ```
 
-`question_index` is an integer (0-based). `submitted_by` defaults to the current user if omitted.
+`question_index` is an integer (0-based). `submitted_by` is accepted and ignored: the submitter is the authenticated user. Off-boarding programmes are restricted to staff (`engineer`, `reliability`, `admin`) and the person being offboarded (matched on id or e-mail): the list returns only programmes the caller may see, and reading, fetching questions for, answering or completing any other programme is `403` (unknown id `404`).
 
 **Response `200`:**
 ```json
@@ -2943,7 +2997,8 @@ Submit a NER correction annotation.
 **Side effects:**
 - Inserts annotation into `ner_annotations`
 - If `is_correct=false`: reduces `quarantine_items.confidence` by 0.1 for any pending quarantine item with matching `document_id` + `entity_type`; writes `audit_log` entry with `action=confidence_recheck_queued`; records a circuit breaker override for the entity type
-- If `is_correct=true`: adds to `validation_corpus` with `authority=annotation_correction`
+- If `is_correct=true`: adds to `validation_corpus` with `authority=annotation_correction`, but **only for `reliability` and `admin`**: the corpus is the ground truth the model gate scores against. Any other role still records the annotation, which just does not become ground truth
+- Anti-gaming: at most 60 corrections per user per hour (`429`). A user's repeat corrections on the same document add one circuit-breaker override, and correcting the same entity again does not lower its quarantine confidence a second time
 
 **Response `201`:**
 ```json
@@ -3051,11 +3106,13 @@ Query the audit log with optional filters.
 
 The Go connector (Gin) bridges OT historian data and EAM sync with the FastAPI backend. Uses `INTERNAL_API_KEY` as a service bearer token when calling FastAPI.
 
+**Authentication.** Every route except `GET /health` requires `X-Connector-Secret: <CONNECTOR_SHARED_SECRET>` (`/ot` and `/eam` groups, constant-time compare; otherwise `401 {"error": "unauthorized"}`). The connector refuses to start without `CONNECTOR_SHARED_SECRET`, and when `APP_ENV` is not `development` it also refuses the dev defaults for `CONNECTOR_SHARED_SECRET` and `INTERNAL_API_KEY`. The FastAPI side (`/health/connectors`) and the attribution worker send the header from the same env var. Request bodies are capped at 1 MiB (`413`) and upstream replies read at 4 MiB; upstream failure text is logged, never echoed to the caller (generic `upstream request failed`, `request failed`). In the dev compose override the port is published on `127.0.0.1` only.
+
 ---
 
 ### `GET /health`
 
-Connector liveness probe.
+Connector liveness probe (unauthenticated, no data; used by the Docker healthcheck).
 
 **Response `200`:** `{"status": "ok"}`
 
@@ -3126,8 +3183,11 @@ Proxy an EAM work order into Kairos event ingestion. Forwards raw body to FastAP
 | `401` | Missing or invalid JWT |
 | `403` | OPA policy denied (wrong role for the route) |
 | `404` | Resource not found |
-| `409` | Conflict (duplicate asset_id, document already superseded) |
-| `422` | Pydantic validation error (field type mismatch) |
+| `409` | Conflict (asset id already registered, event_id reused with a different payload, brief already acknowledged, MoC already approved, rejected supersede MoC) |
+| `413` | Upload larger than `MAX_UPLOAD_MB` (25 MB; document and voice-note uploads). Caddy refuses bodies over 30 MB before they reach the API |
+| `422` | Pydantic validation error (field type mismatch, or a request over a size cap) |
+| `429` | Per-IP rate limit (`RATE_LIMIT_PER_MINUTE`, enforced whenever `APP_ENV` is not `development`), or more than 60 annotation corrections per user per hour |
+| `503` | MoC webhook with no `MOC_WEBHOOK_SECRET` configured |
 | `500` | Internal server error — check `docker logs kairos-backend-api 2>&1 \| tail -30` |
 
 **OPA 403 response shape:**
@@ -3138,6 +3198,8 @@ Proxy an EAM work order into Kairos event ingestion. Forwards raw body to FastAP
   "user_role": "field_worker"
 }
 ```
+
+**Request size caps** (all `422`): `POST /search/synthesize` and `/synthesize/stream` take a `query` of at most 2000 characters, `as_of` at most 64, `context` at most 50 items; `rca-pack` `failure_code` at most 200; `POST /assets/bulk` 1 to 5000 rows; the feedback `note` at most 2000 and the OCR review `note` at most 1000. Error responses never carry upstream exception text: Supabase foreign-key violations return `A referenced record does not exist.`, unique violations `A record with these identifiers already exists.`, and storage and signing failures fixed messages.
 
 **Pydantic 422 response shape:**
 ```json
@@ -3160,20 +3222,21 @@ Proxy an EAM work order into Kairos event ingestion. Forwards raw body to FastAP
 # Get a token
 TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@kairos.local","password":"KairosAdmin123!"}' \
+  -d '{"email":"admin@kairos.local","password":"'"$KAIROS_SEED_PASSWORD_ADMIN"'"}' \
   | jq -r .access_token)
 
 # Use it
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/assets/P-101
 
-# Health check (no auth needed)
-curl http://localhost:8000/health/detailed
+# Liveness (no auth needed); /health/detailed needs a token
+curl http://localhost:8000/health/
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/health/detailed
 
 # Internal service call (Go connector pattern)
 curl -H "Authorization: Bearer kairos-internal-dev-key" \
   http://localhost:8000/assets/P-101
 
-# Dev shortcut: omit Authorization header when APP_DEBUG=True and APP_ENV != production
+# Dev shortcut: omit Authorization header when APP_DEBUG=True and APP_ENV=development
 # Treated as {user_id: "dev-user", role: "engineer", site_id: "SITE_001"}
 curl http://localhost:8000/assets/P-101
 ```
@@ -3182,13 +3245,13 @@ curl http://localhost:8000/assets/P-101
 
 | Role | Can do |
 |------|--------|
-| `field_worker` | Read search, read briefs, ack briefs, post alarms, plant state. **403 on audit-log, compliance, governance, documents and the events feed** |
-| `engineer` | Above + ingest documents, write assets, read/resolve governance, read documents + events + audit + compliance, start offboarding |
-| `reliability` | Engineer's reads + promote quarantine, countersign briefs (no asset write) |
+| `field_worker` | Read search, read briefs, ack briefs, flag deviations, read plant state. **403 on audit-log, compliance, governance, documents, the events feed and every event-ingest route** |
+| `engineer` | Above + ingest documents and events (`ingest_event`), write assets, read/resolve governance, read documents + events + audit + compliance, start offboarding |
+| `reliability` | Engineer's reads and ingests + promote quarantine, countersign briefs, assert authority 1 to 3 at ingest, supersede authority 1 to 3 documents (no asset write) |
 | `compliance` | Read search, compliance, audit, non-conformance (conflicts + quarantine) and events. **Not** the model gate, MoC, circuit breaker or documents |
 | `admin` | Everything, including the cross-site view |
 
-Verify the policy's decisions with `tools/verify_authz_policy.sh` (34 cases against a throwaway
+Verify the policy's decisions with `tools/verify_authz_policy.sh` (39 cases against a throwaway
 OPA, safe to run while the stack is up). That checks the policy is *correct*; to check it is
 *reached*, probe the live API with a restricted persona and confirm a 403 —
 `curl -H "Authorization: Bearer $FIELD_TOKEN" localhost:8000/audit-log/` must not return 200.

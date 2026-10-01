@@ -7,7 +7,7 @@ This file is the whole thing: what to click, what to say, what **not** to say, a
 [§3](#3-the-10-screens-you-will-show) first, rehearse [§4](#4-the-script) with a stopwatch, print
 [§5](#5-pace-card--tape-this-to-the-laptop).
 
-Judged on: **Innovation 25 · Business Impact 25 · Technical Excellence 20 · Scalability 15 · UX 15.**
+Each beat is tied to one of five themes: **Innovation, Business Impact, Technical Excellence, Scalability, UX.**
 Every beat says which of those it is buying.
 
 ---
@@ -89,7 +89,7 @@ anything.
 
 ## 3. The 10 screens you will show
 
-Ten tabs, in this order. Three of them use a different login on purpose — when a judge sees a shorter
+Ten tabs, in this order. Three of them use a different login on purpose — when a viewer sees a shorter
 sidebar, they are seeing role-based access control without you claiming anything.
 
 | Tab | Route | Logged in as | State before you start | Used in |
@@ -131,17 +131,17 @@ the four problem numbers.
 **SAY:**
 
 > "Every large plant in this country already has the answer to almost every question it has. It is
-> just spread across seven to twelve systems that do not talk to each other.
+> just spread across systems that do not talk to each other.
 >
-> So people spend **thirty-five percent of their working day** looking for something that already
-> exists — that is the number in this problem statement. But the lost time is not the real cost."
+> McKinsey found people spend **nearly a fifth of their working week** looking for information or
+> chasing a colleague for it. But the lost time is not the real cost."
 
 *(scroll to the four numbers)*
 
-> "**Eighteen to twenty-two percent of unplanned downtime** in Indian heavy industry happens because
-> someone decided without the full history of that machine in front of them. ABB priced Indian
-> unplanned downtime at **seventy lakh rupees an hour.** ⟨CUT FOR 8:00 — the next
-> sentence⟩ And **a quarter of India's experienced engineers retire in the next ten years.**
+> "**Eighty-eight percent** of Indian industrial businesses have an unplanned outage at least once
+> a month, according to ABB. ABB priced an hour of it at close to **seventy lakh rupees.** ⟨CUT FOR
+> 8:00: the next sentence⟩ And globally, **two of every three new energy hires to 2035** will only be
+> replacing people who retire (IEA).
 >
 > This is not a filing problem. It is a safety problem."
 
@@ -314,7 +314,7 @@ straight to Tab 8.
 
 > **⚠ Data note — read before you show this screen (verified 2026-08-24).** The old script claimed a
 > live **pending**-MoC banner on every answer touching that pressure. It will not appear, and three
-> other details on this screen do not survive a judge clicking through:
+> other details on this screen do not survive a viewer clicking through:
 >
 > | Claim in the old script | What the data actually holds |
 > |---|---|
@@ -370,7 +370,7 @@ word "one click".
 > screen behind you.** Say "on the benchmark scope" — that is the sentence as written above.
 >
 > **Do not say a findings number out loud.** It moves with every ingest, and §6 already tells you to
-> point at a number the room can see rather than read it. If a judge asks why ISO 45001 is so large,
+> point at a number the room can see rather than read it. If someone asks why ISO 45001 is so large,
 > the honest answer is that the clause set applies plant-wide while the registry has grown past the
 > canon ten — it is a scoping gap in the demo data, not a detection error.
 
@@ -518,7 +518,7 @@ Everything **after** Beat 6 can be squeezed. Everything **before** it cannot.
 The app has **42 routes** (44 until `/system-benchmarks` and `/system-information` were removed on
 2026-09-22). You will show **11 of them** across 12 screens (`/copilot` appears twice, as
 two separate sessions). The other 31 stay shut, on purpose. The point of this table is that when a
-judge asks *"what else is in there?"*, you answer in one sentence instead of clicking around.
+viewer asks *"what else is in there?"*, you answer in one sentence instead of clicking around.
 
 **11 shown · 15 held in reserve · 16 deliberately closed = 42.**
 
@@ -537,7 +537,7 @@ judge asks *"what else is in there?"*, you answer in one sentence instead of cli
 | `/compliance` | 9 | Regulatory gap detection against real clause text |
 | `/compliance/audit-pack` | 9 | Auto-built audit evidence with a human signature line |
 | `/field/voice` | 10 | Mobile field capture, offline queue, straight into quarantine |
-| `/login` | pre-flight | Five real personas. Judges see three different sidebars during the run |
+| `/login` | pre-flight | Five real personas. Viewers see three different sidebars during the run |
 
 ### Held in reserve — open only if asked — 15
 
@@ -601,9 +601,9 @@ are easy to say by accident when you are nervous.
 | "Predictive maintenance" / "we predict failures" | "It puts the failure history and the matching sensor pattern in front of you before the job starts" |
 | "We save a plant seventy lakh an hour" | **The most dangerous slip in the new material.** ₹7 million/hour is ABB's measure of what *downtime costs*, not what we save. We have never run a deployment and have no saving to quote. Say "that is what the problem costs", never "that is what we save" |
 | "AVEVA/Octave can't do this" | They can do much of it. Claim the three differences in the Q&A bank — proactive push, refusal, published grading — never the category |
-| "Hexagon SDx" / "HxGN Alix" | **Stale by three months.** It is **Octave** since 28 May 2026 — InConcert, Attune EAM, Aria. Getting a competitor's name wrong in front of an industry judge costs more than the point you were making |
+| "Hexagon SDx" / "HxGN Alix" | **Stale by three months.** It is **Octave** since 28 May 2026 — InConcert, Attune EAM, Aria. Getting a competitor's name wrong in front of an industry expert costs more than the point you were making |
 | "McKinsey says downtime costs a refinery $20–50 million" | That is the **gap between median and top-quartile performers**, not a downtime bill. Keep the comparison in the sentence or do not use the figure |
-| Any figure from the problem statement, presented as ours | The 35%, the 7–12 systems, the 18–22%, the quarter retiring — **none is independently traceable** to a findable study. They are the organisers' framing and fine to reference as such. Say "the problem statement puts it at…", never "we found that…" |
+| Any statistic without its publisher | The page cites McKinsey (2012, knowledge workers in general), ABB (2023, a self-reported survey) and the IEA (2025, global energy sector, not India). Name the publisher and keep its caveat. Never say "we found that…" |
 | "100% accurate" *(about anything)* | Nothing in this system is 100% except retrieval reach and provenance on that run, and both have a confidence interval |
 | "We map OISD, PESO and the Factories Act" | **Only OISD 117 and ISO 45001 are mapped into the gap engine.** PESO and Factories Act clause text sits in the vault unmapped. Saying otherwise is contradicted by the framework bar on the screen behind you |
 | "Forty-seven compliance findings" | Stale — that was the 10-asset benchmark scope. Live is **233**. Point at the donut instead of naming a number that moves with every ingest |
@@ -627,7 +627,7 @@ are easy to say by accident when you are nervous.
 | **"What stops someone poisoning the knowledge base?"** | Four things. Anything extracted below 0.7 confidence lands in **quarantine** and cannot reach the graph until a human promotes it — the gate is one-way, nothing auto-promotes. Safety limits need a signed Management of Change. The vault never deletes, so the original always survives. And every promotion is written to the audit log. |
 | **"How do you know your own retrieval works?"** | Because our own baseline harness caught it failing. It measured vector search at **0 out of 37** one day — that is how we found a filter on an unindexed field silently erroring, which had quietly degraded the whole system to keyword search only. No unit test caught that. The benchmark did. |
 | **"Does it scale?"** | 2,275 requests with 0% errors, and the knee at 50 concurrent users. A 60-minute soak on cloud stores with no leak signal and 0.11% errors across 37,842 requests. What that does **not** prove is a ten-thousand-asset plant, and we say so on the page. |
-| **"Have you actually measured everything the problem statement asks for?"** | Yes — **thirteen** harnesses, one per criterion — **twelve in `benchmark/`, plus `run_model_validation.py` under `backend/scripts/`.** Say it that way: a judge who lists `benchmark/` counts twelve. They include the three that landed last: OCR recall by document type, knowledge-graph linkage completeness, and cross-functional discovery measured as a counterfactual against single-function retrieval. |
+| **"Have you actually measured everything the problem statement asks for?"** | Yes — **thirteen** harnesses, one per criterion — **twelve in `benchmark/`, plus `run_model_validation.py` under `backend/scripts/`.** Say it that way: anyone who lists `benchmark/` counts twelve. They include the three that landed last: OCR recall by document type, knowledge-graph linkage completeness, and cross-functional discovery measured as a counterfactual against single-function retrieval. |
 | **"What if the AI provider goes down?"** | Answers fall through Nebius Token Factory → NIM → OpenRouter → Gemini → local; the tiers live in one registry, so a provider is added or reordered without touching the call path. Every answer records which provider produced it, and the benchmark marks a run invalid if anything but the pinned Nemotron model answered. |
 | **"What if the vision model can't read our drawings?"** | It says so. A P&ID it cannot parse falls back to a placeholder that the screen labels as a placeholder — it never invents a valve tag. And even a good parse stays **candidate** until an engineer checks it element by element. |
 | **"Does it work offline?"** | Field capture does. Voice notes and deviation flags queue on the device and sync when signal comes back. |
@@ -649,7 +649,7 @@ Use this to check yourself, and to answer *"did you actually build all of it?"*
 
 ### "What you may build" — all five, all on screen
 
-| The problem statement asks for | Beat | What the judge actually sees |
+| The problem statement asks for | Beat | What the viewer actually sees |
 |---|---|---|
 | Universal document ingestion & knowledge graph agent | **3** | A vendor bulletin nothing has seen, uploaded live → vault → entities → graph in ~8 s, and a P&ID turned into topology |
 | Expert knowledge copilot | **5**, **10** | A cited answer ranked by authority; the same product running in a 390 px phone window |
@@ -786,7 +786,7 @@ moment you upload it. Never reuse one.
 | 2 | ~~`1-tonight/run2_he301_cleaning.pdf`~~ | **SPENT** — `DOC-HXCHGWGKP5QF`, 24-Aug 19:27 UTC |
 | 3 | `1-tonight/run3_he302_gasket.pdf` | Tonight, rehearsal 3 — the last rehearsal file you have |
 | 4 | `2-preflight/run4_eq102_bearing.pdf` | Tomorrow, warm-up before you go up |
-| 5 | `3-demo/oem_bulletin_fp_sb_2026_20.pdf` | **On stage.** Named plausibly — judges see the filename |
+| 5 | `3-demo/oem_bulletin_fp_sb_2026_20.pdf` | **On stage.** Named plausibly — viewers see the filename |
 
 Each is a vendor service bulletin dated 20-Aug-2026, stating **one fact nothing else in the corpus
 states**. After ingest, ask Copilot that fact back — the answer cites a document that did not exist

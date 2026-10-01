@@ -7,6 +7,7 @@ vi.mock("@/lib/api", () => ({ ingestDocument: vi.fn(), supersedeDocument: vi.fn(
 vi.mock("@/components/use-role", () => ({
   useRole: () => "engineer",
   RESOLVE_ROLES: ["engineer", "reliability", "admin"],
+  AUTHORITY_ASSERT_ROLES: ["reliability", "admin"],
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -20,7 +21,7 @@ function submitReplacement() {
 }
 
 describe("SupersedeAction", () => {
-  beforeEach(() => vi.mocked(supersedeDocument).mockResolvedValue({}));
+  beforeEach(() => vi.mocked(supersedeDocument).mockResolvedValue({ status: "superseded", old_document_id: "DOC-OLD", new_document_id: "DOC-NEW", moc_required: false, moc_id: null }));
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -48,5 +49,26 @@ describe("SupersedeAction", () => {
 
     expect(await screen.findByText(/identical to this document/)).toBeInTheDocument();
     expect(supersedeDocument).not.toHaveBeenCalled();
+  });
+
+  it("shows an awaiting-approval state with the MoC id, not success, when the supersede is held", async () => {
+    vi.mocked(ingestDocument).mockResolvedValue({ status: "accepted", document_id: "DOC-NEW", sha256: "x", message: "" });
+    vi.mocked(supersedeDocument).mockResolvedValue({
+      status: "pending_moc_approval", old_document_id: "DOC-OLD", new_document_id: "DOC-NEW", moc_required: true, moc_id: "MOC-AB12CD34",
+    });
+    render(<SupersedeAction documentId="DOC-OLD" />);
+
+    submitReplacement();
+
+    expect(await screen.findByText(/Awaiting MoC approval/)).toBeInTheDocument();
+    expect(screen.getByText("MOC-AB12CD34")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "the MoC page" })).toHaveAttribute("href", "/governance/moc/MOC-AB12CD34");
+    expect(screen.queryByText(/superseded\.$/)).not.toBeInTheDocument();
+  });
+
+  it("offers authority levels 4 and 5 only to a role that cannot assert 1 to 3", () => {
+    render(<SupersedeAction documentId="DOC-OLD" />);
+    fireEvent.click(screen.getByRole("button", { name: "Supersede document" }));
+    expect(screen.getAllByRole("option", { name: /^L\d$/ }).map((o) => o.textContent)).toEqual(["L4", "L5"]);
   });
 });

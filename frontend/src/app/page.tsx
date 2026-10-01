@@ -42,28 +42,28 @@ const navLinks = [
  */
 const problemStats: { figure: string; label: string; body: string; source: string }[] = [
   {
-    figure: "35%",
-    label: "of the working day",
-    body: "Time people in asset-heavy industries spend looking for information, chasing someone for an answer, or rebuilding a document that already exists somewhere.",
-    source: "McKinsey, 2024",
+    figure: "~20%",
+    label: "of the working week",
+    body: "Time the average interaction worker spends looking for internal information or tracking down a colleague who can help. A searchable record of knowledge can cut that search time by as much as 35%.",
+    source: "McKinsey Global Institute, 2012",
   },
   {
-    figure: "7 to 12",
-    label: "disconnected systems",
-    body: "The number of separate places one large plant keeps its drawings, work orders, procedures, inspection records and regulatory filings.",
-    source: "NASSCOM and EY",
+    figure: "88%",
+    label: "of Indian industrial businesses",
+    body: "Have an unplanned outage at least once a month, against 69% globally.",
+    source: "ABB Value of Reliability survey, 2023",
   },
   {
-    figure: "18 to 22%",
-    label: "of unplanned downtime",
-    body: "Outages caused by maintenance decisions made without the equipment's full history in front of the person deciding.",
-    source: "BIS Research",
+    figure: "~₹70 lakh",
+    label: "per hour of unplanned downtime",
+    body: "Roughly what an hour of unplanned downtime costs the typical Indian industrial business, against ₹1.03 crore globally.",
+    source: "ABB Value of Reliability survey, 2023",
   },
   {
-    figure: "25%",
-    label: "of experienced engineers",
-    body: "The share of India's industrial engineers and operators who retire within the decade. Whatever they never wrote down leaves with them.",
-    source: "Industry estimate",
+    figure: "2 in 3",
+    label: "new energy-sector hires to 2035",
+    body: "Will be needed just to replace workers who retire. Whatever they never wrote down leaves with them.",
+    source: "IEA, World Energy Employment 2025",
   },
 ];
 
@@ -1105,7 +1105,7 @@ const heroSources: { tag: string; label: string; deg: number; cited?: boolean }[
  * The three sources behind the answer on the card. Every one is a real record in
  * the golden dataset (`dataset/00_Reference/00_KAIROS_CANON.md` § Master
  * Timeline), and FP-SB-2025-04 is retrievable from the running system, so a
- * judge who asks the product this question gets this citation back. The third is
+ * reader who asks the product this question gets this citation back. The third is
  * deliberately unverified: disclosing weak evidence rather than blending it into
  * the rest is the whole product argument, so the hero states it instead of
  * hiding it.

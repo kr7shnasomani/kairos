@@ -5,6 +5,7 @@ Provides shared clients as FastAPI dependencies (injected per-request or applica
 
 import asyncio
 import hashlib
+import hmac
 import time
 import uuid
 from typing import Annotated
@@ -185,6 +186,10 @@ def _auth_cache_get(token: str) -> dict | None:
     return user
 
 
+def _auth_cache_drop(token: str) -> None:
+    _auth_cache.pop(hashlib.sha256(token.encode()).hexdigest(), None)
+
+
 def _auth_cache_put(token: str, user: dict, ttl: int) -> None:
     if ttl <= 0:
         return
@@ -212,7 +217,8 @@ async def resolve_token(token: str, settings: Settings) -> dict | None:
     dependency raises 401, the middleware denies or falls through in dev.
     """
     # Internal service bypass — Go connector and Celery workers call with INTERNAL_API_KEY
-    if settings.INTERNAL_API_KEY and token == settings.INTERNAL_API_KEY:
+    # compare_digest: a `==` on a never-expiring admin key leaks its prefix through timing.
+    if settings.INTERNAL_API_KEY and hmac.compare_digest(token.encode(), settings.INTERNAL_API_KEY.encode()):
         return {"user_id": "service-kairos-connector", "email": "connector@internal", "role": "admin", "site_id": "SITE_001", "sub": "service-connector"}
 
     # Fast path: recently-verified token — skips the Supabase Auth round-trip. The middleware
@@ -234,11 +240,13 @@ async def resolve_token(token: str, settings: Settings) -> dict | None:
         log.info("auth.token_rejected", error=str(exc))
         return None
 
-    meta = user.user_metadata or {}
+    # Authorization data comes from app_metadata ONLY. user_metadata is writable by the user
+    # themselves (PUT /auth/v1/user), so reading a role from it lets any account make itself admin.
+    meta = user.app_metadata or {}
     user_dict = {
         "user_id": str(user.id),
         "email": user.email,
-        # The app role lives in user_metadata. The token's top-level `role` is Supabase's
+        # The app role lives in app_metadata. The token's top-level `role` is Supabase's
         # Postgres role ("authenticated"), which matches no entry in kairos.rego.
         "role": meta.get("role", "field_worker"),
         "site_id": meta.get("site_id", ""),

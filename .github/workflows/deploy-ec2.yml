@@ -1,0 +1,80 @@
+name: Deploy to EC2
+
+# Continuous deploy for the backend, mirroring the manual process in docs/DEPLOY.md §8/§14:
+# rsync the repo to the server (excluding .env and dev-only files), then `make prod` rebuilds
+# and restarts the backend/connector containers.
+#
+# This is a no-op until AWS_EC2_HOST / AWS_EC2_USER / AWS_EC2_SSH_KEY repo secrets exist — the
+# "Check deploy secrets" step below detects that and every later step is skipped (job still
+# reports green). Once the secrets are added, the same workflow actually deploys and reports
+# red/green on the outcome. See docs/DEPLOY.md § Continuous deploy for setup.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ 'backend/**' ]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deploy secrets are configured
+        id: secrets-check
+        run: |
+          if [ -n "${{ secrets.AWS_EC2_HOST }}" ] && [ -n "${{ secrets.AWS_EC2_USER }}" ] && [ -n "${{ secrets.AWS_EC2_SSH_KEY }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::AWS_EC2_HOST, AWS_EC2_USER and AWS_EC2_SSH_KEY repo secrets are not set. This run did nothing — see docs/DEPLOY.md § Continuous deploy."
+          fi
+
+      - name: Checkout
+        if: steps.secrets-check.outputs.ready == 'true'
+        uses: actions/checkout@v7
+
+      - name: Load deploy SSH key
+        if: steps.secrets-check.outputs.ready == 'true'
+        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.AWS_EC2_SSH_KEY }}
+
+      - name: Trust the server's host key
+        if: steps.secrets-check.outputs.ready == 'true'
+        env:
+          KNOWN_HOSTS: ${{ secrets.AWS_EC2_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          if [ -n "$KNOWN_HOSTS" ]; then
+            # Pinned: the key comes from the repo secret, and ssh/rsync refuse any other host key.
+            printf '%s\n' "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
+            printf 'Host *\n  StrictHostKeyChecking yes\n' >> ~/.ssh/config
+          else
+            echo "::warning title=Host key not pinned::AWS_EC2_KNOWN_HOSTS is not set, so the server's key is trusted on first sight (ssh-keyscan) and a network attacker could impersonate it. Set it to the output of: ssh-keyscan -H <host>"
+            ssh-keyscan -H "${{ secrets.AWS_EC2_HOST }}" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Sync backend code to the server
+        if: steps.secrets-check.outputs.ready == 'true'
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude 'frontend' --exclude 'node_modules' \
+            --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.ruff_cache' \
+            --exclude '.claude' --exclude '.agents' --exclude 'supabase/.temp' \
+            --exclude 'docker-compose.override.yml' --exclude '.env' --exclude '.env.bak.*' \
+            ./ "${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}:~/kairos/"
+
+      - name: Rebuild and restart the backend
+        if: steps.secrets-check.outputs.ready == 'true'
+        run: ssh "${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}" "cd ~/kairos && make prod"
+
+      - name: Verify the API is up
+        if: steps.secrets-check.outputs.ready == 'true'
+        run: curl -sf --max-time 15 "https://${{ secrets.AWS_EC2_HOST }}/health" > /dev/null

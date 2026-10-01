@@ -20,7 +20,7 @@ rounded-card SaaS template with the brand colour on top.
 | Eyebrow | Filled orange block, white uppercase label (`HOW IT WORKS`). |
 | Structure | Centred column with hairline **frame rails** (`.lp-frame`), **corner ticks** (`.lp-tick`), alternating `#f8f8f8` bands, dark bands for contrast. |
 | Grids | 1px hairline **mesh** of cells, not floating cards with gaps. |
-| Numbers | Big display numerals (`35%`, `7 to 12`) in accent, label under. |
+| Numbers | Big display numerals (`~20%`, `88%`) in accent, label under. |
 | Buttons | Square orange block with a `▸` glyph; secondary is a square black block. |
 | Hover | `.lp-card`: scale 1.02 + accent border. `.lp-cell`: accent wash + 2px top bar that draws left→right. |
 | Motion | Scroll reveal with child stagger (`data-reveal` / `data-stagger`), bars that grow, tab crossfade. |
@@ -178,7 +178,8 @@ state, no horizontal scroll, no rounded chrome left (radius 2–99px on any elem
 40px), and every page h1 at Instrument 500 / 40px (desktop). Screenshots reviewed for
 Overview, Governance, Assets, Compliance, Copilot and Graph in light, Overview in dark, the
 collapsed rail, 1920px (frame rails) and 375px. `tsc` clean; vitest green apart from the date-bound offboarding fixture, which fails on
-unchanged code too (272/273 at the latest run, 2026-09-27).
+unchanged code too (272/273 at the latest run, 2026-09-27; fixed 2026-09-28 by freezing the
+test's system clock — see `status.md`).
 **Not done:** high-contrast palette screenshots; contrast re-measurement (every text/ground
 pair introduced reuses an already-measured token pair); dynamic `[id]` routes beyond the ones
 reached by clicking through.

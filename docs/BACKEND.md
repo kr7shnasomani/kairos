@@ -44,7 +44,9 @@ kairos/                          # repo root
 │   │   ├── config.py                # All settings (pydantic-settings, env vars)
 │   │   ├── dependencies.py          # DI: Neo4j, Qdrant, ES, Redis, Supabase, Auth
 │   │   ├── middleware/
+│   │   │   ├── auth.py              # AuditLoggingMiddleware (http.request log line)
 │   │   │   ├── opa.py               # OPA policy enforcement middleware
+│   │   │   ├── ratelimit.py         # Per-IP Redis rate limit
 │   │   │   └── telemetry.py         # OTEL tracing + metrics setup
 │   │   ├── models/                  # Pydantic request/response schemas
 │   │   ├── routers/                 # One file per domain layer
@@ -65,12 +67,20 @@ kairos/                          # repo root
 │   │   └── elicitation_workflow.py  # MicroInterviewWorkflow + question generation (Neo4j + LLM)
 │   ├── connectors/                  # Go service — OT historian + EAM sync
 │   │   ├── cmd/connector/main.go    # Entry point, all HTTP handlers
+│   │   ├── cmd/connector/auth.go    # X-Connector-Secret middleware + boot-time config validation
+│   │   ├── cmd/connector/auth_test.go  # Go tests: secret check, config refusal, body cap, no upstream echo
 │   │   ├── internal/ot/client.go    # PIWebAPIClient + MockHistorianClient
+│   │   ├── internal/ot/client_test.go  # Go test: tag escaping, URL scrubbed from errors
 │   │   ├── internal/eam/client.go   # EAM connector interface + SAP stub
 │   │   ├── internal/events/relay.go # Redis Stream relay
 │   │   └── fixtures/sample_assets.json  # 5 demo assets for EAM sync
 │   ├── scripts/
-│   │   ├── seed_users.py            # Creates 5 Supabase auth users (admin, engineer, field_worker, reliability, compliance)
+│   │   ├── seed_users.py            # Creates 6 Supabase auth users (admin, engineer, field_worker, reliability, compliance, demo). Passwords come from KAIROS_SEED_PASSWORD_* in .env.
+│   │   │                             # Passwords from KAIROS_SEED_PASSWORD_* in .env (refuses to run if any is blank);
+│   │   │                             # role + site_id are written to app_metadata, display name to user_metadata
+│   │   ├── migrate_roles_to_app_metadata.py  # One-off: copy role/site_id/name from user_metadata to app_metadata for
+│   │   │                             # existing users. DRY RUN by default, --apply writes cloud Supabase Auth.
+│   │   │                             # Must run BEFORE deploying code that reads app_metadata only
 │   │   ├── seed_regulations.py      # Seeds 12 regulations into Neo4j
 │   │   ├── init_neo4j.py            # Neo4j schema constraints + indices
 │   │   ├── init_qdrant.py           # Qdrant collection creation
@@ -100,7 +110,9 @@ kairos/                          # repo root
 │   ├── questions.json           # 25 domain-expert Q&A across 15 categories (grounded in the dataset canon)
 │   └── RESULTS.md               # Raw output of both scripts (methodology → docs/BENCHMARKS.md)
 ├── db/                          # Database schemas (mounted into Python containers)
-│   ├── schema.sql               # Consolidated Supabase schema — single source of truth (001–016 folded in)
+│   ├── schema.sql               # Consolidated Supabase schema — single source of truth (001–016 folded in, plus the 017 RLS block)
+│   ├── migrations/              # Hand-applied SQL not yet run on the live project
+│   │   └── 017_enable_rls_remaining_tables.sql  # RLS on the 14 tables that lacked it (NOT APPLIED; see DATABASE.md)
 │   ├── maintenance/             # Cloud-Supabase reset SQL (reset_all_data.sql) + CHANGELOG.md (tracked runs)
 │   └── neo4j/init_schema.cypher # Neo4j constraints + indices
 ├── fixtures/                    # Shared mock data (mounted into Python containers)
@@ -108,12 +120,12 @@ kairos/                          # repo root
 ├── infra/                       # Infrastructure configs
 │   ├── policies/kairos.rego     # OPA RBAC rules (active — mounted by kairos-opa)
 │   ├── temporal/dynamicconfig.yaml  # Temporal server config (active)
-│   ├── caddy/Caddyfile          # HTTPS reverse proxy (active under --profile prod)
+│   ├── caddy/Caddyfile          # HTTPS reverse proxy (active under --profile prod): 30 MB body cap + security headers
 │   ├── grafana/provisioning/    # LEGACY — obs is Grafana Cloud now; dashboard JSONs kept (importable)
 │   ├── otel/otel-config.yaml    # DEAD — otel-collector container removed
 │   └── tempo/tempo.yaml         # DEAD — tempo container removed
 ├── frontend/                    # Next.js UI (separate Docker build context)
-└── tests/                       # Pytest test suite (mounted into backend-api)
+└── tests/                       # Pytest test suite (mounted into backend-api); the test_sec_*.py files cover the 2026-10-01 security pass
 ```
 
 ---
@@ -131,8 +143,13 @@ kairos/                          # repo root
 `create_app()` registers:
 1. CORS middleware (`CORS_ORIGINS` from settings)
 2. `OPAMiddleware` (enforces RBAC via OPA on writes **and** sensitive reads)
-3. OTEL instrumentation (`setup_telemetry(app)`)
-4. All routers with prefix/tag
+3. `RateLimitMiddleware` (per-IP; zero, meaning off, only when `Settings.is_development`) and `AuditLoggingMiddleware`
+4. OTEL instrumentation (`setup_telemetry(app)`)
+5. All routers with prefix/tag
+
+Every middleware reads `request.scope["path"]`, never `request.url.path`: the URL is rebuilt from the `Host` header, so `Host: x/health` turned `/events/work-order` into `/health/events/work-order`, which the OPA skip list treated as exempt. The scope path is what the router matches.
+
+Database errors reaching the global handler return fixed messages (foreign key: `A referenced record does not exist.`; unique: `A record with these identifiers already exists.`), never the upstream detail.
 
 **Lifespan:** On startup, `VectorStoreService.ensure_collections()` and `SearchEngineService.ensure_indices()` create Qdrant collections and ES indices if missing.
 
@@ -153,9 +170,9 @@ All backends are injected as FastAPI dependencies. Each is a singleton (module-l
 | `SettingsDep` | `Settings` | Cached settings singleton |
 
 **Auth flow in `get_current_user`:**
-1. If no `Authorization` header and `APP_DEBUG=True` → returns `{user_id: "dev-user", role: "engineer"}` (dev only).
-2. If token matches `INTERNAL_API_KEY` → returns service account `{role: "admin"}` (Go connector bypass).
-3. Otherwise → calls `supabase.auth.get_user(token)` using a fresh anon client (never the service-role client). Role extracted from `user.user_metadata.role`.
+1. If no `Authorization` header and `Settings.dev_bypass_allowed` (`APP_DEBUG=True` **and** `APP_ENV=development`) → returns `{user_id: "dev-user", role: "engineer"}` (dev only). `APP_ENV` is trimmed and lower-cased, and only the exact value `development` counts: `production`, `staging` or a typo are all non-development (`Settings.is_development`).
+2. If token matches `INTERNAL_API_KEY` (`hmac.compare_digest`) → returns service account `{role: "admin"}` (Go connector bypass).
+3. Otherwise → calls `supabase.auth.get_user(token)` using a fresh anon client (never the service-role client). Role and site are read from `user.app_metadata` (users can edit `user_metadata`, never `app_metadata`). `POST /auth/logout` drops the token from the verified-token cache (`_auth_cache_drop`) and revokes the session. `site_scope(user, requested)` returns the caller's own site (None for admin) and `403`s a request for another one; it is how every site-scoped read and write in the routers is bounded.
 
 ---
 
@@ -183,7 +200,7 @@ All models live in `backend/api/models/`.
 | `ExtractionResult` | NER/OCR result summary |
 | `SearchResult` | Single search hit with authority + method |
 | `SearchResponse` | Paginated hybrid search response |
-| `SynthesizeRequest` | Query + context + optional `query_category` |
+| `SynthesizeRequest` | `query` (max 2000), optional `as_of`; `context` (max 50) and `query_category` are accepted for compatibility and **ignored** (the server retrieves its own evidence) |
 | `SynthesizeResponse` | Answer + sources + confidence + `refused` flag |
 | `PromoteQuarantineRequest` | Quarantine promotion payload |
 | `RCAPackRequest` | `asset_id`, `incident_date`, `failure_code`, `include_quarantine` |
@@ -207,10 +224,10 @@ All events inherit from `BaseEvent` (`event_id`, `source_system`, `site_id`, `oc
 | `PTWEvent` | `ptw_id`, `work_area`, `asset_ids[]`, `ptw_type`, `issuing_engineer_id` | PTW system |
 | `ShiftHandoverEvent` | `outgoing_shift_lead_id`, `incoming_shift_lead_id`, `handover_time` | Any |
 | `AlarmEvent` | `alarm_id`, `asset_id`, `alarm_tag`, `severity`, `acknowledged_by` | DCS |
-| `TagOutEvent` | `asset_id`, `tag_out_reason`, `performed_by`, `expected_return_date` | Field |
-| `InspectionCompleteEvent` | `asset_id`, `inspection_type`, `result`, `performed_by`, `findings`, `document_id`, `confidence` | Field/QA |
-| `EventAck` | `user_id`, `role`, `signature`, `notes` | API client |
-| `DeviationFlagEvent` | `asset_id`, `description`, `reported_by`, `affected_topology_path` | Field inspector |
+| `TagOutEvent` | `asset_id`, `tag_out_reason`, `performed_by` (optional, a source-system claim), `expected_return_date` | Field |
+| `InspectionCompleteEvent` | `asset_id`, `inspection_type`, `result`, `performed_by` (optional claim), `findings`, `document_id`, `confidence` (may be lowered, never raised past 0.85 on the evidence edge) | Field/QA |
+| `EventAck` | `notes`; `user_id`, `role`, `acknowledged_at`, `signature` are optional and ignored (identity, time and signature are server-side) | API client |
+| `DeviationFlagEvent` | `asset_id`, `description`, `affected_topology_path` (the reporter is the token's user) | Field inspector |
 | `DeviationFlagResolveRequest` | `resolution` (`promoted` \| `disputed`), `moc_warranted`, `notes` | Engineer/admin |
 | `PlantStateEvent` | `site_id`, `state` (`normal` \| `turnaround` \| `shutdown` \| `emergency`), `expires_at` | Engineer/admin |
 
@@ -227,6 +244,7 @@ All business logic lives in `backend/api/services/`. Routers call services; serv
 Interface to Neo4j. All writes use `MERGE`, never `CREATE` for asset nodes.
 
 Key methods:
+- `topology_node_id(document_id, element_id)` — graph node id of a P&ID element, `{document_id}:{element_id}`. The vision model numbers elements per drawing (`TOPO-EQ-001`), so a bare id merged two drawings onto one Concept. Supabase rows keep the raw id; `verify_topology_element` matches both the scoped and the legacy bare form, pinned to the document's own edge.
 - `create_asset_node(props)` — MERGE Asset node with all properties
 - `get_asset(asset_id)` — single asset lookup
 - `list_assets(site_id, equipment_class, skip, limit)` — paginated
@@ -341,7 +359,7 @@ Qdrant treats a missing key as non-matching, so requiring `active` would silentl
 
 LLM synthesis + embedding. Never originates knowledge — only assembles retrieved context.
 
-- `synthesize(query, context, query_category)` — `nvidia/nemotron-3-super-120b-a12b` on the first
+- `synthesize(query, context, query_category, aliases=None)` — `nvidia/nemotron-3-super-120b-a12b` on the first
   configured tier (NIM by default), falling through the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
   result after it (an honest "not specified in the sources" must not render as a hedged answer).
 - `evidence_gate(...)` / `result_gate(...)` — those two gates, as separate methods returning a
@@ -360,12 +378,27 @@ LLM synthesis + embedding. Never originates knowledge — only assembles retriev
   so a repeated or polled query previously paid a Jina round-trip each time. Embeddings are
   deterministic per `(task, text)` for a fixed model, so caching is safe; a failed embedding
   (`[]`) is never cached. Process-local — move to Redis if cross-replica hit rate matters.
-- `classify_query_category(query)` — deterministic keyword classifier mapping free text onto a
-  safety-critical category, or `None`. Called by `POST /search/synthesize` when the caller omits
-  `query_category`. Without it the safety gate was unreachable: nothing in the system set the
-  category, so `refused` was always `false`.
-- `parse_synthesis_response(answer)` — extracts structured fields from LLM output
-- `parse_rca_response(answer)` — extracts `hypothesis|evidence_weight|sources` lines
+- `classify_query_category(query)` — deterministic classifier mapping free text onto a
+  safety-critical category, or `None`. Called by `POST /search/synthesize` (and its stream) for
+  **every** request: the client's `query_category` is ignored. It fails closed: keyword lists and
+  unit regexes first, then a catch-all `safety_parameter_unspecified` for a question that reads like
+  a limit, rating or setting (a number with an engineering unit, a tag plus a parameter word) and no
+  list named. A false positive costs a refusal that points at the sources; a miss costs an ungated answer.
+- `query_asset_tags(query, aliases)` — the assets a question names, by tag or by confirmed alias
+  (resolved to the canonical id); standards and document prefixes such as `OISD-117` or `SOP-114`
+  are not assets. `_gate_evidence(...)` then requires every named asset to be vouched for by
+  same-asset evidence (worst-covered asset's best authority, lowest best confidence).
+- **Prompt hardening.** `_prompt(user, system)` returns a `str` subclass carrying the system
+  message, so the rules ride in the system channel and the user message holds only the escaped
+  `<query>` and `<document index authority_level document_id>` blocks (`_untrusted` escapes text so it
+  cannot close a tag or forge a `[Source n | ...]` header). Escaping reduces injection, it does not
+  eliminate it, so the gates never rely on what the model says about authority.
+- `parse_synthesis_response(answer)` — extracts structured fields from LLM output. The model's own
+  trailing lines win (`SOURCES_USED` last match), `CONFIDENCE` takes the **lowest** value, so
+  nothing echoed from a document can raise it; `valid_citations(cited, n)` drops numbers outside the evidence.
+- `result_gate` **fails closed**: no parseable `CONFIDENCE`, or a citation outside the evidence, is a refusal.
+- `parse_rca_response(answer, allowed_sources)` — extracts `hypothesis|evidence_weight|sources` lines;
+  a hypothesis may cite only the document ids the model was shown, and weights are clamped to 1.0
 
 > **Every tier failing on 429 is reported as such.** Each provider tags a `rate_limited`
 > result; when the whole cascade fails and any tier was rate-limited, the response gets
@@ -414,25 +447,25 @@ Everything is built; only the key is missing. Steps, locally or on the server:
    measured through NIM. A run answered by `tokenfactory` counts as the pinned model.
 
 **Safety-critical categories:**
-`max_allowable_pressure`, `isolation_interlock_sequence`, `torque_specification`, `electrical_rating`, `pressure_relief_setting`, `safety_shutdown_setpoint`
+`max_allowable_pressure`, `isolation_interlock_sequence`, `torque_specification`, `electrical_rating`, `pressure_relief_setting`, `safety_shutdown_setpoint`, `safety_parameter_unspecified`
 
 The refusal gate clears on **either** high confidence (`≥ 0.7`) **or** an authoritative source
 (`authority_level ≤ 3` = regulatory / engineering / OEM), and refuses only when both fail.
 Both signals are needed: hybrid search and graph facts carry `authority_level` but no
 `confidence`, so a confidence-only gate read them as `0.0` and would refuse every
-safety-critical query. Covered by `tests/test_query_category.py`.
+safety-critical query. Covered by `tests/test_query_category.py` and `tests/test_sec_llm.py`.
 
 ### `BriefEngine` (`services/brief_engine.py`)
 
 Assembles operator briefs from 5 parallel graph+vector+ES+Supabase queries.
 
 - `assemble_work_order_brief(event)` — pulls failure history, open conflicts, procedures, quarantine flags; appends correlated DCS alarms / PTW context. Headline + body are **operator-readable prose** (grouped record counts, named source documents, ⚠ lines for conflicts/quarantine) — **not** a raw edge dump. No LLM call (phase discipline); authority/verification stay in the source badges.
-- `assemble_ptw_brief(event)` — adds isolation topology, regulatory requirements; revokes any pending WO brief task for the same asset
+- `assemble_ptw_brief(event)` — adds isolation topology, regulatory requirements
 - `assemble_shift_handover_brief(event)` — pulls active WOs, alarms, open PTWs
 - `assemble_recurring_failure_brief(event)` — triggered when same-family WO detected in 90-day window; priority=high headline includes recurrence count
 - `assemble_tag_out_brief(event)` — pulls downstream topology dependencies for the tagged-out asset
 - `assemble_inspection_brief(event)` — triggered on `result=failed` or non-empty `findings`; includes finding text and referenced document
-- `deliver(brief, redis)` — saves to `briefs` table, publishes to `REDIS_STREAM_BRIEFS`, records `kairos.briefs.delivered` metric. 4-hour asset cool-down.
+- `deliver(brief, redis)` — saves to `briefs` table, publishes to `REDIS_STREAM_BRIEFS`, records `kairos.briefs.delivered` metric. 4-hour cool-down per (recipient, asset, trigger event type).
 - `_get_correlated_events(event_id)` — fetches all events sharing the same `compound_event_id` via Supabase
 
 ### `EventBusService` (`services/event_bus.py`)
@@ -441,15 +474,25 @@ Redis Streams producer + EEMUA 191 push governor.
 
 - `publish(stream, payload)` — `XADD` to any stream
 - `publish_work_order(payload)` / `publish_ptw(payload)` — typed publish helpers
-- `is_duplicate(asset_id, event_type, business_id=None)` — Redis TTL key check (`DEDUP_WINDOW_MINUTES` window).
+- `is_duplicate(asset_id, event_type, business_id=None)` — read-only Redis key check (`DEDUP_WINDOW_MINUTES` window). `mark_seen(...)` records the event and is called last, after the ingest succeeds, so a failed ingest stays retryable.
   **Pass `business_id`** (`work_order_id`, `ptw_id`, `alarm_id`) wherever the event has one. Keyed on
   `(asset_id, event_type)` alone it collapses *two different permits on one asset* into one and the
   second technician never gets a brief — routine during a turnaround. Wired on all six event routes.
+- `mark_seen(asset_id, event_type, business_id=None)` — the write half of dedup, called as the **last** step of each event route (marking at check time turned a connector's retry after a 500 into `deduplicated` and lost the event, and with it a critical PTW brief). Two identical events racing inside one request's runtime can both run; the insert is idempotent and the brief cool-down absorbs the twin.
 - `correlate_events(asset_id, event_id, occurred_at, supabase)` — assigns shared `compound_event_id` to same-asset events within the dedup window
 - `check_governor(user_id, priority, site_id, supabase)` — returns True if brief can be sent. PTW (`priority="critical"`) always passes. Checks plant state gate then hourly rolling counter.
 - `get_plant_state(site_id, supabase)` — queries `plant_operating_states`, checks `expires_at`
 - `record_push(user_id)` — increments hourly counter with 3600s TTL
 - `get_governor_state(user_id)` — returns `{state, push_count_last_hour, ceiling, next_delivery_allowed_at}`
+
+### Event routes (`routers/events.py`)
+
+- `_store_event(supabase, row)` — the one insert into `operational_events` for every event route. `event_id` is client supplied, so it is a plain insert, **not** an upsert (an upsert let any ingest role overwrite another event's payload, asset and site by posting its id). A duplicate key (Postgres `23505`) is read back: identical type, asset, site and payload is a retry after a partial failure and carries on; anything else is `409` and the stored row is untouched.
+- `IngestUserDep` / `_INGEST_ROLES = (engineer, reliability, admin)` — `require_role` guard on the six ingest routes, mirroring the OPA `ingest_event` grant.
+- `_canonical_asset(asset_id, driver, supabase, current_user)` — resolves a confirmed alias, 404s an unknown tag, and with `current_user` also 404s an asset on another site (same response, so existence is not disclosed).
+- `INSPECTION_EVIDENCE_CONFIDENCE = 0.85` — ceiling on the confidence of an inspection-evidence edge. `inspection-complete` stores the event **first**, validates that `document_id` is an `inspection_report` already in the vault, then writes the graph edge and any quarantine row.
+- Acknowledgements (`POST /events/{id}/ack`) are built server-side: actor from the token, HMAC-SHA256 signature (`_sign_acknowledgment`, shared with briefs) over event, user, action and server time, one per user per event (a repeat returns `repeat: true`).
+- The pending-brief Redis slot (`kairos:brief_pending:{asset_id}:{work_order_id}`) belongs to work orders only; tag-out and PTW take none.
 
 ### `SLAService` (`services/sla_service.py`)
 
@@ -509,6 +552,7 @@ SPC circuit breaker: halts graph writes for an **asset class** when its 7-day ov
 Named entity recognition for the extraction pipeline. Cloud-first: NIM primary, then a regex last resort. (A local Ollama tier exists in code but is disabled — `OLLAMA_BASE_URL` is empty; see §6 `LLMService`.)
 
 - `NERService(model=…)` — **overrides `NVIDIA_NIM_NER_MODEL` for this instance.** The Layer-0 model gate scores a *candidate* model, so it must be able to pick one; without this the gate always called the env-var model and merely labelled the result with the requested name.
+- NIM is called at `NVIDIA_NIM_BASE_URL` (the same setting synthesis honours; it used to be hard-coded to NVIDIA's public endpoint, so a private gateway still received the key and the document text). An entity returned with a missing, non-numeric or out-of-range `confidence` gets `_DEFAULT_ENTITY_CONFIDENCE = 0.5`, below the 0.7 quarantine line, so it goes to review rather than into the graph; one garbled score no longer discards the whole document's entities.
 - `extract_entities(text, document_type)` — tries NIM `meta/llama-3.2-11b-vision-instruct`; falls back to regex ASSET_TAG pattern matching (Ollama tier skipped while `OLLAMA_BASE_URL` is empty). Returns `[(entity, entity_type, confidence)]`
 - **Character offsets are recovered** (`_with_spans`): the model returns entity *text* with no
   positions, so `start`/`end` used to come back `None` — leaving the annotation UI unable to
@@ -533,6 +577,8 @@ OCR for the extraction pipeline. Cloud-first for scanned documents; zero-API-cos
 
   **Cloud path:** `nvidia/nemotron-ocr-v2` for scanned documents and images.
 
+  **Resource ceilings** (uploader-controlled files are rasterised or flattened in the one ingestion worker): `MAX_PDF_PAGES = 100`, DPI capped at 150 and by `MAX_RASTER_PIXELS = 16,000,000` per page (`capped_dpi`; a page too large to stay legible at 30 DPI is rejected), `MAX_RASTER_TOTAL_BYTES = 150 MB` of PNG across all pages, spreadsheets capped at 50,000 rows, 256 columns and 200 MB declared uncompressed (checked from the zip directory before openpyxl reads it). A file over a ceiling is treated as unreadable and routes to human review, never silently truncated.
+
   Spreadsheets and email archives are two of the six source types named in the problem
   statement. `openpyxl` is used rather than hand-rolled zip+XML because xlsx cell typing
   (dates stored as serial numbers, shared vs inline strings) is exactly the silent corruption
@@ -550,7 +596,7 @@ OCR for the extraction pipeline. Cloud-first for scanned documents; zero-API-cos
 
 **Layer 3, Path B** — P&ID engineering-drawing topology extraction via a cloud vision model. Vision-*understanding*, not OCR (OCR destroys the drawing's connections).
 
-- `extract_topology(file_bytes, mime_type) -> dict | None` — rasterizes the drawing (150 DPI for PDFs), downscales to fit the inline size cap (Pillow), sends it to NIM `meta/llama-3.2-11b-vision-instruct` (chat completions, OpenAI-style `image_url` content) with a schema-locked prompt, and parses the returned topology JSON (`equipment_nodes`, `isolation_valves`, `instrumentation_loops`, `isolation_boundaries`). Returns `None` on any failure so the pipeline falls back to the demo fixture.
+- `extract_topology(file_bytes, mime_type) -> dict | None` — rasterizes the drawing (150 DPI for PDFs, lowered by `ocr.capped_dpi` so one page never becomes a multi-gigabyte bitmap; an A0 sheet at 150 DPI already exceeds the pixel cap), downscales to fit the inline size cap (Pillow), sends it to NIM `meta/llama-3.2-11b-vision-instruct` (chat completions, OpenAI-style `image_url` content) with a schema-locked prompt, and parses the returned topology JSON (`equipment_nodes`, `isolation_valves`, `instrumentation_loops`, `isolation_boundaries`). Returns `None` on any failure so the pipeline falls back to the demo fixture.
 - Wired into `run_ocr` for `document_type='pid_drawing'`. The result carries `topology_source` (`vision_model` | `demo_fixture`) through the manifest and `GET /documents/{id}/topology` so a fixture never masquerades as a real extraction. Every element still routes to element-by-element engineer verification (Layer 7).
 - **Path A** (custom YOLOv9 + LayoutLMv3 on GPU) is the documented future upgrade — see `ARCHITECTURE.md` Layer 3.
 
@@ -560,8 +606,10 @@ PII detection and masking for the **DPDP Act 2023 export boundary**.
 
 - `detect(text, person_names) -> [span]` — non-overlapping spans, earliest-start wins with
   longest-match tiebreak. Structured identifiers by regex (EMAIL, PAN, AADHAAR, EMPLOYEE_ID,
-  SHIFT_ID, Indian PHONE); PERSON names supplied by the caller from `NERService`, so there is
-  no second name model.
+  SHIFT_ID, Indian PHONE: `+91` / `(+91)` / `91` / `0` prefixes and a 5+5 split; Aadhaar with spaces, dashes or none); PERSON names supplied by the caller from `NERService`,
+  plus context patterns (`_NAME_CONTEXT`) for names the model never saw because NER reads only the first part of a
+  document: after an honorific (`Mr`, `Dr`, `Shri`, `Smt`, ...) or a sign-off label (`Prepared by`, `Approved by`,
+  `Operator:`, `Name:`, ...). No second name model.
 - `redact(text, person_names) -> {redacted_text, spans, counts, pii_found}` — masks each
   distinct value with a **stable pseudonym** (`[PERSON_1]`), so cross-references in the text
   survive redaction where a blanket `[REDACTED]` would destroy them. Offsets in `spans` refer
@@ -665,7 +713,7 @@ Exported names are the OTLP → Prometheus normalisation of the dotted instrumen
 
 Task queue: `kairos-ingestion`. Triggered by `POST /documents/ingest`.
 
-Seven sequential activities:
+Seven sequential activities. `store_in_vault` raises a non-retryable `ApplicationError(type="BadFile")` for a missing registry row or a SHA-256 mismatch (`non_retryable_error_types=["BadFile"]`: a wrong file stays wrong, and retrying it five times only re-crashes the single ingestion worker). `link_to_graph` resolves aliases from **confirmed** rows only, and its own alias proposals are written `ignore_duplicates=True`.
 
 | Activity | What it does | Output |
 |---------|-------------|--------|
@@ -722,13 +770,13 @@ Supported `event_type` values and their brief assemblers:
 
 Triggered with `apply_async(countdown=LATE_ARRIVAL_WINDOW_MINUTES*60)` for WO, tag-out, and shift-handover events. PTW and inspection (failed/findings) briefs are immediate.
 
-**Redis pending key:** `kairos:brief_pending:{asset_id}` — stores the Celery task ID so a subsequent PTW or tag-out event for the same asset can revoke the pending WO brief task.
+**Redis pending key:** `kairos:brief_pending:{asset_id}:{work_order_id}` — stores the Celery task ID so a re-report of the same work order can revoke and re-enqueue its pending brief. A PTW or another work order on the asset never touches it.
 
 ### Attribution Worker (`workers/attribution.py`)
 
 Task: `workers.attribution.evaluate_outcome(event_id, asset_id)`
 
-Triggered from `POST /events/work-order` when `count(WO for same asset in last 30 days) > 1`.
+Triggered from `POST /events/work-order` when `count(WO for same asset in last 30 days) > 1`. Its Go historian call carries `X-Connector-Secret` (`CONNECTOR_SHARED_SECRET`).
 
 Three independent checks — **all must pass** for `genuine_failure=True`:
 
@@ -816,7 +864,9 @@ Triggered by `POST /governance/model-gate/run` (admin only). `model_name` is **o
 
 Service: `kairos-backend-go` at `http://kairos-backend-go:8090`.
 
-Source: `backend/connectors/cmd/connector/main.go`.
+Source: `backend/connectors/cmd/connector/main.go`; auth and boot validation in `auth.go`.
+
+**Authentication.** Every route except `GET /health` is behind `requireSecret`: the caller must send `X-Connector-Secret` equal to `CONNECTOR_SHARED_SECRET` (both sides SHA-256 hashed, then constant-time compared; otherwise `401`). `validateConfig` runs at start and the process exits when `CONNECTOR_SHARED_SECRET` is unset, and, unless `APP_ENV` is exactly `development`, when it or `INTERNAL_API_KEY` is still the dev default. Callers: the FastAPI `/health/connectors` proxy and `workers/attribution.py` read `CONNECTOR_SHARED_SECRET` from their environment (docker-compose passes the same value to all three). Hardening: request bodies capped at 1 MiB (`413`), upstream replies read through a 4 MiB limit, a shared `http.Client` with a 15 s timeout, `ReadHeaderTimeout` 10 s, upstream and fixture failures logged and answered with generic text, and the PI Web API URL never logged (it may carry credentials). `internal/ot/client.go` URL-escapes the tag, web id and times, and strips the request URL from transport errors. In the dev override the port binds `127.0.0.1` only.
 
 ### Endpoints
 
@@ -838,8 +888,8 @@ Source: `backend/connectors/cmd/connector/main.go`.
 ### PI Web API Client (`internal/ot/client.go`)
 
 When `PI_WEBAPI_BASE_URL` is configured:
-1. `GET {baseURL}/search?q={tag}` → resolves `WebID`
-2. `GET {baseURL}/streams/{webId}/recorded?startTime={from}&endTime={to}` → time series
+1. `GET {baseURL}/search?q={tag}` → resolves `WebID` (tag URL-escaped)
+2. `GET {baseURL}/streams/{webId}/recorded?startTime={from}&endTime={to}` → time series (each value escaped; response bodies capped at 4 MiB)
 
 Basic Auth via `PI_WEBAPI_USERNAME` / `PI_WEBAPI_PASSWORD`.
 
@@ -915,12 +965,18 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `APP_ENV` | `development` | `development \| test \| production` |
-| `APP_DEBUG` | `True` | Enables dev auth bypass (no token required) |
+| `APP_ENV` | `development` | Trimmed and lower-cased. **`development` is the only value that enables any dev convenience** (`Settings.is_development`): the unauthenticated mock user, the OPA pass-through, no rate limit, the default admin key. `production`, `staging` and a typo all count as non-development, so an unrecognised value fails closed |
+| `APP_DEBUG` | `True` | Enables dev auth bypass (no token required) only together with `APP_ENV=development` (`dev_bypass_allowed`). Must be `false` outside development |
 | `APP_VERSION` | `0.1.0` | Included in health response |
 | `APP_SECRET_KEY` | `CHANGE_ME_IN_PRODUCTION` | Change in prod |
 | `CORS_ORIGINS` | `["http://localhost:3000","http://localhost:8000"]` | Allowed origins |
 | `INTERNAL_API_KEY` | `kairos-internal-dev-key` | Service-to-service auth token |
+| `MOC_WEBHOOK_SECRET` | `None` | HMAC secret for `POST /governance/moc/webhook`. Unset is accepted only in development; **boot refuses without it outside development** |
+| `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP cap, enforced whenever `APP_ENV` is not `development` (0 = off) |
+| `MAX_UPLOAD_MB` | `25` | Reject document and voice-note uploads larger than this (Caddy caps the raw body at 30 MB) |
+| `KAIROS_SEED_PASSWORD_ADMIN`, `_ENGINEER`, `_FIELD_WORKER`, `_RELIABILITY`, `_COMPLIANCE` | blank | Read by `scripts/seed_users.py`, `tests/conftest.py` and `tools/e2e_flows.sh` from `.env` (not `Settings`); the seeder refuses to run if any is blank |
+
+**Boot guard (`_no_insecure_defaults_in_prod`).** Outside development the API refuses to start while `INTERNAL_API_KEY` or `APP_SECRET_KEY` is a dev default, the Supabase service-role key or JWT secret is empty, `MOC_WEBHOOK_SECRET` is unset, or `APP_DEBUG` is true. The Go connector applies the same idea to `CONNECTOR_SHARED_SECRET`.
 
 ### Supabase
 
@@ -1020,7 +1076,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `MAX_PUSH_PER_USER_PER_HOUR` | `6` | Hard ceiling per operator |
-| `BRIEF_COOLDOWN_HOURS` | `4` | Same (recipient, asset) cool-down |
+| `BRIEF_COOLDOWN_HOURS` | `4` | Same (recipient, asset, trigger type) cool-down |
 | `DEDUP_WINDOW_MINUTES` | `10` | Event dedup window + event correlation window |
 | `LATE_ARRIVAL_WINDOW_MINUTES` | `5` | Countdown before delayed brief assembly fires |
 | `PLANT_STATE_DEFAULT` | `normal` | Fallback plant state |
@@ -1040,6 +1096,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `EAM_ODS_ENDPOINT` | `""` (uses fixture when empty) |
 | `FASTAPI_URL` | `http://kairos-backend-api:8000` |
 | `INTERNAL_API_KEY` | `kairos-internal-dev-key` |
+| `CONNECTOR_SHARED_SECRET` | `kairos-connector-dev-secret` (required; callers send it as `X-Connector-Secret`; the dev default is refused outside `APP_ENV=development`) |
 | `EAM_FIXTURE_PATH` | `/app/fixtures/sample_assets.json` |
 
 ### OpenTelemetry
@@ -1058,19 +1115,23 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 1. Client calls `POST /auth/login` → gets `access_token` (ES256 JWT)
 2. Client includes `Authorization: Bearer <access_token>` on all requests
 3. `get_current_user` calls `supabase.auth.get_user(token)` using a fresh anon client
-4. Role extracted from `user.user_metadata.role` (not the top-level `role` field)
+4. Role extracted from `user.app_metadata.role` (not `user_metadata`, which the user can edit, and not the top-level `role` field)
+5. `POST /auth/logout` revokes the session server side (`scope="local"`); the frontend calls it on sign-out and on forced expiry, best effort
+
+`app_metadata` is writable only with the service-role key. Users created before this rule keep their role in `user_metadata` and would all resolve as `field_worker` with no site, so run `scripts/migrate_roles_to_app_metadata.py` (dry run, then `--apply`) **before** deploying the code that reads `app_metadata` only. It never overwrites an existing `app_metadata` key and does not touch `user_metadata`. `services/identity.display_name` reads the display name from `app_metadata` for the same reason (a name on a PTW sign-off must not be user-editable).
 
 ### Test Users
 
 Created by `docker exec kairos-backend-api python scripts/seed_users.py`.
 
-| Email | Password | Role |
+| Email | Password (env var in `.env`) | Role |
 |-------|----------|------|
-| `admin@kairos.local` | `KairosAdmin123!` | `admin` |
-| `engineer@kairos.local` | `KairosEngineer123!` | `engineer` |
-| `field_worker@kairos.local` | `KairosField123!` | `field_worker` |
-| `reliability@kairos.local` | `KairosReliability123!` | `reliability` |
-| `compliance@kairos.local` | `KairosCompliance123!` | `compliance` |
+| `admin@kairos.local` | `KAIROS_SEED_PASSWORD_ADMIN` | `admin` |
+| `engineer@kairos.local` | `KAIROS_SEED_PASSWORD_ENGINEER` | `engineer` |
+| `field_worker@kairos.local` | `KAIROS_SEED_PASSWORD_FIELD_WORKER` | `field_worker` |
+| `reliability@kairos.local` | `KAIROS_SEED_PASSWORD_RELIABILITY` | `reliability` |
+| `compliance@kairos.local` | `KAIROS_SEED_PASSWORD_COMPLIANCE` | `compliance` |
+| `demo@kairos.local` | `KAIROS_SEED_PASSWORD_DEMO` | `demo` |
 
 All five roles in the OPA policy are loginable. `reliability` and `compliance` are the two personas
 that actually demonstrate governance — quarantine promotion and read-only audit — so a demo that
@@ -1081,15 +1142,15 @@ skips them skips the point.
 | Role | Permissions |
 |------|-------------|
 | `field_worker` | `read_search`, `read_briefs`, `ack_brief` |
-| `engineer` | All above + `ingest_document`, `read_governance`, `read_nonconformance`, `read_compliance`, `read_audit`, `read_documents`, `read_events`, `resolve_admin_conflict`, `read_assets`, `write_assets` |
-| `reliability` | Engineer's reads + `promote_quarantine`, **`countersign_brief`**, `resolve_admin_conflict` (no `ack_brief`, no `write_assets`) |
+| `engineer` | All above + `ingest_document`, `ingest_event`, `read_governance`, `read_nonconformance`, `read_compliance`, `read_audit`, `read_documents`, `read_events`, `resolve_admin_conflict`, `read_assets`, `write_assets` |
+| `reliability` | Engineer's reads and ingests (`ingest_document`, `ingest_event`) + `promote_quarantine`, **`countersign_brief`**, `resolve_admin_conflict` (no `ack_brief`, no `write_assets`) |
 | `compliance` | `read_search`, `read_compliance`, `read_audit`, `read_nonconformance`, `read_events` |
 | `admin` | `*` (all) |
 
 > **Engineers deliberately cannot `promote_quarantine` or `countersign_brief`.** That is what makes
 > the one-way quarantine gate and the PTW dual signature real: the second signature can never come
 > from the issuing role. `_sensitive_actions` in the policy lists both, plus
-> `resolve_admin_conflict`, `write_assets`, `ingest_document` and all six `read_*` actions —
+> `resolve_admin_conflict`, `write_assets`, `ingest_document`, `ingest_event` and all six `read_*` actions —
 > without that listing the catch-all rule would grant them to every authenticated role.
 
 > **`read_nonconformance` is narrower than `read_governance` on purpose.** The compliance auditor's
@@ -1101,10 +1162,12 @@ skips them skips the point.
 
 `OPAMiddleware` in `api/middleware/opa.py` intercepts all `POST/PUT/PATCH/DELETE` requests **and
 `GET`/`HEAD` on the sensitive read prefixes** (`/audit-log`, `/compliance`, `/governance`,
-`/documents`, `/events`), except `/health`, `/auth`, `/docs`. Maps route prefix to OPA action name,
+`/documents`, `/events`), except `/health`, `/auth`, `/docs`, and the one signed webhook `POST /governance/moc/webhook` (`_SIGNED_WEBHOOKS`: authenticated by its own HMAC, and OPA needs a user the plant's MoC system does not have). Maps route prefix to OPA action name; the six event-ingest routes are listed by exact route as `ingest_event` (not by the `/events` prefix, so deviation flags, acks and `plant-state` stay on the generic write action),
 calls `http://kairos-opa:8181/v1/data/kairos/authz/allow`. 403 if denied.
 
-Four things about it are load-bearing, each of which was a live defect before 2026-08-17:
+Five things about it are load-bearing, each of which was a live defect:
+
+- **It reads `request.scope["path"]`**, never `request.url.path`, which is rebuilt from the `Host` header (a crafted `Host` made a gated route look like `/health/...`, which the skip list exempts).
 
 - **It fails closed.** `_ask_opa` returns `self.debug` when OPA is unreachable, never a bare `True`.
 - **It does not verify tokens itself** — it calls `dependencies.resolve_token`, the app's single
@@ -1118,17 +1181,29 @@ Four things about it are load-bearing, each of which was a live defect before 20
 `/events/plant-state` is exempt from `read_events`: the app shell renders plant state for every
 persona, and a field worker who cannot see that the plant is in shutdown is a safety regression.
 
-Verify with `tools/verify_authz_policy.sh` (34-case decision matrix against a throwaway OPA) —
+Verify with `tools/verify_authz_policy.sh` (39-case decision matrix against a throwaway OPA) —
 and separately confirm the layer is *reached*, by probing the live API with a restricted persona's
 token and checking for a 403.
 
 ### Rate-limit Middleware
 
-`RateLimitMiddleware` in `api/middleware/ratelimit.py` (outermost) caps requests per client IP using a Redis fixed-window counter (`RATE_LIMIT_PER_MINUTE`, default 120). **Enforced only when `APP_ENV=production`** (0 = off in dev/test so bursts never trip it). Fails open if Redis is unreachable; `/health*` exempt. Trusts the first `X-Forwarded-For` hop (behind Caddy). Pairs with the `MAX_UPLOAD_MB` (25) cap on `/documents/ingest` — both are public-exposure abuse guards.
+`RateLimitMiddleware` in `api/middleware/ratelimit.py` (outermost) caps requests per client IP using a Redis fixed-window counter (`RATE_LIMIT_PER_MINUTE`, default 120). **Enforced whenever `APP_ENV` is not `development`** (0 = off in development so bursts never trip it). Fails open if Redis is unreachable; `/health*` exempt. Trusts the first `X-Forwarded-For` hop (behind Caddy). Pairs with the `MAX_UPLOAD_MB` (25) cap on `/documents/ingest` — both are public-exposure abuse guards.
+
+### Request hardening (2026-10-01 security pass)
+
+Behaviour that is easy to regress, each pinned by a `tests/test_sec_*.py` case. Detail and status per finding: `implementation/status.md` § Accepted risks and deploy checklist.
+
+- **Documents** (`routers/documents.py`): `DOCUMENT_TYPES` (7 values), `ALLOWED_MIME_TYPES` (anything else is stored as `application/octet-stream`), `safe_filename` for the storage path, `parse_occurred_at` (not future, not older than 30 years), and `AUTHORITY_ASSERT_ROLES = {admin, reliability}`: any other role asking for authority 1 to 3 is capped to 4 and the response reports `authority_capped`. Superseding a document of authority 1 to 3 is limited to `SUPERSEDE_GATED_ROLES` and needs an approved MoC (deterministic id `supersede_moc_id`); the first request returns `202 pending_moc_approval` and a repeat after approval applies it. Signed artifact URLs carry `download=` so a stored file is never rendered in the storage origin.
+- **MoC webhook** (`routers/governance.py`): `verify_moc_webhook` checks HMAC-SHA256 over `"{X-Webhook-Timestamp}." + raw body` in `X-Webhook-Signature`, with a 5-minute skew window (`MOC_WEBHOOK_MAX_SKEW_SECONDS`), fail-closed when no secret is configured outside development, and a replay of an already approved MoC is `409`.
+- **Briefs**: an acknowledgement is final (`409` on a second one); a PTW brief is readable by any staff role; the inbox filter uses `.in_()` over `_brief_recipients`, never a string built from the `site_id` claim.
+- **Annotations**: only `reliability` and `admin` feed `validation_corpus`; 60 corrections per user per hour; repeat corrections on one document count once toward the circuit breaker.
+- **Elicitation**: the submitter is always the token's user; off-boarding programmes are visible to staff and the person concerned only (`_require_staff_or_subject`); voice-note storage paths are sanitised (`_safe_segment`) and read in 1 MB chunks against `MAX_UPLOAD_MB`.
+- **Site scope**: asset routes use `scoped_asset` (one `404` for missing or other-site), events, the RCA pack, the audit pack and the coverage and pending-alias lists filter by `site_scope`.
+- **Dependencies** (`requirements.txt`): `fastapi==0.135.1` with `starlette>=1.3.1` (fastapi 0.111.1 capped starlette at 0.37.x, which carries a BadHost advisory and multipart DoS advisories; 0.135.1 is the newest that still accepts the pinned pydantic 2.7.4) and `anyio==4.14.2`. Removed as unused: `python-jose` (and its `ecdsa`), `passlib`, `flower`, `rich`, `tenacity`, `python-dateutil`, `pytz`. `numpy` stays pinned only because `qdrant-client` 1.9.1 needs it. The CI `pip-audit` step now ignores nothing.
 
 ### Internal Service Auth
 
-Go connector and service-to-service calls use `Authorization: Bearer <INTERNAL_API_KEY>`. `resolve_token` recognizes this and returns a service admin account without calling Supabase — which is also what keeps the fail-closed OPA middleware from 401ing every connector and Celery write, since the key is not a JWT.
+Go connector and service-to-service calls use `Authorization: Bearer <INTERNAL_API_KEY>`, compared in constant time (`hmac.compare_digest`). The connector's own inbound routes are separately protected by `X-Connector-Secret` (§9). `resolve_token` recognizes the key and returns a service admin account without calling Supabase — which is also what keeps the fail-closed OPA middleware from 401ing every connector and Celery write, since the key is not a JWT.
 
 ---
 
@@ -1152,7 +1227,6 @@ All logs via `structlog`. Never use `print()` or stdlib `logging`. Notable log e
 - `attribution.complete` — event_id, asset_id, genuine_failure, action
 - `ingest.complete` — document_id, sha256, job_id
 - `event_bus.compound_event_linked` — compound_event_id, event_ids
-- `events.ptw_revoked_pending_brief` — asset_id, revoked task ID
 - `activity.ingest_lag_recorded` — document_id, lag_minutes (observation; `valid_from` unaffected)
 - `activity.occurred_at_in_future` / `activity.occurred_at_unparseable` — fall back to ingest time
 - `rca_pack.generated` — asset_id, failure_code, timeline_count
@@ -1177,7 +1251,7 @@ These apply to every code change in this codebase. Violations are bugs.
 
 6. **Safety-critical parameter queries** — explicit refusal when confidence < 0.7. Never hedge. Return sources directly.
 
-7. **Phase discipline.** Phase 2 LLM synthesis lives only in `POST /search/synthesize`. Never auto-triggered from routers or workers.
+7. **Phase discipline.** Phase 2 LLM synthesis lives only in `POST /search/synthesize` (and its stream). Never auto-triggered from routers or workers. The evidence and the safety category are produced server-side; a request's `context` and `query_category` are ignored.
 
 8. **EEMUA 191 Governor.** Call `EventBusService.check_governor(user_id)` before every brief delivery. PTW (`priority="critical"`) always exempt.
 

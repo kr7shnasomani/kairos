@@ -129,6 +129,7 @@ WHERE (reg.applies_to_equipment_class IS NULL
     OR a.equipment_class CONTAINS reg.applies_to_equipment_class
     OR reg.applies_to_equipment_class CONTAINS a.equipment_class)
   AND {REAL_ASSET_CYPHER}
+  AND ($site_id IS NULL OR a.site_id = $site_id)
 OPTIONAL MATCH (a)-[r:KNOWLEDGE_EDGE]->(d:Document)
 WHERE (r.valid_to IS NULL OR datetime(r.valid_to) > datetime())
   AND r.verification_status <> 'superseded'
@@ -296,10 +297,11 @@ async def generate_audit_pack(
     Clauses with all evidence below confidence 0.7 require human review before clearance.
     Human sign-off is mandatory — this is audit-preparation acceleration, not automated compliance.
     """
+    site_id = site_scope(current_user, None)  # evidence from assets on other sites is not shown
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
-        result = await session.run(_AUDIT_CYPHER, framework=framework, clauses=clauses)
+        result = await session.run(_AUDIT_CYPHER, framework=framework, clauses=clauses, site_id=site_id)
         rows = [dict(r) async for r in result]
-        excluded = await excluded_test_asset_count(session)
+        excluded = await excluded_test_asset_count(session, site_id)
     for r in rows:
         r["evidence"] = _dedupe_evidence(r.get("evidence") or [])
 

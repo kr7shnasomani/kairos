@@ -37,7 +37,7 @@ The stack is defined by **two files** that select the run mode:
 | File | Role | Loaded when |
 |------|------|-------------|
 | `docker-compose.yml` | **Base — production / AWS-safe.** Non-root images, network isolation, resource limits, healthchecks, only ports **3000** and **8000** published (the API on `127.0.0.1` only), code baked into images. | Always |
-| `docker-compose.override.yml` | **Dev.** Source bind-mounts + hot-reload (`uvicorn --reload`, `next dev`, `go run`), runs as root, publishes every datastore/UI port for debugging. | Auto-loaded by plain `docker compose up` |
+| `docker-compose.override.yml` | **Dev.** Source bind-mounts + hot-reload (`uvicorn --reload`, `next dev`, `go run`), runs as root, publishes every datastore/UI port for debugging, **bound to `127.0.0.1`** (`127.0.0.1:7474:7474`, and so on, including the Go connector's 8090). | Auto-loaded by plain `docker compose up` |
 
 ```bash
 # LOCAL DEV  (base + override, auto)          → hot-reload, all debug ports
@@ -124,6 +124,9 @@ and non-HTTP workers) — the API's health probe is defined in Compose. Default
 `deps → dev → builder → runner`. **`dev`** runs `next dev` (used by the dev
 override). **`runner`** serves the Next.js **standalone** build (`node server.js`)
 as non-root user `nextjs`. Requires `output: "standalone"` in `next.config.ts`.
+`NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_AUTH_STRICT` (default `false`; `true` turns a 401 into a forced
+re-login) are build args in the `builder` stage, baked into the bundle, so a change needs a rebuild.
+`next.config.ts` also derives the CSP `connect-src` from `NEXT_PUBLIC_API_URL` (see `FRONTEND.md` §15a).
 
 ### `backend/connectors/Dockerfile` — multi-stage, non-root
 `builder` (golang:1.25-alpine — bumped from 1.22 for `x/crypto` 0.52) compiles a static binary,
@@ -168,8 +171,10 @@ Neo4j 2g + Qdrant 1g. Size the AWS host for the default (see §9).
 
 The live deployment and its step-by-step procedure are in [`DEPLOY.md`](./DEPLOY.md). Summary:
 
-- **Host:** one EC2 `m7i-flex.large` (2 vCPU, 8 GiB) in `ap-south-1`, Ubuntu 24.04, 30 GB gp3, an
-  Elastic IP and a DuckDNS name. Measured without the frontend the stack uses about 2.4 GiB.
+- **Host:** one EC2 `c7i-flex.large` (2 vCPU, 4 GiB) in `ap-south-1`, Ubuntu 24.04, 30 GB gp3, an
+  Elastic IP and a DuckDNS name. Real peak memory used, measured on production under load: about 2.37 GiB
+  (resized down from an 8 GiB `m7i-flex.large` after capping the Elasticsearch heap at 512 MB — see
+  `DEPLOY.md` §2; a 2 GiB instance was tested and does not fit).
 - **What runs there:** the backend only (API, Celery, both Temporal workers, Temporal + Postgres,
   Go connector, Elasticsearch, Redis, OPA) plus `kairos-caddy` for HTTPS. **The frontend is on Vercel.**
 - **Start or update** (on the server, after copying the code as in DEPLOY.md §8):
@@ -189,8 +194,12 @@ make prod    # builds the backend images, then starts the backend services + kai
 - **TLS:** `kairos-caddy` gets and renews a Let's Encrypt certificate for `KAIROS_DOMAIN`. Keep
   `infra/caddy/Caddyfile` free of an `encode` block so Copilot's Server-Sent Events stream unbuffered.
 - **Secrets:** `.env` lives only on the server (`chmod 600`), never in images or git. With
-  `APP_ENV=production` the API refuses to boot on a default `APP_SECRET_KEY` or `INTERNAL_API_KEY`,
-  or an empty `SUPABASE_JWT_SECRET`.
+  `APP_ENV` anything other than `development` (the only value that enables dev bypasses) the API refuses to
+  boot on a default `APP_SECRET_KEY` or `INTERNAL_API_KEY`, an empty `SUPABASE_JWT_SECRET`, an unset
+  `MOC_WEBHOOK_SECRET`, or `APP_DEBUG=true`, and the Go connector refuses to start without `CONNECTOR_SHARED_SECRET`
+  or with its dev default. Set both secrets in the server `.env` (`DEPLOY.md` §9).
+- **Proxy limits:** `infra/caddy/Caddyfile` caps request bodies at 30 MB and sets `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options`, `Strict-Transport-Security` and drops `Server`.
 - **ES has `xpack.security.enabled=false`** — safe only because it is unpublished
   and internal-network-only.
 - **Persistence:** the named volumes live on the instance's EBS volume and survive a stop/start.
@@ -253,7 +262,7 @@ local ML stack (`torch`/`torchvision`/`ultralytics`/`layoutparser`/`opencv`/
 | Frontend image | dev server only | multi-stage; standalone non-root prod |
 | Go connector (prod) | 880 MB builder stage | ~36 MB non-root release stage |
 | 4 Python services | 4 separate image builds | one shared image, built once |
-| Ports | all datastore ports published | only 3000 + 8000 in prod |
+| Ports | all datastore ports published | only 3000 + 8000 in prod; dev ports on `127.0.0.1` |
 | Networks | one flat network | edge / internal split |
 | Healthchecks | missing on Neo4j; API boot race | full coverage + `service_healthy` gates |
 | Resource limits | none | memory ceilings on every service |

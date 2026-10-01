@@ -16,6 +16,7 @@ SAFE = dict(
     NEO4J_PASSWORD="prod-neo4j-pw",
     SUPABASE_SERVICE_ROLE_KEY="svc",
     SUPABASE_JWT_SECRET="jwt",
+    MOC_WEBHOOK_SECRET="hook",
 )
 
 

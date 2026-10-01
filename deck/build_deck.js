@@ -137,7 +137,7 @@ function steps(s, items, o) {
     if (i > 0) s.addShape(p.ShapeType.rect, { x:x - 0.17, y:SY + 0.14, w:0.01, h:0.58,
       fill:{ color:"FFFFFF", transparency:66 } });
   });
-  s.addNotes("Cover. The problem title, the domain chips and the Domain field are the only event-specific lines on the whole deck; swap them per brief. Nothing anywhere names an organiser or competition.");
+  s.addNotes("Cover. The problem title, the domain chips and the Domain field are the only brief-specific lines on the whole deck; swap them per brief. Nothing anywhere names an organiser or programme.");
 }
 
 /* ============================================ 01  problem: hero over a media band */
@@ -236,7 +236,7 @@ function steps(s, items, o) {
   s.addText("A system that pushes must not become noise, so interruptions are capped at the process industry's own alarm benchmark: fewer than six per operator per hour (EEMUA 191, ANSI/ISA-18.2, IEC 62682).",
     T({ x:M, y:6.44, w:CW, h:0.5, valign:"top", fontFace:F.b, fontSize:11,
         color:C.muted, lineSpacing:14 }));
-  s.addNotes("Five blocks is the whole architecture at this altitude. The alarm cap answers the obvious objection before a judge raises it.");
+  s.addNotes("Five blocks is the whole architecture at this altitude. The alarm cap answers the obvious objection before a reviewer raises it.");
 }
 
 /* ============================================ 03  key features */
@@ -276,7 +276,7 @@ function steps(s, items, o) {
     { text:"Delivery without governance is a confident guess; governance without delivery is a better document store.", options:{ color:C.muted } }
   ], T({ x:M, y:6.74, w:CW, h:0.42, valign:"top", fontFace:F.b, fontSize:12,
          lineSpacing:16 }));
-  s.addNotes("Kept to six so each one is a sentence a judge can repeat. The full feature set also covers P&ID topology extraction, multilingual and mixed-script field records, voice capture, and cross-site pattern detection.");
+  s.addNotes("Kept to six so each one is a sentence a listener can repeat. The full feature set also covers P&ID topology extraction, multilingual and mixed-script field records, voice capture, and cross-site pattern detection.");
 }
 
 /* ============================================ 04  innovation, beside the product */
@@ -428,7 +428,7 @@ function steps(s, items, o) {
   const s = p.addSlide(); const d = ground(s, "white"); rails(s, d);
   head(s, "08", "Feasibility", "Built to survive contact with a real plant", d);
 
-  s.addText("The question is not whether a demo can be assembled. It is whether this can be implemented beyond the hackathon, inside a brownfield plant that will not stop running while you install it.",
+  s.addText("The question is not whether a demo can be assembled. It is whether this can be implemented beyond a pilot, inside a brownfield plant that will not stop running while you install it.",
     T({ x:M, y:1.86, w:CW, h:0.52, valign:"top", fontFace:F.b, fontSize:13,
         color:C.body, lineSpacing:18 }));
 
@@ -466,7 +466,7 @@ function steps(s, items, o) {
     { text:"one vertical slice end to end, ingest through to a cited answer and one proactive brief, measured against a written answer key. A prototype that does one thing all the way through beats five that stop at the seam.", options:{ color:C.muted } }
   ], T({ x:M, y:6.56, w:CW, h:0.6, valign:"top", fontFace:F.b, fontSize:12.5,
          lineSpacing:17 }));
-  s.addNotes("This slide answers the stated criterion: can the solution realistically be implemented beyond the hackathon. Naming the constraints is what makes the rest of it credible.");
+  s.addNotes("This slide answers the question of whether the solution can realistically be implemented beyond a pilot. Naming the constraints is what makes the rest of it credible.");
 }
 
 /* ============================================ 09  scalability */

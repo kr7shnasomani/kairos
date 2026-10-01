@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from api.dependencies import (
@@ -18,6 +18,7 @@ from api.dependencies import (
     QdrantDep,
     SettingsDep,
     SupabaseDep,
+    site_scope,
 )
 from api.models.document import (
     AnswerFeedbackRequest,
@@ -29,7 +30,7 @@ from api.models.document import (
 )
 from api.services.corpus import document_rows
 from api.services.graph import GraphService
-from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService, query_asset_tags
+from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService, query_asset_tags, valid_citations
 from api.services.search_engine import SearchEngineService
 from api.services.search_service import SearchService
 from api.services.timeline import merge_timeline
@@ -200,7 +201,9 @@ async def search_asset(
 _TOPOLOGY_EVIDENCE_CATEGORIES = {"isolation_interlock_sequence"}
 
 
-async def _verified_topology_evidence(query: str, graph: GraphService) -> list[dict]:
+async def _verified_topology_evidence(
+    query: str, graph: GraphService, aliases: list[dict[str, str]] | None = None
+) -> list[dict]:
     """Engineer-verified P&ID elements for the assets the query names, as gate-eligible evidence.
 
     Layer 3 → Layer 11. An isolation question ("which valves make up the isolation boundary for
@@ -220,7 +223,7 @@ async def _verified_topology_evidence(query: str, graph: GraphService) -> list[d
     `relevance_score` is set high because this evidence was selected *by* asset rather than ranked
     into position — an item with no score would drop the whole context out of the scored branch.
     """
-    tags = query_asset_tags(query)
+    tags = query_asset_tags(query, aliases)
     if not tags:
         return []
     results = await asyncio.gather(
@@ -254,64 +257,117 @@ async def _verified_topology_evidence(query: str, graph: GraphService) -> list[d
     return evidence
 
 
-@router.post("/synthesize", response_model=SynthesizeResponse, summary="Synthesize an answer from retrieved knowledge")
-async def synthesize(
+# What the Copilot has always retrieved before it asked for an answer (`synthesize()` in api.ts).
+_SYNTH_EVIDENCE_LIMIT = 6
+
+_PHASE_1_MESSAGE = (
+    "Synthesis is not enabled in Phase 1 (shadow / retrieval mode). "
+    "The retrieved source documents are returned for direct review."
+)
+
+
+async def _server_evidence(
     payload: SynthesizeRequest,
-    current_user: CurrentUserDep,
-    settings: SettingsDep,
-    supabase: SupabaseDep,
-    driver: Neo4jDep,
-) -> SynthesizeResponse:
+    settings,
+    supabase,
+    driver,
+    qdrant,
+    es,
+) -> tuple[list[dict], str | None, list[dict[str, str]]]:
+    """The evidence, safety category and alias map a synthesis request is judged on.
+
+    All three are produced here, never read from the request body. The gate used to take the
+    caller's `context` (with its `authority_level` and `confidence`) and `query_category` at face
+    value, so any signed-in role could clear it with a made-up document (security review H4). The
+    request's `context` and `query_category` are accepted for compatibility and ignored.
     """
-    Assembles retrieved knowledge into a provenance-backed answer via NIM or Ollama.
-    Safety-critical categories trigger explicit refusal when evidence confidence is low.
-    No-ops cleanly when no LLM is configured (Phase 1 fallback).
+    try:
+        as_of = datetime.fromisoformat(payload.as_of) if payload.as_of else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="as_of must be an ISO8601 timestamp") from exc
 
-    Phase gate (Layer 12): in Phase 1 the deployment is retrieval-only by design — trust in
-    retrieval is established before trust in synthesis is requested. The caller still gets its
-    retrieved sources, so the answer surface degrades rather than breaking.
-    """
-    if settings.KAIROS_PHASE < 2:
-        log.info("synthesis.phase_gated", phase=settings.KAIROS_PHASE, query_category=payload.query_category)
-        return SynthesizeResponse(
-            answer=None,
-            sources=payload.context or [],
-            refused=False,
-            message=(
-                "Synthesis is not enabled in Phase 1 (shadow / retrieval mode). "
-                "The retrieved source documents are returned for direct review."
-            ),
-        )
+    svc = SearchService(
+        graph=GraphService(driver, settings.NEO4J_DATABASE),
+        vector=VectorStoreService(qdrant, settings),
+        engine=SearchEngineService(es, settings),
+        llm=LLMService(settings),
+        supabase=supabase,
+    )
+    results = await svc.hybrid_search(
+        query=payload.query,
+        collection=settings.QDRANT_COLLECTION_DOCUMENTS,
+        asset_id=None,
+        authority_min=5,
+        include_quarantine=False,
+        as_of=as_of,
+        limit=_SYNTH_EVIDENCE_LIMIT,
+    )
+    evidence = [
+        {
+            "text": r.snippet,
+            "document_id": r.document_id,
+            "title": r.title,
+            "asset_id": r.asset_id,
+            "authority_level": r.authority_level,
+            "relevance_score": r.relevance_score,
+            "retrieval_method": r.retrieval_method,
+        }
+        for r in results
+    ]
+    aliases = await svc.confirmed_aliases()
 
-    llm = LLMService(settings)
+    # Derived here, for every caller, so none can opt out of the gate by omitting or lying about it.
+    category = LLMService.classify_query_category(payload.query)
+    if payload.query_category and payload.query_category != category:
+        log.info("synthesis.client_category_ignored", sent=payload.query_category, derived=category)
 
-    # Derive the category when the caller didn't supply one. Classifying here rather
-    # than in each client means the safety gate applies to every caller — frontend,
-    # benchmark, and anything added later — instead of only the ones that remember.
-    category = payload.query_category or LLMService.classify_query_category(payload.query)
-
-    # Admit engineer-verified drawing topology alongside the retrieved documents. Server-side for
-    # the same reason the category is derived here: every caller gets it, not just the ones that
-    # remember to ask.
-    context = list(payload.context or [])
+    # Admit engineer-verified drawing topology alongside the retrieved documents.
     if category in _TOPOLOGY_EVIDENCE_CATEGORIES:
-        context += await _verified_topology_evidence(
-            payload.query, GraphService(driver, settings.NEO4J_DATABASE)
+        evidence += await _verified_topology_evidence(
+            payload.query, GraphService(driver, settings.NEO4J_DATABASE), aliases
         )
+    return evidence, category, aliases
 
-    result = await llm.synthesize(payload.query, context, category)
 
-    parsed: dict = {}
-    if result.get("answer"):
-        parsed = LLMService.parse_synthesis_response(result["answer"])
+def _synthesis_payload(result: dict, category: str | None) -> dict:
+    """Project the service result onto `SynthesizeResponse`'s fields, for both routes.
 
-    refused = bool(result.get("refused"))
-    safety_critical = category in SAFETY_CRITICAL_CATEGORIES if category else False
+    A StreamingResponse has no `response_model`, so nothing filters its payload the way the
+    non-streaming endpoint is filtered; the first live run shipped the provider's entire raw
+    chat-completion object to the client under `raw`. Whitelisted, not blacklisted, so a new
+    internal key added to the service result never leaks by default.
+    """
+    sources = result.get("sources", []) or []
+    parsed = LLMService.parse_synthesis_response(result["answer"]) if result.get("answer") else {}
+    # Strip the `ANSWER:`/`CONFIDENCE:` scaffolding, so a client switching between the two routes
+    # never sees raw markers.
+    return {
+        "answer": parsed.get("answer") or result.get("answer"),
+        "sources": sources,
+        "confidence": parsed.get("confidence") or result.get("confidence"),
+        "refused": bool(result.get("refused")),
+        "refusal_reason": result.get("refusal_reason"),
+        "safety_critical": category in SAFETY_CRITICAL_CATEGORIES if category else False,
+        # Citations to a source the answer was not given are dropped, not displayed.
+        "sources_used": valid_citations(parsed.get("sources_used", []), len(sources)),
+        "uncertainty": parsed.get("uncertainty") or result.get("uncertainty"),
+        "model": result.get("model"),
+        "message": result.get("message"),
+        "rate_limited": bool(result.get("rate_limited")),
+    }
 
-    # Computed from the sources actually returned (refusals include them too), so a refusal
-    # that hands back source documents still says those documents are under MoC dispute.
-    pending_moc = await pending_moc_warnings(supabase, result.get("sources", []) or [])
 
+async def _record_synthesis(supabase, current_user: dict, query: str, category: str | None, body: dict) -> list[dict]:
+    """The step every answer owes, however it was delivered: MoC disclosure and an audit row.
+
+    Shared by `POST /synthesize` and its stream. The stream once had neither, so every Copilot
+    answer, safety-critical ones included, went unaudited and carried no pending-MoC warning
+    (security review M3). Returns the pending-MoC warnings for the response.
+    """
+    sources = body.get("sources", []) or []
+    # Computed from the sources actually returned (refusals include them too), so a refusal that
+    # hands back source documents still says those documents are under MoC dispute.
+    pending_moc = await pending_moc_warnings(supabase, sources)
     try:
         await asyncio.to_thread(
             lambda: supabase.table("audit_log").insert({
@@ -319,31 +375,53 @@ async def synthesize(
                 "entity_type": "query",
                 "performed_by": current_user.get("user_id", "unknown"),
                 "details": {
-                    "query": payload.query,
+                    "query": query,
                     "query_category": category,
-                    "sources_used": parsed.get("sources_used", []),
-                    "confidence": parsed.get("confidence"),
-                    "refused": refused,
+                    "sources_used": body.get("sources_used", []),
+                    "evidence_document_ids": [s.get("document_id") for s in sources],
+                    "confidence": body.get("confidence"),
+                    "refused": body.get("refused"),
+                    "model": body.get("model"),
                 },
             }).execute()
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 (an audit failure is logged, never allowed to drop the answer)
         log.warning("synthesis.audit_log_failed", error=str(exc))
+    return pending_moc
 
-    return SynthesizeResponse(
-        answer=parsed.get("answer") or result.get("answer"),
-        sources=result.get("sources", []),
-        confidence=parsed.get("confidence") or result.get("confidence"),
-        refused=refused,
-        refusal_reason=result.get("refusal_reason"),
-        safety_critical=safety_critical,
-        sources_used=parsed.get("sources_used", []),
-        uncertainty=parsed.get("uncertainty") or result.get("uncertainty"),
-        model=result.get("model"),
-        message=result.get("message"),
-        rate_limited=bool(result.get("rate_limited")),
-        pending_moc=pending_moc,
-    )
+
+@router.post("/synthesize", response_model=SynthesizeResponse, summary="Synthesize an answer from retrieved knowledge")
+async def synthesize(
+    payload: SynthesizeRequest,
+    current_user: CurrentUserDep,
+    settings: SettingsDep,
+    supabase: SupabaseDep,
+    driver: Neo4jDep,
+    qdrant: QdrantDep,
+    es: ElasticsearchDep,
+) -> SynthesizeResponse:
+    """
+    Assembles retrieved knowledge into a provenance-backed answer via NIM or Ollama.
+    Safety-critical categories trigger explicit refusal when evidence confidence is low.
+    No-ops cleanly when no LLM is configured (Phase 1 fallback).
+
+    The evidence and the safety category are produced by the server (`_server_evidence`); the
+    request's `context` and `query_category` are ignored, so the gate applies to every caller.
+
+    Phase gate (Layer 12): in Phase 1 the deployment is retrieval-only by design — trust in
+    retrieval is established before trust in synthesis is requested. The caller still gets its
+    retrieved sources, so the answer surface degrades rather than breaking.
+    """
+    evidence, category, aliases = await _server_evidence(payload, settings, supabase, driver, qdrant, es)
+
+    if settings.KAIROS_PHASE < 2:
+        log.info("synthesis.phase_gated", phase=settings.KAIROS_PHASE, query_category=category)
+        return SynthesizeResponse(answer=None, sources=evidence, refused=False, message=_PHASE_1_MESSAGE)
+
+    result = await LLMService(settings).synthesize(payload.query, evidence, category, aliases=aliases)
+    body = _synthesis_payload(result, category)
+    body["pending_moc"] = await _record_synthesis(supabase, current_user, payload.query, category, body)
+    return SynthesizeResponse(**body)
 
 
 @router.post("/synthesize/stream", summary="Synthesize an answer, streamed as Server-Sent Events")
@@ -351,7 +429,10 @@ async def synthesize_stream(
     payload: SynthesizeRequest,
     current_user: CurrentUserDep,
     settings: SettingsDep,
+    supabase: SupabaseDep,
     driver: Neo4jDep,
+    qdrant: QdrantDep,
+    es: ElasticsearchDep,
 ) -> StreamingResponse:
     """Same answer as `POST /synthesize`, delivered progressively.
 
@@ -374,62 +455,25 @@ async def synthesize_stream(
     `done` as authoritative and never render `delta` text as final.
     """
     llm = LLMService(settings)
-    category = payload.query_category or LLMService.classify_query_category(payload.query)
-
-    context = list(payload.context or [])
-    if category in _TOPOLOGY_EVIDENCE_CATEGORIES:
-        context += await _verified_topology_evidence(
-            payload.query, GraphService(driver, settings.NEO4J_DATABASE)
-        )
 
     def _sse(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
-    def _done_payload(data: dict, category: str | None) -> dict:
-        """Project the service result onto `SynthesizeResponse`'s fields.
-
-        A StreamingResponse has no `response_model`, so nothing filters this the way the
-        non-streaming endpoint is filtered — the first live run shipped the provider's entire
-        raw chat-completion object to the client under `raw`. Whitelisted, not blacklisted, so a
-        new internal key added to the service result never leaks by default.
-        """
-        parsed = LLMService.parse_synthesis_response(data["answer"]) if data.get("answer") else {}
-        # Strip the `ANSWER:`/`CONFIDENCE:` scaffolding exactly as the non-streaming endpoint
-        # does, so a client switching between the two never sees raw markers.
-        answer = parsed.get("answer") or data.get("answer")
-        return {
-            "answer": answer,
-            "sources": data.get("sources", []) or [],
-            "confidence": parsed.get("confidence") or data.get("confidence"),
-            "refused": bool(data.get("refused")),
-            "refusal_reason": data.get("refusal_reason"),
-            "safety_critical": category in SAFETY_CRITICAL_CATEGORIES if category else False,
-            "sources_used": parsed.get("sources_used", []),
-            "uncertainty": parsed.get("uncertainty") or data.get("uncertainty"),
-            "model": data.get("model"),
-            "message": data.get("message"),
-            "rate_limited": bool(data.get("rate_limited")),
-        }
-
     async def _events():
-        # The phase gate is repeated rather than shared with `synthesize()` because that handler
-        # returns a response model and this one returns a byte stream; the *condition* is one
-        # line and the divergence risk is lower than the coupling would be.
-        if settings.KAIROS_PHASE < 2:
-            yield _sse("done", {
-                "answer": None,
-                "sources": payload.context or [],
-                "refused": False,
-                "message": (
-                    "Synthesis is not enabled in Phase 1 (shadow / retrieval mode). "
-                    "The retrieved source documents are returned for direct review."
-                ),
-            })
-            return
         try:
-            async for event, data in llm.synthesize_stream(payload.query, context, category):
+            evidence, category, aliases = await _server_evidence(payload, settings, supabase, driver, qdrant, es)
+            # The phase gate is repeated rather than shared with `synthesize()` because that handler
+            # returns a response model and this one returns a byte stream; the *condition* is one
+            # line and the divergence risk is lower than the coupling would be.
+            if settings.KAIROS_PHASE < 2:
+                yield _sse("done", {"answer": None, "sources": evidence, "refused": False, "message": _PHASE_1_MESSAGE})
+                return
+            async for event, data in llm.synthesize_stream(payload.query, evidence, category, aliases=aliases):
                 if event == "done":
-                    data = _done_payload(data, category)
+                    data = _synthesis_payload(data, category)
+                    data["pending_moc"] = await _record_synthesis(
+                        supabase, current_user, payload.query, category, data
+                    )
                 yield _sse(event, data)
         except Exception as exc:  # noqa: BLE001 — a dead stream must still terminate the client
             log.warning("synthesis.stream_error", error=str(exc), exc_type=type(exc).__name__)
@@ -530,7 +574,7 @@ async def generate_rca_pack(
     )
     asset_future = asyncio.to_thread(
         lambda: supabase.table("assets")
-        .select("equipment_class")
+        .select("equipment_class, site_id")
         .eq("asset_id", payload.asset_id)
         .execute()
     )
@@ -538,6 +582,16 @@ async def generate_rca_pack(
     neo4j_events, supabase_result, asset_result = await asyncio.gather(
         neo4j_future, supabase_future, asset_future
     )
+
+    # Site boundary (security review M8). Everything above is keyed by asset id alone, so without
+    # this check a caller at one site reads another site's timeline, events and documents by naming
+    # the asset. An asset with no registry row has no site to compare, which fails closed for
+    # non-admins; `site_scope` already 403s an account that has no site and lets admin through.
+    caller_site = site_scope(current_user, None)
+    if caller_site is not None and (
+        not asset_result.data or asset_result.data[0].get("site_id") != caller_site
+    ):
+        raise HTTPException(status_code=404, detail="Asset not found")
 
     # Normalise Supabase operational events into timeline format
     supabase_events = [
@@ -594,14 +648,19 @@ async def generate_rca_pack(
     synthesis_available = bool(rca_result.get("answer"))
 
     if synthesis_available:
-        parsed = LLMService.parse_rca_response(rca_result["answer"])
+        # Hypotheses may only cite documents the model was shown.
+        parsed = LLMService.parse_rca_response(
+            rca_result["answer"], {e["document_id"] for e in evidence if e.get("document_id")}
+        )
         hypotheses = parsed["hypotheses"]
         confidence = parsed["confidence"]
 
         # Safety-critical refusal: low confidence on safety-relevant failure codes
         safety_keywords = {"pressure", "isolation", "torque", "electrical", "relief", "shutdown", "interlock"}
         code_lower = payload.failure_code.lower()
-        if (confidence is not None and confidence < 0.7
+        # A missing or unparseable CONFIDENCE counts as low: the parser no longer raises on a
+        # garbled value, so passing None through here would turn a 500 into an unrefused answer.
+        if ((confidence is None or confidence < 0.7)
                 and any(kw in code_lower for kw in safety_keywords)):
             refused = True
             hypotheses = []

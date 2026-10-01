@@ -28,6 +28,14 @@ FROM node:20-alpine AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Baked in at build time like the API URL: strict auth turns a 401 into a forced re-login.
+ARG NEXT_PUBLIC_AUTH_STRICT=false
+ENV NEXT_PUBLIC_AUTH_STRICT=${NEXT_PUBLIC_AUTH_STRICT}
+# Read-only demo login (public by design). Both empty = no demo button on the login page.
+ARG NEXT_PUBLIC_DEMO_EMAIL=
+ARG NEXT_PUBLIC_DEMO_PASSWORD=
+ENV NEXT_PUBLIC_DEMO_EMAIL=${NEXT_PUBLIC_DEMO_EMAIL}
+ENV NEXT_PUBLIC_DEMO_PASSWORD=${NEXT_PUBLIC_DEMO_PASSWORD}
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

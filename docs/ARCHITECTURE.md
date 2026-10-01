@@ -556,7 +556,7 @@ Redis Streams is the pragmatic choice for the build. Redpanda is the honest stor
 
 | What | Tool | Notes |
 |------|------|-------|
-| Auth and row-level security | **Supabase Auth** | Built-in JWT (**ES256**, asymmetric — one verifier, `dependencies.resolve_token`; a hand-rolled HS256 decode silently rejects every real token and degrades authz to the dev bypass). Site scope is derived from the verified token, never a query parameter, and a blank site resolves to *no* rows rather than all rows |
+| Auth and row-level security | **Supabase Auth** | Built-in JWT (**ES256**, asymmetric — one verifier, `dependencies.resolve_token`; a hand-rolled HS256 decode silently rejects every real token and degrades authz to the dev bypass). Role and site are read from `app_metadata` (users cannot edit it; `user_metadata` is editable by the user and is never trusted). Site scope is derived from the verified token, never a query parameter, and a blank site resolves to *no* rows rather than all rows. RLS is enabled on all 19 `public` tables (no policies on the 14 added by migration 017, so the public anon key sees nothing; the backend's service-role key bypasses it) |
 | Policy enforcement | **Open Policy Agent** (Docker) | Governance rules in Rego. **Fails closed** — an unreachable OPA denies rather than allows. Reads are gated as well as writes, so every sensitive `read_*` action must also be registered in the sensitive-action list or the catch-all re-grants it to every role. `OPTIONS` is never gated: this middleware is outermost and a CORS preflight carries no token. Read grants mirror the frontend's role map — a role that can open a page but cannot call its API is a broken page, not a closed boundary |
 | Secrets management | **Supabase Vault** (cloud) | Encrypted secrets in Supabase; no local Vault container |
 | Observability | **OpenTelemetry → Grafana Cloud** | Backend exports traces/metrics directly to Grafana Cloud; no local otel-collector/Tempo/Grafana containers |
@@ -608,7 +608,7 @@ One command starts the entire local stack. Agents generate this file in minutes.
 - YOLOv9 custom drawing parser (show architecture, use simplified pre-processed topology)
 - EEMUA 191 governor (implement rate limiting logic, mock the DCS state feed)
 - Cross-site control plane (single-site for MVP, show multi-site in architecture diagram)
-- MoC webhook loop (manual approval UI stands in for the full webhook cycle)
+- MoC webhook loop (manual approval UI stands in for the full webhook cycle; the webhook itself is built and HMAC-signed, `X-Webhook-Timestamp` plus `X-Webhook-Signature`, but no plant MoC system is connected)
 
 ---
 

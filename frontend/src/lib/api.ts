@@ -128,15 +128,73 @@ async function getStrictReadToken(): Promise<string | null> {
   return (await cookies()).get(ACCESS_COOKIE)?.value ?? null;
 }
 
-export function clearSession(): void {
-  if (typeof window === "undefined") return;
+/** IndexedDB name of the offline write queue (`idb.ts`). Lives here so sign-out can drop it. */
+export const QUEUE_DB = "kairos-queue";
+
+/** The `sub` claim of an access token, or "" for a non-JWT (development) token. Offline writes are
+ *  tagged with it so they are only replayed for the user who made them. */
+export function tokenUserId(token: string | null): string {
+  if (!token) return "";
   try {
+    const { sub } = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: string };
+    return typeof sub === "string" ? sub : "";
+  } catch {
+    return "";
+  }
+}
+
+/** Everything a signed-in user leaves on the device besides the tokens: the service worker's cached
+ *  pages and API data, the queued offline writes and the Copilot history. The next person to sign in
+ *  on a shared tablet must find none of it. Each step is best-effort, so one blocked API cannot
+ *  stop the others (or the logout itself). */
+function wipeDeviceData(keepOffline: boolean): void {
+  try { sessionStorage.clear(); } catch { /* storage disabled */ }
+  // A forced expiry keeps the offline queue and caches: a field worker whose session lapsed must
+  // not lose unsent acks and flags. Queue entries carry the user's JWT `sub` and only replay for
+  // that same user (idb.ts), so keeping them across a re-login is safe.
+  if (keepOffline) return;
+  try { void caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {}); } catch { /* no Cache API */ }
+  try { indexedDB.deleteDatabase(QUEUE_DB); } catch { /* no IndexedDB */ }
+  try { navigator.serviceWorker?.controller?.postMessage({ type: "LOGOUT" }); } catch { /* no service worker */ }
+}
+
+/** Explicit sign-out: tokens, caches, the offline queue and Copilot history all go. */
+export function clearSession(): void {
+  endSession(false);
+}
+
+/** Forced expiry (a 401 the refresh token could not repair): drops the tokens but keeps the offline
+ *  queue and caches, so unsent writes survive until the same user signs back in. */
+export function expireSession(): void {
+  endSession(true);
+}
+
+function endSession(keepOffline: boolean): void {
+  if (typeof window === "undefined") return;
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
   } catch {
     // Storage can be disabled; the redirect still prevents a stale protected view.
   }
   document.cookie = `${ACCESS_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+  wipeDeviceData(keepOffline);
+  // Best-effort server-side revocation. Never awaited and never allowed to throw: sign-out must
+  // work offline and when the backend is down.
+  if (token) {
+    try {
+      void fetch(`${API_BASE}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        keepalive: true,
+        signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
+      }).catch(() => {});
+    } catch {
+      // fetch unavailable
+    }
+  }
 }
 
 export async function refreshAccessToken(): Promise<boolean> {
@@ -171,7 +229,7 @@ export async function fetchWithSession(path: string, init: RequestInit, timeoutM
   let res = await makeRequest();
   if (res.status !== 401) return res;
   if (await refreshAccessToken()) res = await makeRequest();
-  if (res.status === 401) clearSession();
+  if (res.status === 401) expireSession();
   return res;
 }
 
@@ -204,14 +262,14 @@ export async function postJson<T>(path: string, body: unknown, timeoutMs = WRITE
     const refreshed = await refreshAccessToken();
     if (!refreshed) {
       // clear session and redirect — no router available outside components
-      try { localStorage.removeItem("kairos-token"); localStorage.removeItem("kairos-refresh"); } catch {}
+      expireSession();
       if (typeof window !== "undefined") window.location.href = "/login";
       throw new Error(`${path} → HTTP 401`);
     }
     res = await makeReq(getToken());
   }
   if (res.status === 401) {
-    clearSession();
+    expireSession();
     if (typeof window !== "undefined") window.location.assign("/login");
   }
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
@@ -245,7 +303,7 @@ async function postSse(
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (res.status === 401) {
-    clearSession();
+    expireSession();
     if (typeof window !== "undefined") window.location.assign("/login");
   }
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
@@ -296,7 +354,7 @@ async function postMultipart<T>(path: string, body: FormData): Promise<T> {
 }
 
 export function ackBrief(briefId: string, body: { signature?: string; notes?: string }) {
-  return postJson<{ ack_status: string }>(`/briefs/${briefId}/ack`, { user_id: "dev-user", ...body });
+  return postJson<{ ack_status: string }>(`/briefs/${encodeURIComponent(briefId)}/ack`, { user_id: "dev-user", ...body });
 }
 
 /**
@@ -311,11 +369,11 @@ export function countersignBrief(briefId: string) {
     acknowledged_by: string;
     countersigned_by: string;
     countersigned_at: string;
-  }>(`/briefs/${briefId}/countersign`, {});
+  }>(`/briefs/${encodeURIComponent(briefId)}/countersign`, {});
 }
 
 export function sendBriefFeedback(briefId: string, rating: string, notes?: string) {
-  return postJson<{ feedback_recorded: boolean }>(`/briefs/${briefId}/feedback`, { rating, notes });
+  return postJson<{ feedback_recorded: boolean }>(`/briefs/${encodeURIComponent(briefId)}/feedback`, { rating, notes });
 }
 
 /**
@@ -364,14 +422,14 @@ async function getJson<T>(path: string, timeoutMs = 4000, requireAuth = false): 
   let res = await makeRequest();
   if (res.status === 401 && isStrictAuth()) {
     if (!await refreshAccessToken()) {
-      clearSession();
+      expireSession();
       if (typeof window !== "undefined") window.location.assign("/login");
       throw new Error(`${path} → HTTP 401`);
     }
     res = await makeRequest();
   }
   if (res.status === 401 && isStrictAuth()) {
-    clearSession();
+    expireSession();
     if (typeof window !== "undefined") window.location.assign("/login");
   }
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
@@ -404,7 +462,7 @@ export type ModelProbe = { provider: string; ok: boolean; status?: number; model
 export async function probeModel(provider: string): Promise<ModelProbe> {
   try {
     const r = await getJson<{ provider: string; ok: boolean; status?: number; model?: string; latency_ms?: number; detail?: string | null }>(
-      `/health/model?provider=${provider}`, 25000, true,
+      `/health/model?provider=${encodeURIComponent(provider)}`, 25000, true,
     );
     return { provider: r.provider, ok: r.ok, status: r.status, model: r.model, latencyMs: r.latency_ms, detail: r.detail };
   } catch (e) {
@@ -428,7 +486,7 @@ export async function getBriefs(): Promise<Fetched<BriefsResponse>> {
 
 export async function getBrief(briefId: string): Promise<Fetched<Brief | null>> {
   try {
-    const data = await getJson<Brief>(`/briefs/${briefId}`);
+    const data = await getJson<Brief>(`/briefs/${encodeURIComponent(briefId)}`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -493,28 +551,28 @@ export async function getQuarantine(): Promise<Fetched<QuarantineResponse>> {
 
 export function resolveConflict(conflictId: string, resolution: { note?: string; decision?: string }) {
   return postJson<{ status: string; conflict_id: string }>(
-    `/governance/conflicts/${conflictId}/resolve`,
+    `/governance/conflicts/${encodeURIComponent(conflictId)}/resolve`,
     resolution,
   );
 }
 
 export function promoteQuarantine(itemId: string, body: PromoteQuarantineRequest) {
   return postJson<{ status: string; item_id: string; edge_id: string; conflict_detected: boolean }>(
-    `/governance/quarantine/${itemId}/promote`,
+    `/governance/quarantine/${encodeURIComponent(itemId)}/promote`,
     body,
   );
 }
 
 export function disputeQuarantine(itemId: string, reason: string) {
   return postJson<{ status: string; item_id: string }>(
-    `/governance/quarantine/${itemId}/dispute`,
+    `/governance/quarantine/${encodeURIComponent(itemId)}/dispute`,
     { reason },
   );
 }
 
 export function requestQuarantineInfo(itemId: string, note: string) {
   return postJson<{ status: "requested"; item_id: string }>(
-    `/governance/quarantine/${itemId}/request-info`,
+    `/governance/quarantine/${encodeURIComponent(itemId)}/request-info`,
     { note },
   );
 }
@@ -769,7 +827,7 @@ export async function getDocuments(): Promise<Fetched<DocumentsResponse>> {
 
 export async function getDocument(documentId: string): Promise<Fetched<VaultDocument | null>> {
   try {
-    const data = await getJson<VaultDocument>(`/documents/${documentId}`);
+    const data = await getJson<VaultDocument>(`/documents/${encodeURIComponent(documentId)}`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -782,8 +840,9 @@ export async function getDocument(documentId: string): Promise<Fetched<VaultDocu
  *  vault_url is the auth-only endpoint that a plain link can't open). */
 export async function getArtifactUrl(documentId: string): Promise<string | null> {
   try {
-    const data = await getJson<{ signed_url?: string }>(`/documents/${documentId}/artifact-url`, 8000);
-    return data.signed_url ?? null;
+    const data = await getJson<{ signed_url?: string }>(`/documents/${encodeURIComponent(documentId)}/artifact-url`, 8000);
+    // Handed to window.open: only ever an http(s) link, never a javascript: or data: URL.
+    return data.signed_url && /^https?:\/\//i.test(data.signed_url) ? data.signed_url : null;
   } catch {
     return null;
   }
@@ -839,7 +898,7 @@ export async function getMocList(): Promise<Fetched<MocResponse>> {
 
 export async function getMoc(mocId: string): Promise<Fetched<MocItem | null>> {
   try {
-    const data = await getJson<MocItem>(`/governance/moc/${mocId}`);
+    const data = await getJson<MocItem>(`/governance/moc/${encodeURIComponent(mocId)}`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -849,7 +908,7 @@ export async function getMoc(mocId: string): Promise<Fetched<MocItem | null>> {
 }
 
 export async function approveMoc(mocId: string, note?: string): Promise<void> {
-  await postJson(`/governance/moc/${mocId}/approve`, { note: note || undefined });
+  await postJson(`/governance/moc/${encodeURIComponent(mocId)}/approve`, { note: note || undefined });
 }
 
 // --- Governance: circuit breaker ---
@@ -944,7 +1003,7 @@ export async function getBlastRadius(documentId: string): Promise<Fetched<BlastR
       document_id: string;
       affected_count: number;
       affected?: Array<{ edge?: Record<string, unknown>; source?: Record<string, unknown>; target?: Record<string, unknown> }>;
-    }>(`/governance/blast-radius/${documentId}`);
+    }>(`/governance/blast-radius/${encodeURIComponent(documentId)}`);
     const items: BlastRadiusItem[] = (raw.affected ?? []).map((a, i) => {
       const edge = a.edge ?? {};
       // The affected entity is whichever endpoint is not this document: the SOURCE for
@@ -1028,7 +1087,7 @@ export function triggerElicitation(workOrderId: string, assetId?: string) {
 export async function getElicitationQuestions(workOrderId: string): Promise<Fetched<ElicitationSession | null>> {
   try {
     const raw = await getJson<Omit<ElicitationSession, "questions"> & { questions: Array<string | ElicitationQuestion> }>(
-      `/elicitation/${workOrderId}/questions`,
+      `/elicitation/${encodeURIComponent(workOrderId)}/questions`,
     );
     // The backend stores and returns questions as plain strings. The page reads `question_text` and
     // keys answers by `question_id`, so un-normalised every question rendered blank and every answer
@@ -1057,7 +1116,7 @@ export function submitElicitationResponses(
 ) {
   // The work-order endpoint stores the whole interview as one quarantine item and returns its id.
   return postJson<{ item_id: string; status: string }>(
-    `/elicitation/${workOrderId}/responses`,
+    `/elicitation/${encodeURIComponent(workOrderId)}/responses`,
     { responses },
   );
 }
@@ -1070,7 +1129,7 @@ export function submitVoiceNote(workOrderId: string, blob: Blob, submittedBy: st
   form.append("file", blob, blob instanceof File ? blob.name : "recording.webm");
   form.append("submitted_by", submittedBy);
   // `status: "duplicate"` means this exact audio is already in quarantine and no transcription runs.
-  return postMultipart<{ task_id?: string; status: string; message?: string }>(`/elicitation/${workOrderId}/voice`, form);
+  return postMultipart<{ task_id?: string; status: string; message?: string }>(`/elicitation/${encodeURIComponent(workOrderId)}/voice`, form);
 }
 
 // --- Offboarding ---
@@ -1097,7 +1156,7 @@ export async function getOffboardingList(): Promise<Fetched<OffboardingProgramme
 
 export async function getOffboarding(programmeId: string): Promise<Fetched<OffboardingProgramme | null>> {
   try {
-    const data = await getJson<OffboardingProgramme>(`/elicitation/offboarding/${programmeId}`, 6000);
+    const data = await getJson<OffboardingProgramme>(`/elicitation/offboarding/${encodeURIComponent(programmeId)}`, 6000);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -1112,7 +1171,7 @@ export async function getOffboarding(programmeId: string): Promise<Fetched<Offbo
 export async function getOffboardingQuestions(programmeId: string): Promise<Fetched<Record<string, string[]>>> {
   try {
     const raw = await getJson<{ items?: Array<{ id: string; questions?: string[] }> }>(
-      `/elicitation/offboarding/${programmeId}/questions`,
+      `/elicitation/offboarding/${encodeURIComponent(programmeId)}/questions`,
       6000,
     );
     const map: Record<string, string[]> = {};
@@ -1133,7 +1192,7 @@ export function submitOffboardingResponses(
   responses: Array<{ question_index: number; answer: string }>,
 ) {
   return postJson<{ status: string; items_queued: number }>(
-    `/elicitation/offboarding/${programmeId}/responses`,
+    `/elicitation/offboarding/${encodeURIComponent(programmeId)}/responses`,
     { item_id: itemId, responses },
   );
 }
@@ -1197,7 +1256,7 @@ export function resolveDeviationFlag(
   // Mirrors backend DeviationFlagResolveRequest (models/event.py)
   body: { resolution: "promoted" | "disputed"; moc_warranted?: boolean; notes?: string },
 ) {
-  return postJson<{ status: string }>(`/events/deviation-flag/${flagId}/resolve`, body);
+  return postJson<{ status: string }>(`/events/deviation-flag/${encodeURIComponent(flagId)}/resolve`, body);
 }
 
 export function setPlantState(body: {
@@ -1210,7 +1269,7 @@ export function setPlantState(body: {
 
 export async function getPlantState(siteId: string): Promise<Fetched<PlantState | null>> {
   try {
-    const data = await getJson<PlantState>(`/events/plant-state/${siteId}`);
+    const data = await getJson<PlantState>(`/events/plant-state/${encodeURIComponent(siteId)}`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -1221,7 +1280,7 @@ export async function getPlantState(siteId: string): Promise<Fetched<PlantState 
 
 export async function getEvent(eventId: string): Promise<Fetched<OperationalEvent | null>> {
   try {
-    const data = await getJson<OperationalEvent>(`/events/${eventId}`);
+    const data = await getJson<OperationalEvent>(`/events/${encodeURIComponent(eventId)}`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -1231,7 +1290,7 @@ export async function getEvent(eventId: string): Promise<Fetched<OperationalEven
 }
 
 export function ackEvent(eventId: string, body: { user_id: string; role: string; signature?: string; notes?: string }) {
-  return postJson<{ status: string }>(`/events/${eventId}/ack`, body);
+  return postJson<{ status: string }>(`/events/${encodeURIComponent(eventId)}/ack`, body);
 }
 
 export async function getGovernorState(userId: string): Promise<Fetched<GovernorEventState | null>> {
@@ -1436,7 +1495,7 @@ export async function getDocumentTopology(documentId: string): Promise<Fetched<T
         isolation_boundaries?: Array<Record<string, unknown>>;
         instrumentation_loops?: Array<Record<string, unknown>>;
       };
-    }>(`/documents/${documentId}/topology`);
+    }>(`/documents/${encodeURIComponent(documentId)}/topology`);
 
     // Per-element verification, keyed by element id. Every node used to be stamped with one
     // document-level string, so the per-node colour coding was decorative — a reviewer could
@@ -1526,14 +1585,26 @@ export function verifyTopologyElements(
     canonical_ready: boolean;
     applied: string[];
     unknown_elements: string[];
-  }>(`/documents/${documentId}/topology/verify`, { decisions });
+  }>(`/documents/${encodeURIComponent(documentId)}/topology/verify`, { decisions });
 }
 
 /** Supersede takes the id of a replacement that is **already in the vault** — ingest it first
  *  (`ingestDocument`). It used to post the file itself, which the endpoint never accepted, so
  *  every supersede from the UI failed. */
 export function supersedeDocument(documentId: string, newDocumentId: string) {
-  return postJson<{ document_id?: string }>(`/documents/${documentId}/supersede`, { new_document_id: newDocumentId });
+  return postJson<SupersedeResponse>(`/documents/${encodeURIComponent(documentId)}/supersede`, { new_document_id: newDocumentId });
+}
+
+/** A document of authority 1 to 3 is not superseded on the first call: the backend answers HTTP 202
+ *  with `pending_moc_approval` and a MoC id, and applies the supersede only when the same request is
+ *  repeated after that MoC is approved. Callers must branch on `status`, never treat 2xx as done. */
+export interface SupersedeResponse {
+  status: "superseded" | "pending_moc_approval";
+  old_document_id: string;
+  new_document_id: string;
+  moc_required: boolean;
+  moc_id: string | null;
+  message?: string;
 }
 
 // The live payload names the stage `pipeline_stage` and uses the worker's own vocabulary
@@ -1559,7 +1630,7 @@ const PIPELINE_STAGE_ALIASES: Record<string, DocumentPipelineStage> = {
 
 export async function getDocumentStatus(documentId: string): Promise<Fetched<DocumentStatus | null>> {
   try {
-    const raw = await getJson<RawDocumentStatus>(`/documents/${documentId}/status`);
+    const raw = await getJson<RawDocumentStatus>(`/documents/${encodeURIComponent(documentId)}/status`);
     const stage = raw.pipeline_stage ?? "queued";
     const data: DocumentStatus = {
       document_id: raw.document_id,
@@ -1657,7 +1728,7 @@ export async function getHealthDetailed(): Promise<Fetched<HealthDetailed | null
  */
 export async function getOtCoverage(assetId: string): Promise<Fetched<OtCoverage | null>> {
   try {
-    const data = await getJson<OtCoverage>(`/assets/${assetId}/ot-coverage`);
+    const data = await getJson<OtCoverage>(`/assets/${encodeURIComponent(assetId)}/ot-coverage`);
     return { data, source: "live" };
   } catch (e) {
     // Live-only: never substitute fixture data for a failed fetch. The caller
@@ -1776,6 +1847,11 @@ export interface DocumentIngestResponse {
   job_id?: string;
   vault_path?: string;
   workflow?: string;
+  /** Level stored, level the uploader asked for, and whether the two differ (levels 1 to 3 are
+   *  capped to 4 unless the role is admin or reliability). Absent on a duplicate. */
+  authority_level?: number;
+  authority_requested?: number;
+  authority_capped?: boolean;
 }
 
 // --- Events: list ---
@@ -1832,9 +1908,9 @@ function factClaim(target: Record<string, unknown>, edge: Record<string, unknown
 export async function getAssetDetail(id: string): Promise<Fetched<AssetDetailView | null>> {
   try {
     const [detail, aliases, knowledge] = await Promise.all([
-      getJson<AssetDetail>(`/assets/${id}`),
-      getJson<AssetAlias[]>(`/assets/${id}/aliases`).catch(() => [] as AssetAlias[]),
-      getJson<AssetKnowledgeResponse>(`/assets/${id}/knowledge`).catch(() => null),
+      getJson<AssetDetail>(`/assets/${encodeURIComponent(id)}`),
+      getJson<AssetAlias[]>(`/assets/${encodeURIComponent(id)}/aliases`).catch(() => [] as AssetAlias[]),
+      getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(id)}/knowledge`).catch(() => null),
     ]);
     const crit = criticalityMeta(detail.criticality);
     const view: AssetDetailView = {
@@ -1906,7 +1982,7 @@ export async function getKnowledgeGraph(
 ): Promise<Fetched<KnowledgeGraphData>> {
   try {
     const qs = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
-    const raw = await getJson<AssetKnowledgeResponse>(`/assets/${assetId}/knowledge${qs}`);
+    const raw = await getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(assetId)}/knowledge${qs}`);
     const nodesMap = new Map<string, GraphNodeData>();
     nodesMap.set(assetId, { id: assetId, label: assetId, kind: "Asset", properties: {} });
     // Dedupe edges — re-ingested datasets leave many identical KNOWLEDGE_EDGEs

@@ -1,11 +1,21 @@
 """
 Seed test users for Kairos development.
-Creates admin, engineer, and field_worker users in Supabase Auth.
+Creates the six role users (admin, engineer, field_worker, reliability, compliance, demo) in Supabase Auth.
 Run inside the API container:
   docker exec kairos-backend-api python scripts/seed_users.py
+
+Passwords come from the environment (`.env`, which is gitignored), one variable per role:
+KAIROS_SEED_PASSWORD_ADMIN, _ENGINEER, _FIELD_WORKER, _RELIABILITY, _COMPLIANCE, _DEMO.
+The demo user is the public one-click login: read-only (`demo` role in kairos.rego), and its password
+is public by design (NEXT_PUBLIC_DEMO_PASSWORD on the frontend), so never reuse it for another account.
+The script refuses to run if any is missing, so a password is never invented or committed.
+
+role and site_id go in `app_metadata`, which only the service role can write. `user_metadata` is
+editable by the user themselves, so it holds display data only (see dependencies.resolve_token).
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -21,18 +31,21 @@ log = structlog.get_logger(__name__)
 TEST_USERS = [
     {
         "email": "admin@kairos.local",
-        "password": "KairosAdmin123!",
-        "user_metadata": {"role": "admin", "site_id": "SITE_001", "name": "Admin User"},
+        "password_env": "KAIROS_SEED_PASSWORD_ADMIN",
+        "app_metadata": {"role": "admin", "site_id": "SITE_001", "name": "Admin User"},
+        "user_metadata": {"name": "Admin User"},
     },
     {
         "email": "engineer@kairos.local",
-        "password": "KairosEngineer123!",
-        "user_metadata": {"role": "engineer", "site_id": "SITE_001", "name": "Engineer User"},
+        "password_env": "KAIROS_SEED_PASSWORD_ENGINEER",
+        "app_metadata": {"role": "engineer", "site_id": "SITE_001", "name": "Engineer User"},
+        "user_metadata": {"name": "Engineer User"},
     },
     {
         "email": "field_worker@kairos.local",
-        "password": "KairosField123!",
-        "user_metadata": {"role": "field_worker", "site_id": "SITE_001", "name": "Field Worker"},
+        "password_env": "KAIROS_SEED_PASSWORD_FIELD_WORKER",
+        "app_metadata": {"role": "field_worker", "site_id": "SITE_001", "name": "Field Worker"},
+        "user_metadata": {"name": "Field Worker"},
     },
     # Reliability and compliance existed in OPA (infra/policies/kairos.rego) but had no seeded
     # user, so neither persona could be logged into — the two roles that actually demonstrate
@@ -41,18 +54,34 @@ TEST_USERS = [
     # auditor scoped to the compliance cockpit and audit trail.
     {
         "email": "reliability@kairos.local",
-        "password": "KairosReliability123!",
-        "user_metadata": {"role": "reliability", "site_id": "SITE_001", "name": "Reliability Engineer"},
+        "password_env": "KAIROS_SEED_PASSWORD_RELIABILITY",
+        "app_metadata": {"role": "reliability", "site_id": "SITE_001", "name": "Reliability Engineer"},
+        "user_metadata": {"name": "Reliability Engineer"},
     },
     {
         "email": "compliance@kairos.local",
-        "password": "KairosCompliance123!",
-        "user_metadata": {"role": "compliance", "site_id": "SITE_001", "name": "Compliance Auditor"},
+        "password_env": "KAIROS_SEED_PASSWORD_COMPLIANCE",
+        "app_metadata": {"role": "compliance", "site_id": "SITE_001", "name": "Compliance Auditor"},
+        "user_metadata": {"name": "Compliance Auditor"},
+    },
+    # The login page's "Explore the live demo" button. Read-only by policy: the `demo` role has an
+    # explicit allow list in kairos.rego and no write, ingest, ack or audit access.
+    {
+        "email": "demo@kairos.local",
+        "password_env": "KAIROS_SEED_PASSWORD_DEMO",
+        "app_metadata": {"role": "demo", "site_id": "SITE_001", "name": "Demo Visitor"},
+        "user_metadata": {"name": "Demo Visitor"},
     },
 ]
 
 
 async def seed():
+    # Fail before touching Supabase, and name every missing variable at once.
+    missing = [u["password_env"] for u in TEST_USERS if not os.environ.get(u["password_env"])]
+    if missing:
+        log.error("seed_users.missing_passwords", variables=missing)
+        sys.exit("Refusing to seed: set " + ", ".join(missing) + " in .env (see .env.example).")
+
     sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
     existing = sb.auth.admin.list_users()
@@ -64,7 +93,8 @@ async def seed():
             continue
         result = sb.auth.admin.create_user({
             "email": user["email"],
-            "password": user["password"],
+            "password": os.environ[user["password_env"]],
+            "app_metadata": user["app_metadata"],
             "user_metadata": user["user_metadata"],
             "email_confirm": True,
         })

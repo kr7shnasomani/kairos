@@ -21,13 +21,14 @@ operations, but note each one you exercise.
 
 ## Logins
 
-| Persona | Email | Password |
+| Persona | Email | Password (env var in `.env`) |
 |---|---|---|
-| admin | `admin@kairos.local` | `KairosAdmin123!` |
-| engineer | `engineer@kairos.local` | `KairosEngineer123!` |
-| reliability | `reliability@kairos.local` | `KairosReliability123!` |
-| field_worker | `field_worker@kairos.local` | `KairosField123!` |
-| compliance | `compliance@kairos.local` | `KairosCompliance123!` |
+| admin | `admin@kairos.local` | `KAIROS_SEED_PASSWORD_ADMIN` |
+| engineer | `engineer@kairos.local` | `KAIROS_SEED_PASSWORD_ENGINEER` |
+| reliability | `reliability@kairos.local` | `KAIROS_SEED_PASSWORD_RELIABILITY` |
+| field_worker | `field_worker@kairos.local` | `KAIROS_SEED_PASSWORD_FIELD_WORKER` |
+| compliance | `compliance@kairos.local` | `KAIROS_SEED_PASSWORD_COMPLIANCE` |
+| demo (read-only) | `demo@kairos.local` | `KAIROS_SEED_PASSWORD_DEMO` |
 
 Role gating lives in `use-role.ts` (`routeAllowed` / `roleHome`). Expected: staff surfaces need
 engineer/reliability/admin; `/system-health` is admin-only; `/compliance` + `/audit` also allow
@@ -169,7 +170,7 @@ routes. A clean render is not a passing feature.
 ### Method — read before adding a result
 
 - **Assert the identity before recording a persona result:**
-  `agent-browser eval "JSON.parse(atob(localStorage.getItem('kairos-token').split('.')[1])).user_metadata.role"`.
+  `agent-browser eval "JSON.parse(atob(localStorage.getItem('kairos-token').split('.')[1])).app_metadata.role"`.
   A login that silently failed will report the *previous* persona's behaviour as the new one's.
 - **Refs go stale after any navigation** — re-snapshot before every interaction.
 - **Use a full snapshot, not `-c`** — compact mode drops nodes and produces false negatives.

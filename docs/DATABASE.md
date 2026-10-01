@@ -30,7 +30,7 @@ Neo4j is the primary knowledge store. It holds the authoritative, time-versioned
 | `Document` | `document_id` | Ingested documents in the immutable vault. Merged before any edge write. |
 | `Event` | `event_id` | Operational events (work orders, alarms, PTW, inspections). |
 | `Person` | `person_id` | Engineers, operators, named individuals. |
-| `Concept` | `concept_id` | Extracted knowledge fragments (failure modes, parameters, procedures) **and regulation clauses** (`type: 'Regulation'`) + P&ID topology elements. |
+| `Concept` | `concept_id` | Extracted knowledge fragments (failure modes, parameters, procedures) **and regulation clauses** (`type: 'Regulation'`) + P&ID topology elements. A topology element's `concept_id` is `{document_id}:{element_id}` (`GraphService.topology_node_id`), because the vision model numbers elements per drawing; the Supabase `quarantine_items` rows keep the raw element id. Drawings ingested before this carry the bare id and are still matched. |
 | `Organisation` | `org_id` | Platform root + external organisations. Seed: `KAIROS_PLATFORM`. |
 
 ### Regulation Concept Properties (`Concept {type: 'Regulation'}`)
@@ -477,7 +477,7 @@ Index: `session_id`
 
 ### Row-Level Security
 
-RLS is enabled on: `assets`, `documents`, `briefs`, `quarantine_items`, `audit_log`.
+RLS is enabled on **all 19 `public` tables** in `db/schema.sql`: `assets`, `documents`, `briefs`, `quarantine_items`, `audit_log` (from the original schema) and the other 14 (`asset_alias_map`, `document_asset_links`, `extraction_jobs`, `operational_events`, `brief_feedback`, `knowledge_conflicts`, `moc_items`, `elicitation_sessions`, `ner_annotations`, `extraction_overrides`, `plant_operating_states`, `validation_corpus`, `offboarding_sessions`, `offboarding_session_items`), added by `db/migrations/017_enable_rls_remaining_tables.sql`. Supabase exposes every `public` table through PostgREST, so without RLS the public anon key could read, write and delete those rows directly, bypassing the API, OPA and the audit log. The 14 get **no policies on purpose**: with RLS on and no policy, `anon` and `authenticated` see nothing, and the backend (service-role key) is unaffected. **Migration 017 is in the repo and `schema.sql` but has not been applied to the live project**: it is a cloud write, so it waits for an explicit decision (status.md § Accepted risks and deploy checklist). It is idempotent, and the run must be recorded in `db/maintenance/CHANGELOG.md`.
 
 The FastAPI backend always uses `SUPABASE_SERVICE_ROLE_KEY` — service role bypasses RLS entirely. Policies apply only to direct Supabase client access (anon/authenticated roles):
 
@@ -501,7 +501,7 @@ Private bucket (no public access). All reads require a signed URL.
 
 ### Migrations
 
-The full schema is consolidated into a **single source-of-truth file, `db/schema.sql`** — apply it to a fresh database to get the current schema. The 16 original ordered migrations were folded in and are no longer kept as separate files; the live applied history remains tracked by Supabase in `supabase_migrations.schema_migrations` (timestamp-versioned). Going forward, make a schema change directly in `schema.sql` (and record any ad-hoc live run in `db/maintenance/CHANGELOG.md`).
+The full schema is consolidated into a **single source-of-truth file, `db/schema.sql`** — apply it to a fresh database to get the current schema. The 16 original ordered migrations were folded in and are no longer kept as separate files (a migration that has not yet been run on the live project is kept as a file under `db/migrations/`: currently only `017`, which `schema.sql` already includes); the live applied history remains tracked by Supabase in `supabase_migrations.schema_migrations` (timestamp-versioned). Going forward, make a schema change directly in `schema.sql` (and record any ad-hoc live run in `db/maintenance/CHANGELOG.md`).
 
 The table below is the **schema-evolution changelog** — what each of the 16 folded-in migrations contributed to `schema.sql`:
 
@@ -523,6 +523,7 @@ The table below is the **schema-evolution changelog** — what each of the 16 fo
 | `014_validation_corpus.sql` | `validation_corpus` table |
 | `015_sla_tracking.sql` | `escalated_at` + `escalated_to` on `knowledge_conflicts`; `sla_due_at` + `escalated_at` on `quarantine_items` |
 | `016_vault_audio_mime.sql` | Allow `audio/*` MIME types on the `kairos-vault` bucket (voice-note uploads) |
+| `017_enable_rls_remaining_tables.sql` | RLS (no policies) on the 14 tables that lacked it. Lives in `db/migrations/`, not yet applied live |
 
 ### Maintenance & data hygiene
 
@@ -708,19 +709,19 @@ kairos:governor:{user_id}:hourly_count   TTL: 3600s (rolling hour)
 ### Delay Compensation Keys
 
 ```
-kairos:brief_pending:{asset_id}          TTL: LATE_ARRIVAL_WINDOW + 60s
+kairos:brief_pending:{asset_id}:{work_order_id}  TTL: LATE_ARRIVAL_WINDOW + 60s
 kairos:brief_pending:shift:{site_id}     TTL: LATE_ARRIVAL_WINDOW + 60s
 ```
 
-A PTW arriving for the same asset within the window revokes the pending WO Celery task and assembles the PTW brief immediately. The Celery task ID is stored in this key.
+The Celery task ID is stored in the `{asset_id}:{work_order_id}` key, so only a re-report of the same work order revokes and re-enqueues it. A PTW assembles its own brief immediately and never touches a pending slot.
 
 ### Dedup Keys
 
 ```
-kairos:dedup:{asset_id}:{event_type}     TTL: 600s (10 minutes)
+kairos:dedup:{event_type}:{business_id or asset_id}     TTL: 600s (10 minutes)
 ```
 
-Identical `(asset_id, event_type)` pairs within 10 minutes collapse to `{status: "deduplicated"}`. Tests using `shared_asset_id` must use distinct asset IDs to avoid dedup collisions within the window.
+The key is written by `EventBusService.mark_seen` only after an ingest has succeeded (the check itself is read-only). Identical `(event_type, business_id)` pairs, or `(event_type, asset_id)` for events with no business id, within 10 minutes collapse to `{status: "deduplicated"}`. Tests using `shared_asset_id` must use distinct asset IDs to avoid dedup collisions within the window.
 
 ### Celery (DB 1)
 

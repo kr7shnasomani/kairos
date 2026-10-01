@@ -16,6 +16,7 @@ from typing import Any
 import structlog
 from temporalio import activity, workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ApplicationError
 
 log = structlog.get_logger(__name__)
 
@@ -24,6 +25,9 @@ DEFAULT_RETRY = RetryPolicy(
     backoff_coefficient=2.0,
     maximum_interval=timedelta(minutes=5),
     maximum_attempts=5,
+    # A file that is wrong stays wrong: retrying a failed integrity check or an unreadable
+    # artifact five times only re-crashes the single ingestion worker with the same input.
+    non_retryable_error_types=["BadFile"],
 )
 
 
@@ -142,13 +146,15 @@ async def store_in_vault(
         .execute()
     )
     if not doc_result.data:
-        raise RuntimeError(f"Document '{document_id}' not found in vault registry")
+        raise ApplicationError(f"Document '{document_id}' not found in vault registry", type="BadFile", non_retryable=True)
 
     canonical_sha256 = doc_result.data[0]["sha256_hash"]
     if computed_sha256 != canonical_sha256:
-        raise RuntimeError(
+        raise ApplicationError(
             f"SHA-256 integrity check FAILED for {document_id}: "
-            f"expected={canonical_sha256} computed={computed_sha256}"
+            f"expected={canonical_sha256} computed={computed_sha256}",
+            type="BadFile",
+            non_retryable=True,
         )
 
     # Advance job stage → ocr_running
@@ -240,9 +246,12 @@ async def run_ocr(
         for elem in all_elements:
             elem_id = elem["id"]
             elem_group = elem["element_group"]
+            # The model's element ids ("TOPO-EQ-001") repeat across drawings, so the graph node id is
+            # scoped to this document. Supabase rows and the manifest keep the raw id.
+            node_id = graph.topology_node_id(document_id, elem_id)
 
             # Merge Concept node so the KNOWLEDGE_EDGE MATCH succeeds
-            await graph.merge_concept_node(elem_id, {
+            await graph.merge_concept_node(node_id, {
                 "label": elem.get("tag") or elem.get("loop_id") or elem.get("boundary_id") or elem_id,
                 "element_type": elem_group,
                 "source_document_id": document_id,
@@ -253,7 +262,7 @@ async def run_ocr(
                 await graph.create_knowledge_edge(
                     source_id=document_id,
                     source_label="Document",
-                    target_id=elem_id,
+                    target_id=node_id,
                     target_label="Concept",
                     relationship_type="CONTAINS_TOPOLOGY_ELEMENT",
                     valid_from=now,
@@ -498,9 +507,14 @@ async def link_to_graph(
     graph = GraphService(_get_neo4j_driver())
     ner = NERService()
 
-    # Build alias lookup from Supabase {alias: canonical_asset_id}
+    # Build alias lookup from Supabase {alias: canonical_asset_id}. Confirmed aliases only: an
+    # unconfirmed one is this pipeline's own guess, and resolving later documents through it would
+    # turn one wrong guess into a standing link (the API side filters the same way).
     alias_result = await asyncio.to_thread(
-        lambda: supabase.table("asset_alias_map").select("alias, canonical_asset_id").execute()
+        lambda: supabase.table("asset_alias_map")
+        .select("alias, canonical_asset_id")
+        .eq("confirmed", True)
+        .execute()
     )
     alias_map = {row["alias"]: row["canonical_asset_id"] for row in (alias_result.data or [])}
 
@@ -856,7 +870,7 @@ async def link_to_graph(
                             "alias_source": f"ner_extraction:{document_id}",
                             "confidence": confidence,
                             "confirmed": False,
-                        }, on_conflict="alias").execute()
+                        }, on_conflict="alias", ignore_duplicates=True).execute()
                     )
                 except Exception as exc:
                     log.warning("link.alias_insert_failed", alias=raw_tag, error=str(exc))

@@ -27,7 +27,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._limit = limit_per_minute
 
     async def dispatch(self, request: Request, call_next):
-        if self._limit <= 0 or request.url.path in _EXEMPT:
+        if self._limit <= 0 or request.scope["path"] in _EXEMPT:
             return await call_next(request)
 
         # Behind Caddy, request.client is the proxy — trust the first X-Forwarded-For hop.

@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getOffboardingList } from "@/lib/api";
 import OffboardingPage from "./page";
 
@@ -15,7 +15,17 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("OffboardingPage", () => {
-  afterEach(cleanup);
+  // Fixed before every fixture date so "Retires in N days" stays true regardless of when the
+  // suite runs — without this the assertion silently rots as real time passes 2026-09-21.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-10T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it("renders a data-driven expert handover overview", async () => {
     render(await OffboardingPage());

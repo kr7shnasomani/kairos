@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CopilotAnswer } from "@/lib/copilot";
 import { Answer, provisionalText } from "./answer-card";
 
-vi.mock("@/lib/api", () => ({ submitAnswerFeedback: vi.fn().mockResolvedValue(true) }));
+vi.mock("@/lib/api", () => ({ submitAnswerFeedback: vi.fn().mockResolvedValue(true), getToken: () => null }));
 
 const base: CopilotAnswer = {
   answer: null,

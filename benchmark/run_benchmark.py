@@ -49,6 +49,8 @@ from collections import Counter, defaultdict
 import httpx
 
 API = os.getenv("VERIFY_API_URL", "http://localhost:8000")
+# From .env (gitignored); a KeyError here names the variable to set. Never hardcode it.
+ADMIN_PASSWORD = os.environ["KAIROS_SEED_PASSWORD_ADMIN"]
 QUESTIONS = os.getenv("BENCHMARK_FILE", "/app/benchmark/questions.json")
 # Mirrors the frontend's budget for POST /search/synthesize (frontend/src/lib/api.ts) ON PURPOSE.
 # It used to be 120 s, which is how a real regression slipped through: with NVIDIA_NIM_TIMEOUT at
@@ -285,7 +287,7 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
     aborted = False
 
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:
-        r = await c.post(f"{API}/auth/login", json={"email": "admin@kairos.local", "password": "KairosAdmin123!"})
+        r = await c.post(f"{API}/auth/login", json={"email": "admin@kairos.local", "password": ADMIN_PASSWORD})
         h = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
         for qi, q in enumerate(questions):

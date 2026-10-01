@@ -6,12 +6,15 @@ and surfaces extraction status and results.
 
 import asyncio
 import hashlib
+import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
+from urllib.parse import quote
 
 import shortuuid
 import structlog
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 
 from api.config import settings
@@ -38,6 +41,61 @@ from workflows.document_pipeline import DocumentIngestionWorkflow
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
+
+# Fixed vocabulary: `document_type` becomes a storage path segment and feeds briefs and compliance
+# matching, so a free-text value is both a path-injection input and a way to impersonate a type.
+DOCUMENT_TYPES = frozenset({
+    "oem_manual", "procedure", "inspection_report", "ptw", "shift_log", "regulation", "pid_drawing",
+})
+
+# Only formats the extraction pipeline can read. Anything else (notably text/html and image/svg+xml)
+# is stored as an opaque download, because the stored type is served back through signed URLs.
+ALLOWED_MIME_TYPES = frozenset({
+    "text/plain", "text/markdown", "text/csv", "application/pdf",
+    "image/png", "image/jpeg", "image/tiff", "image/webp",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "message/rfc822", "application/mbox", "text/rfc822-headers",
+})
+
+# Authority 1-3 (regulatory, engineering, OEM) outranks everything in retrieval and clears the safety
+# gate, so only these roles may assert it at upload. Others are capped to level 4, never rejected,
+# so an engineer's upload still lands in the vault and is disclosed as capped in the response.
+AUTHORITY_ASSERT_ROLES = frozenset({"admin", "reliability"})
+MAX_UNASSERTED_AUTHORITY_LEVEL = 3  # levels at or below this need AUTHORITY_ASSERT_ROLES
+CAPPED_AUTHORITY_LEVEL = 4
+
+# `occurred_at` sets valid_from. Future dates are refused and the past is bounded, so an uploader
+# cannot backdate a forged document ahead of every genuine one.
+OCCURRED_AT_MAX_AGE = timedelta(days=30 * 365)
+
+
+def safe_filename(name: str | None) -> str:
+    """A storage-safe filename: directory parts dropped, only [A-Za-z0-9._-] kept, never dot-led."""
+    base = PurePosixPath((name or "").replace("\\", "/")).name
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "_", base).lstrip(".")
+    return cleaned[:120] or "upload"
+
+
+def normalise_mime(content_type: str | None) -> str:
+    """The upload's content type if it is a known document format, else an opaque download type."""
+    base = (content_type or "").split(";", 1)[0].strip().lower()
+    return base if base in ALLOWED_MIME_TYPES else "application/octet-stream"
+
+
+def parse_occurred_at(value: str | None, now: datetime) -> str | None:
+    """Validate the source-document timestamp; returns ISO 8601 (UTC) or None. Raises ValueError."""
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    if parsed > now + timedelta(days=1):
+        raise ValueError("occurred_at is in the future")
+    if parsed < now - OCCURRED_AT_MAX_AGE:
+        raise ValueError("occurred_at is more than 30 years in the past")
+    return parsed.isoformat()
 
 
 def _access_tags(current_user: dict, authority_level: int) -> dict:
@@ -109,14 +167,40 @@ async def ingest_document(
     Returns immediately with document_id + job_id. Poll /documents/{document_id}/status.
     """
     _ingest_start = time.monotonic()
+    uploader = current_user.get("user_id", "unknown")
+    now_dt = datetime.now(UTC)
 
-    # Abuse guard: reject oversized uploads. Check the declared size first (avoids buffering a
-    # huge body into memory), then backstop against the actual bytes read.
+    # Validate every uploader-controlled input before touching the file or the vault.
+    if document_type not in DOCUMENT_TYPES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"document_type must be one of: {', '.join(sorted(DOCUMENT_TYPES))}")
+    try:
+        occurred_at = parse_occurred_at(occurred_at, now_dt)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid occurred_at: {exc}") from exc
+    if asset_id:
+        known_asset = await asyncio.to_thread(
+            lambda: supabase.table("assets").select("asset_id").eq("asset_id", asset_id).limit(1).execute()
+        )
+        if not known_asset.data:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unknown asset_id '{asset_id}'.")
+
+    # Authority 1-3 may only be asserted by a designated role; everyone else is capped, and the
+    # request records both the level asked for and who asserted the level that stuck.
+    requested_authority = authority_level
+    role = current_user.get("role", "")
+    if authority_level <= MAX_UNASSERTED_AUTHORITY_LEVEL and role not in AUTHORITY_ASSERT_ROLES:
+        authority_level = CAPPED_AUTHORITY_LEVEL
+        log.warning("ingest.authority_capped", user_id=uploader, role=role, requested=requested_authority)
+
+    # Abuse guard: reject oversized uploads. The declared size is checked first, then the read is
+    # bounded so an undeclared oversize body is never buffered in full. Starlette has already
+    # spooled the multipart body by now, so the true pre-parse limit is the proxy's request_body cap.
     max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
     if file.size is not None and file.size > max_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                             detail=f"File exceeds the {settings.MAX_UPLOAD_MB} MB limit.")
-    file_bytes = await file.read()
+    file_bytes = await file.read(max_bytes + 1)
     if len(file_bytes) > max_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                             detail=f"File exceeds the {settings.MAX_UPLOAD_MB} MB limit.")
@@ -140,9 +224,11 @@ async def ingest_document(
         }
 
     document_id = f"DOC-{shortuuid.uuid()[:12].upper()}"
-    storage_path = f"{document_type}/{document_id}/{file.filename}"
-    mime_type = file.content_type or "application/octet-stream"
-    now = datetime.now(UTC).isoformat()
+    # Service-role upload bypasses storage policies, so the path is built only from vetted parts.
+    storage_path = f"{document_type}/{document_id}/{safe_filename(file.filename)}"
+    display_name = PurePosixPath((file.filename or "").replace("\\", "/")).name[:255] or "upload"
+    mime_type = normalise_mime(file.content_type)
+    now = now_dt.isoformat()
 
     # Upload raw bytes — no transformation, no preprocessing (Layer 2 immutability)
     try:
@@ -155,10 +241,7 @@ async def ingest_document(
         )
     except Exception as exc:
         log.error("ingest.storage_upload_failed", document_id=document_id, error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Vault storage upload failed: {exc}",
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Vault storage upload failed.")
 
     # Stable authenticated URL — Supabase Storage pattern for private buckets
     vault_url = (
@@ -172,7 +255,7 @@ async def ingest_document(
             lambda: supabase.table("documents").insert({
                 "document_id": document_id,
                 "sha256_hash": sha256,
-                "file_name": file.filename,
+                "file_name": display_name,
                 "file_size_bytes": len(file_bytes),
                 "mime_type": mime_type,
                 "document_type": document_type,
@@ -181,7 +264,7 @@ async def ingest_document(
                 "vault_url": vault_url,
                 "status": "active",
                 "ingested_at": now,
-                "ingested_by": current_user.get("user_id", "unknown"),
+                "ingested_by": uploader,
                 "occurred_at": occurred_at,
                 "access_tags": _access_tags(current_user, authority_level),
             }).execute()
@@ -204,7 +287,7 @@ async def ingest_document(
             )
         except Exception as cleanup_exc:
             log.error("ingest.orphan_cleanup_failed", storage_path=storage_path, error=str(cleanup_exc))
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Vault DB registration failed: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Vault DB registration failed.")
 
     job_id = job_result.data[0]["job_id"]
 
@@ -225,12 +308,15 @@ async def ingest_document(
                 "action": "document_ingested",
                 "entity_type": "document",
                 "entity_id": document_id,
-                "performed_by": current_user.get("user_id", "unknown"),
+                "performed_by": uploader,
                 "details": {
                     "sha256": sha256,
                     "document_type": document_type,
                     "authority_level": authority_level,
-                    "file_name": file.filename,
+                    "authority_requested": requested_authority,
+                    "authority_asserted_by": uploader,
+                    "uploader_role": role,
+                    "file_name": display_name,
                     "asset_id": asset_id,
                     "source_system": source_system,
                 },
@@ -276,6 +362,9 @@ async def ingest_document(
         "job_id": str(job_id),
         "sha256": sha256,
         "vault_path": storage_path,
+        "authority_level": authority_level,
+        "authority_requested": requested_authority,
+        "authority_capped": authority_level != requested_authority,
         "workflow": workflow_status,
         "message": f"Document queued for extraction. Poll /documents/{document_id}/status for progress.",
     }
@@ -666,7 +755,7 @@ async def get_artifact_url(
     """
     doc_result = await asyncio.to_thread(
         lambda: supabase.table("documents")
-        .select("vault_url")
+        .select("vault_url, file_name")
         .eq("document_id", document_id)
         .limit(1)
         .execute()
@@ -684,7 +773,7 @@ async def get_artifact_url(
         )
     except Exception as exc:
         log.error("artifact.sign_failed", document_id=document_id, error=str(exc))
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Could not sign artifact URL: {exc}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Could not sign artifact URL.")
 
     # supabase-py has returned this key as signedURL / signedUrl / signed_url across versions.
     signed_url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("signed_url")
@@ -692,6 +781,12 @@ async def get_artifact_url(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Signed URL missing from storage response")
     if signed_url.startswith("/"):
         signed_url = f"{settings.SUPABASE_URL}{signed_url}"
+    # `download=` makes the storage server answer with `Content-Disposition: attachment`, so an
+    # artifact is never rendered in the storage origin whatever content type it was uploaded with.
+    if "download=" not in signed_url:
+        signed_url += ("&" if "?" in signed_url else "?") + "download=" + quote(
+            safe_filename(doc_result.data[0].get("file_name")), safe=""
+        )
     return {"signed_url": signed_url, "expires_in": 3600}
 
 
@@ -923,10 +1018,23 @@ async def get_redacted_document(
     }
 
 
+# Superseding a document of this authority or stronger closes the validity window on facts that
+# briefs and safety answers rely on, so it needs a stronger role and an approved MoC first.
+GATED_SUPERSEDE_AUTHORITY = 3
+SUPERSEDE_GATED_ROLES = frozenset({"admin", "reliability"})
+
+
+def supersede_moc_id(document_id: str, new_document_id: str) -> str:
+    """Deterministic MoC id for one (old, new) pair, so a repeat request finds the same record."""
+    digest = hashlib.sha256(f"{document_id}>{new_document_id}".encode()).hexdigest()
+    return f"MOC-SUP-{digest[:10].upper()}"
+
+
 @router.post("/{document_id}/supersede", summary="Mark a document as superseded by a newer version")
 async def supersede_document(
     document_id: str,
     current_user: CurrentUserDep,
+    response: Response,
     supabase: SupabaseDep,
     driver: Neo4jDep,
     es: ElasticsearchDep,
@@ -938,7 +1046,12 @@ async def supersede_document(
     Closes the validity window on the old document and links it to the new version.
     The old artifact is NEVER deleted — immutability is non-negotiable.
 
-    Side effects:
+    Authority 1-3 documents (regulatory, engineering, OEM) are gated: only reliability/admin may
+    request it, and the request only creates a MoC in `pending_approval` (202). Nothing is closed
+    or flagged until that MoC is approved (`POST /governance/moc/{id}/approve`); repeating the same
+    request afterwards applies it. Lower-authority documents supersede immediately.
+
+    Side effects once applied:
     - All Neo4j edges referencing this document have their valid_to window closed.
     - The ES document and every Qdrant chunk are flagged `status: superseded`, so the old
       version stops surfacing in default retrieval (ARCHITECTURE.md §8). Neither is deleted —
@@ -947,6 +1060,9 @@ async def supersede_document(
     - If any affected edge carried authority_level <= 3 (OEM/Engineering/Regulatory),
       a MoC draft is created in moc_items for engineering review.
     """
+    if new_document_id == document_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="A document cannot supersede itself.")
+
     # Verify both documents exist
     old_result = await asyncio.to_thread(
         lambda: supabase.table("documents")
@@ -964,7 +1080,7 @@ async def supersede_document(
 
     new_result = await asyncio.to_thread(
         lambda: supabase.table("documents")
-        .select("document_id, status")
+        .select("document_id, status, authority_level, ingested_by")
         .eq("document_id", new_document_id)
         .execute()
     )
@@ -973,6 +1089,69 @@ async def supersede_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Replacement document '{new_document_id}' not found in vault. Ingest it first.",
         )
+    if new_result.data[0]["status"] != "active":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Replacement document '{new_document_id}' is not active.",
+        )
+
+    actor = current_user.get("user_id", "unknown")
+    approved_moc_id: str | None = None
+    if (old_result.data[0].get("authority_level") or 5) <= GATED_SUPERSEDE_AUTHORITY:
+        role = current_user.get("role", "")
+        if role not in SUPERSEDE_GATED_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Role '{role}' cannot supersede a document of authority "
+                       f"{old_result.data[0]['authority_level']}. Required: {sorted(SUPERSEDE_GATED_ROLES)}",
+            )
+        moc_id = supersede_moc_id(document_id, new_document_id)
+        moc_result = await asyncio.to_thread(
+            lambda: supabase.table("moc_items").select("moc_id, status").eq("moc_id", moc_id).execute()
+        )
+        moc_status = moc_result.data[0]["status"] if moc_result.data else None
+        if moc_status == "rejected":
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=f"MoC '{moc_id}' was rejected.")
+        if moc_status == "approved":
+            approved_moc_id = moc_id
+        else:
+            if moc_status is None:
+                moc_blast = await GraphService(driver).get_blast_radius(document_id)
+                new_row = new_result.data[0]
+                await asyncio.to_thread(
+                    lambda: supabase.table("moc_items").insert({
+                        "moc_id": moc_id,
+                        "asset_id": None,
+                        "description": (
+                            f"Supersede '{document_id}' (authority {old_result.data[0]['authority_level']}) with "
+                            f"'{new_document_id}' (authority {new_row.get('authority_level')}, "
+                            f"uploaded by {new_row.get('ingested_by')}). Requested by {actor}. "
+                            f"{moc_blast['affected_count']} downstream facts require review."
+                        ),
+                        "conflicting_sources": [{"old": document_id, "new": new_document_id}],
+                        "blast_radius": moc_blast.get("affected", [])[:50],  # cap payload size
+                        "status": "pending_approval",
+                    }).execute()
+                )
+                await asyncio.to_thread(
+                    lambda: supabase.table("audit_log").insert({
+                        "action": "document_supersede_requested",
+                        "entity_type": "document",
+                        "entity_id": document_id,
+                        "performed_by": actor,
+                        "details": {"new_document_id": new_document_id, "moc_id": moc_id},
+                    }).execute()
+                )
+                log.info("document.supersede_requested", old=document_id, new=new_document_id, moc_id=moc_id)
+            response.status_code = status.HTTP_202_ACCEPTED
+            return {
+                "status": "pending_moc_approval",
+                "old_document_id": document_id,
+                "new_document_id": new_document_id,
+                "moc_required": True,
+                "moc_id": moc_id,
+                "message": "Approve the MoC, then repeat this request to apply the supersession.",
+            }
 
     now = datetime.now(UTC)
 
@@ -1024,8 +1203,8 @@ async def supersede_document(
         edge.get("edge", {}).get("authority_level", 5) <= 3
         for edge in blast.get("affected", [])
     )
-    moc_id = None
-    if moc_required:
+    moc_id = approved_moc_id
+    if moc_required and approved_moc_id is None:
         moc_id = f"MOC-{shortuuid.uuid()[:8].upper()}"
         await asyncio.to_thread(
             lambda: supabase.table("moc_items").insert({
@@ -1048,7 +1227,7 @@ async def supersede_document(
             "action": "document_superseded",
             "entity_type": "document",
             "entity_id": document_id,
-            "performed_by": current_user.get("user_id", "unknown"),
+            "performed_by": actor,
             "details": {
                 "new_document_id": new_document_id,
                 "edges_closed": closed_count,

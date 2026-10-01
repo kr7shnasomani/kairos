@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,18 +25,23 @@ var (
 	historian   ot.HistorianClient
 	fastAPIURL  string
 	internalKey string
+	httpClient  = &http.Client{Timeout: 15 * time.Second}
 )
 
 func main() {
 	port := getEnv("GO_CONNECTOR_PORT", "8090")
 	fastAPIURL = getEnv("FASTAPI_URL", "http://kairos-backend-api:8000")
-	internalKey = getEnv("INTERNAL_API_KEY", "kairos-internal-dev-key")
+	internalKey = getEnv("INTERNAL_API_KEY", devInternalKey)
+	secret := os.Getenv("CONNECTOR_SHARED_SECRET")
+	if err := validateConfig(os.Getenv("APP_ENV"), secret, internalKey); err != nil {
+		log.Fatalf("[kairos-connector] refusing to start: %v", err)
+	}
 
 	// Initialise historian: use PI Web API if configured, else mock
 	piURL := os.Getenv("PI_WEBAPI_BASE_URL")
 	if piURL != "" {
 		historian = ot.NewPIWebAPIClient(piURL, os.Getenv("PI_WEBAPI_USERNAME"), os.Getenv("PI_WEBAPI_PASSWORD"))
-		log.Printf("[kairos-connector] Using PI Web API historian: %s\n", piURL)
+		log.Println("[kairos-connector] Using PI Web API historian") // never log the URL: it may carry credentials
 	} else {
 		historian = &ot.MockHistorianClient{}
 		log.Println("[kairos-connector] PI_WEBAPI_BASE_URL not set — using mock historian")
@@ -43,30 +49,31 @@ func main() {
 
 	router := gin.Default()
 
-	// Health
+	// Health: the only unauthenticated route (Docker healthcheck, no data)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "kairos-connector"})
 	})
 
 	// OT Federation endpoints (Layer 5)
-	ot_ := router.Group("/ot")
+	ot_ := router.Group("/ot", requireSecret(secret))
 	{
 		ot_.GET("/query", queryHistorian)
 		ot_.GET("/connectors", listConnectors)
 	}
 
 	// EAM ingestion endpoints (Layer 1 — MDM bootstrap)
-	eam := router.Group("/eam")
+	eam := router.Group("/eam", requireSecret(secret))
 	{
 		eam.POST("/sync", syncEAMAssets)
 		eam.POST("/work-order", receiveWorkOrder)
 	}
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%s", port),
-		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		Addr:              fmt.Sprintf(":%s", port),
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
 	}
 
 	quit := make(chan os.Signal, 1)
@@ -116,12 +123,12 @@ func queryHistorian(c *gin.Context) {
 
 	from, err := parseTimeOrDefault(fromStr, time.Now().Add(-30*24*time.Hour))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid 'from': %v", err)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid 'from': expected RFC3339"})
 		return
 	}
 	to, err := parseTimeOrDefault(toStr, time.Now())
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid 'to': %v", err)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid 'to': expected RFC3339"})
 		return
 	}
 
@@ -129,7 +136,7 @@ func queryHistorian(c *gin.Context) {
 	points, err := historian.Query(c.Request.Context(), q)
 	if err != nil {
 		log.Printf("[kairos-connector] historian query error: %v\n", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "historian query failed"})
 		return
 	}
 
@@ -244,11 +251,13 @@ func syncEAMAssets(c *gin.Context) {
 		fixturePath := getEnv("EAM_FIXTURE_PATH", "./fixtures/sample_assets.json")
 		data, err := os.ReadFile(fixturePath)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("fixture read failed: %v", err)})
+			log.Printf("[kairos-connector] fixture read failed: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "fixture read failed"})
 			return
 		}
 		if err := json.Unmarshal(data, &assets); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("fixture parse failed: %v", err)})
+			log.Printf("[kairos-connector] fixture parse failed: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "fixture parse failed"})
 			return
 		}
 		log.Printf("[kairos-connector] EAM_ODS_ENDPOINT not set — loaded %d assets from fixture\n", len(assets))
@@ -300,17 +309,18 @@ func postAssetToFastAPI(ctx context.Context, asset eamAssetRecord) gin.H {
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fastAPIURL+"/assets", bytes.NewReader(body))
 	if err != nil {
-		return gin.H{"asset_id": asset.AssetID, "status": "error", "error": err.Error()}
+		log.Printf("[kairos-connector] asset %s request build error: %v\n", asset.AssetID, err)
+		return gin.H{"asset_id": asset.AssetID, "status": "error", "error": "request failed"}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+internalKey)
 
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return gin.H{"asset_id": asset.AssetID, "status": "error", "error": err.Error()}
+		log.Printf("[kairos-connector] asset %s forward error: %v\n", asset.AssetID, err)
+		return gin.H{"asset_id": asset.AssetID, "status": "error", "error": "request failed"}
 	}
 	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
 		return gin.H{"asset_id": asset.AssetID, "status": "ok"}
@@ -319,13 +329,20 @@ func postAssetToFastAPI(ctx context.Context, asset eamAssetRecord) gin.H {
 	if resp.StatusCode == http.StatusConflict {
 		return gin.H{"asset_id": asset.AssetID, "status": "exists"}
 	}
-	return gin.H{"asset_id": asset.AssetID, "status": "error", "code": resp.StatusCode, "detail": string(respBody)}
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	log.Printf("[kairos-connector] asset %s rejected by FastAPI: %d %s\n", asset.AssetID, resp.StatusCode, respBody)
+	return gin.H{"asset_id": asset.AssetID, "status": "error", "code": resp.StatusCode}
 }
 
 func receiveWorkOrder(c *gin.Context) {
 	// Forward raw JSON body to FastAPI /events/work-order
-	body, err := io.ReadAll(c.Request.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes))
 	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request body too large"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
@@ -333,27 +350,29 @@ func receiveWorkOrder(c *gin.Context) {
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost,
 		fastAPIURL+"/events/work-order", bytes.NewReader(body))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("[kairos-connector] work-order request build error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+internalKey)
 
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Printf("[kairos-connector] work-order forward error: %v\n", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("FastAPI unreachable: %v", err)})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "upstream unreachable"})
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 
-	var result interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		c.Data(resp.StatusCode, "application/json", respBody)
+	// Success bodies pass through; failure text from FastAPI is logged, never echoed.
+	if resp.StatusCode >= http.StatusBadRequest {
+		log.Printf("[kairos-connector] work-order rejected by FastAPI: %d %s\n", resp.StatusCode, respBody)
+		c.JSON(resp.StatusCode, gin.H{"error": "upstream request failed"})
 		return
 	}
-	c.JSON(resp.StatusCode, result)
+	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
 // =============================================================================

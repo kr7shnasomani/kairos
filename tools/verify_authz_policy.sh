@@ -43,6 +43,11 @@ CASES=(
   # --- writes: unchanged by the read work ------------------------------------
   "field_worker:write_api:true"           # deviation flags, brief acks, synthesize
   "field_worker:write_assets:false"
+  "field_worker:ingest_event:false"       # events create critical briefs and compliance evidence
+  "compliance:ingest_event:false"
+  "engineer:ingest_event:true"
+  "reliability:ingest_event:true"
+  "admin:ingest_event:true"               # the Go connector's internal key resolves to admin
   "field_worker:ingest_document:false"
   "engineer:write_assets:true"
   "engineer:ingest_document:true"
@@ -51,6 +56,29 @@ CASES=(
   "reliability:countersign_brief:true"
   "engineer:countersign_brief:false"      # the acknowledger's role cannot also countersign
   "admin:promote_quarantine:true"
+  # --- demo: the public one-click identity. Explicit allow list, deny by default ---
+  "demo:read_search:true"
+  "demo:read_briefs:true"
+  "demo:read_assets:true"
+  "demo:read_documents:true"
+  "demo:read_compliance:true"
+  "demo:read_nonconformance:true"
+  "demo:synthesize:true"                  # the Copilot, without being granted write_api
+  "demo:write_api:false"                  # feedback, annotations, rca-pack, brief ack, deviation flags
+  "demo:write_assets:false"
+  "demo:ingest_document:false"
+  "demo:ingest_event:false"
+  "demo:promote_quarantine:false"
+  "demo:countersign_brief:false"
+  "demo:resolve_admin_conflict:false"     # supersede/approve/resolve
+  "demo:read_audit:false"
+  "demo:read_governance:false"            # model gate, MoC, circuit breaker
+  "demo:read_events:false"
+  "demo:read_other:false"                 # offboarding/personnel and any GET not named for it
+  "demo:some_future_action:false"         # deny by default, not an exclusion list
+  "field_worker:synthesize:true"          # the new action reaches every other role unchanged
+  "compliance:synthesize:true"
+  "engineer:synthesize:true"
   # --- the Postgres role on a raw Supabase token is not an app role -----------
   "authenticated:read_compliance:false"
   "authenticated:write_api:false"

@@ -83,7 +83,7 @@ class SearchService:
         Deduplicates by document_id (lowest authority_level wins, then highest score).
         Re-ranks: authority_level ASC, relevance_score DESC.
         """
-        query = expand_query_aliases(query, await self._confirmed_aliases())
+        query = expand_query_aliases(query, await self.confirmed_aliases())
         query_vector = await self.llm.embed(query, task="retrieval.query")
 
         # Time-travel: a document superseded *today* was the current one at an earlier as_of, so
@@ -184,7 +184,7 @@ class SearchService:
                 r.title = name
         return results
 
-    async def _confirmed_aliases(self) -> list[dict[str, str]]:
+    async def confirmed_aliases(self) -> list[dict[str, str]]:
         """Confirmed alias → canonical rows, cached. Fails open to no expansion, never to an error."""
         global _alias_cache
         if self.supabase is None:

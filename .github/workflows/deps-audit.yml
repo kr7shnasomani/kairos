@@ -69,15 +69,11 @@ jobs:
       #     protobuf to 5.29.6, which unblocked OTEL 1.28.0/0.49b0, which unpinned setuptools.
       #     qdrant-client and temporalio were NOT upgraded. 16 advisories -> 10.
       #
-      # Remove an --ignore-vuln line as soon as its blocker clears. Do not add one without a reason
-      # on the same line.
+      # No advisories are ignored (re-checked 2026-10-01 after the fastapi, starlette and anyio bumps and
+      # the removal of python-jose). Do not add an --ignore-vuln without a reason on the same line.
       - name: Audit backend/requirements.txt
         run: |
-          pip-audit --requirement backend/requirements.txt --strict --progress-spinner off \
-            --ignore-vuln PYSEC-2026-1325 \
-            --ignore-vuln PYSEC-2026-161 --ignore-vuln PYSEC-2026-248 --ignore-vuln PYSEC-2026-249 \
-            --ignore-vuln PYSEC-2026-1941 --ignore-vuln PYSEC-2026-1943 \
-            --ignore-vuln PYSEC-2026-2280 --ignore-vuln PYSEC-2026-2281
+          pip-audit --requirement backend/requirements.txt --strict --progress-spinner off
 
   node:
     name: npm audit (frontend)

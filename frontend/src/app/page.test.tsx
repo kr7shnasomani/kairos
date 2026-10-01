@@ -55,7 +55,7 @@ describe("Home", () => {
     expect(problem).toBeInTheDocument();
     // The stakes, plus at least one attributed figure behind them.
     expect(problem).toHaveTextContent(/it is a safety problem/i);
-    expect(within(problem).getByText("35%")).toBeInTheDocument();
+    expect(within(problem).getByText("88%")).toBeInTheDocument();
     expect(problem).toHaveTextContent(/mckinsey/i);
 
     const how = document.getElementById("how") as HTMLElement;

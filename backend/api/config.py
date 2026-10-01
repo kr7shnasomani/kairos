@@ -5,7 +5,7 @@ All settings are read from environment variables (via .env file in development).
 
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +30,21 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 25                 # reject document uploads larger than this
     RATE_LIMIT_PER_MINUTE: int = 120        # per-client-IP request cap (0 = disabled)
 
+    @field_validator("APP_ENV", mode="before")
+    @classmethod
+    def _normalise_app_env(cls, value: object) -> object:
+        """`"Production"`, `" production"` and `"PRODUCTION"` are all production. Matching the raw
+        string meant any spelling other than the exact lowercase one fell through to dev behaviour."""
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @property
+    def is_development(self) -> bool:
+        """The only environment where a dev convenience may exist: the unauthenticated mock user,
+        the OPA pass-through, an unlimited request rate and the default admin key. Everything else
+        (`production`, `prod`, `staging`, a typo) is treated as hostile, so an unrecognised value
+        fails closed instead of silently opening the API."""
+        return self.APP_ENV == "development"
+
     @property
     def dev_bypass_allowed(self) -> bool:
         """Single definition of "a bypass of the trust boundary is permitted here".
@@ -39,9 +54,9 @@ class Settings(BaseSettings):
         key off `APP_DEBUG` alone, so a deployment that forgot `APP_ENV=production` got the
         dev bypass *and* skipped the `_no_insecure_defaults_in_prod` guardrail that is supposed
         to catch exactly that. Requiring both means the guardrail is no longer the only thing
-        standing between a mis-set env and an open API.
+        standing between a mis-set env and an open API. Only an exact `development` qualifies.
         """
-        return self.APP_DEBUG and self.APP_ENV != "production"
+        return self.APP_DEBUG and self.is_development
 
     # -------------------------------------------------------------------------
     # Supabase (cloud — filled in later)
@@ -278,8 +293,9 @@ class Settings(BaseSettings):
     # (POST /governance/moc/webhook). ARCHITECTURE.md requires the plant's MoC system to sign
     # resolutions before Kairos updates the canonical graph. `routers/governance.py` read this via
     # getattr() long before the field existed, so the check silently never ran whatever .env said.
-    # None = unsigned webhooks accepted (dev default). Once set, requests MUST carry a valid
-    # X-Webhook-Signature — a missing header is rejected, not waved through.
+    # None = unsigned webhooks accepted (APP_ENV=development only: the boot guard refuses to start
+    # anywhere else without it). Once set, requests MUST carry a valid X-Webhook-Signature — a
+    # missing header is rejected, not waved through.
     MOC_WEBHOOK_SECRET: str | None = None
 
     # -------------------------------------------------------------------------
@@ -307,10 +323,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _no_insecure_defaults_in_prod(self) -> "Settings":
-        """Fail-closed: refuse to boot in production while any secret that protects the live
-        system is still its dev default. Dev/test are untouched. Set these in the environment.
+        """Fail-closed: refuse to boot outside development while any secret that protects the live
+        system is still its dev default. Development is untouched. Set these in the environment.
         INTERNAL_API_KEY is the critical one — its default is an admin auth-bypass (dependencies.py)."""
-        if self.APP_ENV != "production":
+        if self.is_development:
             return self
         bad: list[str] = []
         if self.INTERNAL_API_KEY == "kairos-internal-dev-key":
@@ -323,11 +339,15 @@ class Settings(BaseSettings):
             bad.append("SUPABASE_SERVICE_ROLE_KEY")
         if not self.SUPABASE_JWT_SECRET:
             bad.append("SUPABASE_JWT_SECRET")
+        if not self.MOC_WEBHOOK_SECRET:
+            # Without it the MoC webhook accepts unsigned bodies and takes `approved_by` from the
+            # caller, so any role with the governance grant could approve MoC items as someone else.
+            bad.append("MOC_WEBHOOK_SECRET (unset accepts unsigned MoC approvals)")
         if self.APP_DEBUG:
             bad.append("APP_DEBUG must be false in production (leaks tracebacks + bypasses OPA authz)")
         if bad:
             raise ValueError(
-                "APP_ENV=production but insecure defaults remain: " + "; ".join(bad)
+                f"APP_ENV={self.APP_ENV} (not development) but insecure defaults remain: " + "; ".join(bad)
                 + ". Set them in the environment before deploying."
             )
         return self

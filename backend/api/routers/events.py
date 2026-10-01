@@ -6,11 +6,14 @@ Publishes to Redis Streams for async brief generation.
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import shortuuid
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from postgrest.exceptions import APIError
 
+from api.config import settings as app_settings
 from api.dependencies import (
     CurrentUserDep,
     ElasticsearchDep,
@@ -21,6 +24,7 @@ from api.dependencies import (
     SettingsDep,
     SupabaseDep,
     require_role,
+    site_scope,
 )
 from api.models.event import (
     AlarmEvent,
@@ -34,6 +38,7 @@ from api.models.event import (
     TagOutEvent,
     WorkOrderEvent,
 )
+from api.routers.briefs import _brief_recipients, _sign_acknowledgment
 from api.services.brief_engine import BriefEngine
 from api.services.event_bus import EventBusService
 from api.services.identity import display_name
@@ -44,13 +49,56 @@ from workers.brief_assembly import assemble_brief
 log = structlog.get_logger(__name__)
 router = APIRouter()
 
+# Who may feed operational events into the system. Mirrors the OPA `ingest_event` grant in
+# infra/policies/kairos.rego (admin is "*"; the Go connector's internal key resolves to admin).
+# These routes create critical-priority briefs and compliance evidence, so they are not open to
+# every authenticated role the way field-worker flows (deviation flags, acks) are.
+_INGEST_ROLES = ("engineer", "reliability", "admin")
+IngestUserDep = Annotated[dict, Depends(require_role(*_INGEST_ROLES))]
 
-async def _canonical_asset(asset_id: str | None, driver, supabase) -> str | None:
+# Ceiling on the confidence of an inspection-evidence edge. The reporter used to choose it freely:
+# a caller-picked 0.7+ cleared the audit pack's "human review required" flag. The link is a staff
+# assertion about a vault document, so it sits above the 0.7 quarantine line but stays
+# `unverified` until a human verifies the edge. A caller may go lower, never higher.
+INSPECTION_EVIDENCE_CONFIDENCE = 0.85
+
+
+async def _store_event(supabase, row: dict) -> None:
+    """Insert an `operational_events` row; an identical re-post of the same event is a no-op.
+
+    `event_id` is client-supplied, so an upsert would let any ingest role overwrite another
+    event's payload, asset and site by posting its id. A duplicate key (Postgres 23505) is read
+    back instead: the same event (type, asset, site, payload) is a retry after a partial failure
+    and carries on; anything else is a 409 and the stored row is left exactly as it was.
+    """
+    try:
+        await asyncio.to_thread(lambda: supabase.table("operational_events").insert(row).execute())
+    except APIError as exc:
+        if exc.code != "23505":
+            raise
+    else:
+        return
+    stored = await asyncio.to_thread(
+        lambda: supabase.table("operational_events")
+        .select("event_type, asset_id, site_id, payload")
+        .eq("event_id", row["event_id"])
+        .limit(1)
+        .execute()
+    )
+    if not stored.data or any(stored.data[0].get(k) != row[k] for k in ("event_type", "asset_id", "site_id", "payload")):
+        log.warning("events.event_id_conflict", event_id=row["event_id"])
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An event with this event_id already exists.")
+
+
+async def _canonical_asset(asset_id: str | None, driver, supabase, current_user: dict | None = None) -> str | None:
     """The canonical id for an event's asset, accepting confirmed aliases ("P-101" → "EQ-101").
 
     Operational systems report the tag they know. Events used to be inserted with it verbatim, so an
     alias failed the `assets` foreign key and surfaced as an unhandled 500; an unknown tag is now a
     404 that names the tag instead.
+
+    With `current_user`, an asset on another site is reported as not registered too (same 404, so
+    its existence is not disclosed). Admin and the connector's service key see every site.
     """
     if not asset_id:
         return asset_id
@@ -60,6 +108,11 @@ async def _canonical_asset(asset_id: str | None, driver, supabase) -> str | None
     canonical = await resolve_canonical_asset_id(asset_id, GraphService(driver), supabase)
     if not canonical:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' is not registered.")
+    site = site_scope(current_user, None) if current_user else None
+    if site is not None:
+        node = await GraphService(driver).get_asset(canonical)
+        if node and node.get("site_id") != site:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' is not registered.")
     return canonical
 
 
@@ -93,7 +146,7 @@ async def _materialise_event_node(
 @router.post("/work-order", summary="Ingest work order event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_work_order(
     payload: WorkOrderEvent,
-    current_user: CurrentUserDep,
+    current_user: IngestUserDep,
     redis: RedisDep,
     supabase: SupabaseDep,
     settings: SettingsDep,
@@ -106,7 +159,8 @@ async def ingest_work_order(
     Canonical deduplication: same asset + event_type within 10-min window → deduplicated.
     Persists to operational_events, publishes to Redis Stream for brief assembly.
     """
-    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
+    site_scope(current_user, payload.site_id)  # a non-admin may only report for their own site
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
 
     # Scoped by work_order_id: two *different* work orders on one asset inside the window are
@@ -130,6 +184,7 @@ async def ingest_work_order(
             .select("payload")
             .eq("asset_id", payload.asset_id)
             .eq("event_type", "work_order_created")
+            .neq("event_id", payload.event_id)
             .gte("occurred_at", cutoff_90)
             .execute()
         )
@@ -142,19 +197,17 @@ async def ingest_work_order(
     except Exception as exc:
         log.warning("events.recurrence_detection_failed", error=str(exc))
 
-    await asyncio.to_thread(
-        lambda: supabase.table("operational_events").insert({
-            "event_id": payload.event_id,
-            "event_type": payload.event_type,
-            "source_system": payload.source_system,
-            "site_id": payload.site_id,
-            "asset_id": payload.asset_id,
-            "payload": event_dict,
-            "occurred_at": payload.occurred_at.isoformat(),
-            "received_at": payload.received_at.isoformat(),
-            "event_subtype": "recurring" if recurring_detected else None,
-        }).execute()
-    )
+    await _store_event(supabase, {
+        "event_id": payload.event_id,
+        "event_type": payload.event_type,
+        "source_system": payload.source_system,
+        "site_id": payload.site_id,
+        "asset_id": payload.asset_id,
+        "payload": event_dict,
+        "occurred_at": payload.occurred_at.isoformat(),
+        "received_at": payload.received_at.isoformat(),
+        "event_subtype": "recurring" if recurring_detected else None,
+    })
 
     await _materialise_event_node(
         driver, payload.event_id, payload.event_type,
@@ -173,11 +226,12 @@ async def ingest_work_order(
     # Correlate with other events for the same asset within DEDUP_WINDOW_MINUTES
     await bus.correlate_events(payload.asset_id, str(payload.event_id), payload.occurred_at, supabase)
 
-    # Delay brief assembly to allow correlated events (e.g. PTW) to arrive first.
-    # If a pending task already exists for this asset, revoke it and re-enqueue so
-    # the brief captures context from both events once assembled.
+    # Delay brief assembly to allow correlated events (e.g. PTW) to arrive first; assembly reads
+    # them back from operational_events. The slot is per work order: this brief goes to *this*
+    # work order's technician, so a second work order on the asset must not cancel it. Only a
+    # re-report of the same work order revokes and re-enqueues.
     window_secs = settings.LATE_ARRIVAL_WINDOW_MINUTES * 60
-    pending_key = f"kairos:brief_pending:{payload.asset_id}"
+    pending_key = f"kairos:brief_pending:{payload.asset_id}:{payload.work_order_id}"
     existing_id = await redis.get(pending_key)
     if existing_id:
         from workers.celery_app import celery_app as _app
@@ -227,6 +281,8 @@ async def ingest_work_order(
     except Exception as exc:
         log.warning("attribution.enqueue_failed", error=str(exc))
 
+    await bus.mark_seen(payload.asset_id, payload.event_type, business_id=payload.work_order_id)
+
     log.info("events.work_order_ingested", event_id=payload.event_id, asset_id=payload.asset_id,
              stream_id=stream_id, brief_task_id=task_id, brief_due_in_seconds=window_secs,
              recurring_detected=recurring_detected)
@@ -244,7 +300,7 @@ async def ingest_work_order(
 @router.post("/ptw", summary="Ingest Permit-to-Work event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_ptw(
     payload: PTWEvent,
-    current_user: CurrentUserDep,
+    current_user: IngestUserDep,
     redis: RedisDep,
     supabase: SupabaseDep,
     settings: SettingsDep,
@@ -254,10 +310,12 @@ async def ingest_ptw(
 ) -> dict:
     """
     PTW events always trigger a safety brief with mandatory sign-off.
-    Never deduplicated. Publishes to PTW stream AND directly to BRIEFS stream
+    Immediate, never held by the late-arrival window. It leaves other events' pending briefs
+    alone: they go to other recipients. Publishes to PTW stream AND directly to BRIEFS stream
     with priority=critical to bypass the EEMUA 191 governor.
     """
-    payload.asset_ids = [await _canonical_asset(a, driver, supabase) for a in payload.asset_ids]
+    site_scope(current_user, payload.site_id)
+    payload.asset_ids = [await _canonical_asset(a, driver, supabase, current_user) for a in payload.asset_ids]
     bus = EventBusService(redis, settings)
     event_dict = payload.model_dump(mode="json")
     primary_asset_id = payload.asset_ids[0] if payload.asset_ids else None
@@ -269,28 +327,16 @@ async def ingest_ptw(
         log.info("events.ptw_deduplicated", event_id=payload.event_id, ptw_id=payload.ptw_id)
         return {"status": "deduplicated", "event_id": payload.event_id, "ptw_id": payload.ptw_id}
 
-    # PTW is always critical/immediate. Revoke any pending delayed brief for this asset
-    # so we generate ONE brief (PTW's) with context from both events already in the DB.
-    if primary_asset_id:
-        existing_id = await redis.get(f"kairos:brief_pending:{primary_asset_id}")
-        if existing_id:
-            from workers.celery_app import celery_app as _app
-            _app.control.revoke(existing_id, terminate=False)
-            await redis.delete(f"kairos:brief_pending:{primary_asset_id}")
-            log.info("events.ptw_revoked_pending_brief", asset_id=primary_asset_id, revoked_task=existing_id)
-
-    await asyncio.to_thread(
-        lambda: supabase.table("operational_events").insert({
-            "event_id": payload.event_id,
-            "event_type": payload.event_type,
-            "source_system": payload.source_system,
-            "site_id": payload.site_id,
-            "asset_id": primary_asset_id,
-            "payload": event_dict,
-            "occurred_at": payload.occurred_at.isoformat(),
-            "received_at": payload.received_at.isoformat(),
-        }).execute()
-    )
+    await _store_event(supabase, {
+        "event_id": payload.event_id,
+        "event_type": payload.event_type,
+        "source_system": payload.source_system,
+        "site_id": payload.site_id,
+        "asset_id": primary_asset_id,
+        "payload": event_dict,
+        "occurred_at": payload.occurred_at.isoformat(),
+        "received_at": payload.received_at.isoformat(),
+    })
 
     await _materialise_event_node(
         driver, payload.event_id, payload.event_type,
@@ -317,6 +363,8 @@ async def ingest_ptw(
     brief = await engine.assemble_ptw_brief(payload)
     brief_id = await engine.deliver(brief, redis)
 
+    await bus.mark_seen(primary_asset_id or "", payload.event_type, business_id=payload.ptw_id)
+
     log.info("events.ptw_ingested", event_id=payload.event_id, ptw_id=payload.ptw_id,
              stream_id=stream_id, brief_id=brief_id)
     return {"status": "accepted", "event_id": payload.event_id, "priority": "critical",
@@ -326,7 +374,7 @@ async def ingest_ptw(
 @router.post("/shift-handover", summary="Ingest shift handover event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_shift_handover(
     payload: ShiftHandoverEvent,
-    current_user: CurrentUserDep,
+    current_user: IngestUserDep,
     redis: RedisDep,
     supabase: SupabaseDep,
     settings: SettingsDep,
@@ -335,6 +383,7 @@ async def ingest_shift_handover(
     es: ElasticsearchDep,
 ) -> dict:
     """Triggers a shift handover brief for the incoming crew."""
+    site_scope(current_user, payload.site_id)
     bus = EventBusService(redis, settings)
 
     # Handovers carry no asset. The crew pair plus the handover time identifies the event, so
@@ -350,18 +399,16 @@ async def ingest_shift_handover(
 
     event_dict = payload.model_dump(mode="json")
 
-    await asyncio.to_thread(
-        lambda: supabase.table("operational_events").insert({
-            "event_id": payload.event_id,
-            "event_type": payload.event_type,
-            "source_system": payload.source_system,
-            "site_id": payload.site_id,
-            "asset_id": None,
-            "payload": event_dict,
-            "occurred_at": payload.occurred_at.isoformat(),
-            "received_at": payload.received_at.isoformat(),
-        }).execute()
-    )
+    await _store_event(supabase, {
+        "event_id": payload.event_id,
+        "event_type": payload.event_type,
+        "source_system": payload.source_system,
+        "site_id": payload.site_id,
+        "asset_id": None,
+        "payload": event_dict,
+        "occurred_at": payload.occurred_at.isoformat(),
+        "received_at": payload.received_at.isoformat(),
+    })
 
     await _materialise_event_node(
         driver, payload.event_id, payload.event_type,
@@ -388,6 +435,8 @@ async def ingest_shift_handover(
     await redis.setex(pending_key, window_secs + 60, task.id)
     task_id = task.id
 
+    await bus.mark_seen("", payload.event_type, business_id=handover_key)
+
     log.info("events.shift_handover_ingested", event_id=payload.event_id, stream_id=stream_id,
              brief_task_id=task_id, brief_due_in_seconds=window_secs)
     return {"status": "accepted", "event_id": payload.event_id, "stream_entry_id": stream_id,
@@ -397,14 +446,15 @@ async def ingest_shift_handover(
 @router.post("/alarm", summary="Ingest alarm acknowledgment event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_alarm(
     payload: AlarmEvent,
-    current_user: CurrentUserDep,
+    current_user: IngestUserDep,
     redis: RedisDep,
     supabase: SupabaseDep,
     settings: SettingsDep,
     driver: Neo4jDep,
 ) -> dict:
     """Received when an operator acknowledges a DCS process alarm."""
-    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
+    site_scope(current_user, payload.site_id)
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
 
     # Keyed on alarm_id: a chattering instrument raising two *distinct* alarms on one asset is
@@ -415,18 +465,16 @@ async def ingest_alarm(
 
     event_dict = payload.model_dump(mode="json")
 
-    await asyncio.to_thread(
-        lambda: supabase.table("operational_events").insert({
-            "event_id": payload.event_id,
-            "event_type": payload.event_type,
-            "source_system": payload.source_system,
-            "site_id": payload.site_id,
-            "asset_id": payload.asset_id,
-            "payload": event_dict,
-            "occurred_at": payload.occurred_at.isoformat(),
-            "received_at": payload.received_at.isoformat(),
-        }).execute()
-    )
+    await _store_event(supabase, {
+        "event_id": payload.event_id,
+        "event_type": payload.event_type,
+        "source_system": payload.source_system,
+        "site_id": payload.site_id,
+        "asset_id": payload.asset_id,
+        "payload": event_dict,
+        "occurred_at": payload.occurred_at.isoformat(),
+        "received_at": payload.received_at.isoformat(),
+    })
 
     await _materialise_event_node(
         driver, payload.event_id, payload.event_type,
@@ -444,6 +492,8 @@ async def ingest_alarm(
 
     # Correlate alarm with other events for the same asset within DEDUP_WINDOW_MINUTES
     await bus.correlate_events(payload.asset_id, str(payload.event_id), payload.occurred_at, supabase)
+
+    await bus.mark_seen(payload.asset_id, payload.event_type, business_id=payload.alarm_id)
 
     log.info("events.alarm_ingested", event_id=payload.event_id, alarm_id=payload.alarm_id,
              stream_id=stream_id)
@@ -470,8 +520,10 @@ async def flag_deviation(
     """
     # A technician types the tag painted on the equipment, which may be an alias. Unresolved, the
     # flag froze no briefs (they are keyed by canonical id) and the insert could fail its FK.
-    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
-    reported_by = payload.reported_by or current_user.get("user_id", "unknown")
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
+    # The reporter is the authenticated user, never a name the client sends: this flag freezes
+    # every unacknowledged brief for the asset and only an engineer can lift it.
+    reported_by = current_user.get("user_id", "unknown")
 
     deviation_sla = (datetime.utcnow() + timedelta(hours=24)).isoformat()
     insert_result = await asyncio.to_thread(
@@ -637,6 +689,7 @@ async def set_plant_state(
     Sets or updates the plant operating state for a site.
     turnaround/shutdown/emergency suppresses all non-critical briefs for that site.
     """
+    site_scope(current_user, payload.site_id)  # an engineer may only set their own site's state
     now_iso = datetime.now(UTC).isoformat()
     set_by = current_user.get("user_id", "unknown")
 
@@ -677,7 +730,7 @@ async def set_plant_state(
 @router.post("/tag-out", summary="Ingest equipment tag-out event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_tag_out(
     payload: TagOutEvent,
-    current_user: CurrentUserDep,
+    current_user: IngestUserDep,
     redis: RedisDep,
     supabase: SupabaseDep,
     settings: SettingsDep,
@@ -687,7 +740,8 @@ async def ingest_tag_out(
     Receives an equipment tag-out event. Deduplicates, publishes to TAG_OUT stream,
     inserts into operational_events, triggers delayed brief assembly.
     """
-    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
+    site_scope(current_user, payload.site_id)
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
 
     if await bus.is_duplicate(payload.asset_id, payload.event_type):
@@ -696,19 +750,17 @@ async def ingest_tag_out(
 
     event_dict = payload.model_dump(mode="json")
 
-    await asyncio.to_thread(
-        lambda: supabase.table("operational_events").insert({
-            "event_id": payload.event_id,
-            "event_type": payload.event_type,
-            "source_system": payload.source_system,
-            "site_id": payload.site_id,
-            "asset_id": payload.asset_id,
-            "payload": event_dict,
-            "occurred_at": payload.occurred_at.isoformat(),
-            "received_at": payload.received_at.isoformat(),
-            "event_subtype": None,
-        }).execute()
-    )
+    await _store_event(supabase, {
+        "event_id": payload.event_id,
+        "event_type": payload.event_type,
+        "source_system": payload.source_system,
+        "site_id": payload.site_id,
+        "asset_id": payload.asset_id,
+        "payload": event_dict,
+        "occurred_at": payload.occurred_at.isoformat(),
+        "received_at": payload.received_at.isoformat(),
+        "event_subtype": None,
+    })
 
     await _materialise_event_node(
         driver, payload.event_id, payload.event_type,
@@ -729,8 +781,9 @@ async def ingest_tag_out(
             "action": "equipment_tag_out",
             "entity_type": "asset",
             "entity_id": payload.asset_id,
-            "performed_by": payload.performed_by,
+            "performed_by": current_user.get("user_id", "unknown"),
             "details": {
+                "reported_performed_by": payload.performed_by,  # source-system claim, unverified
                 "tag_out_reason": payload.tag_out_reason,
                 "expected_return_date": payload.expected_return_date.isoformat() if payload.expected_return_date else None,
                 "stream_id": stream_id,
@@ -739,14 +792,9 @@ async def ingest_tag_out(
     )
 
     window_secs = settings.LATE_ARRIVAL_WINDOW_MINUTES * 60
-    pending_key = f"kairos:brief_pending:{payload.asset_id}"
-    existing_id = await redis.get(pending_key)
-    if existing_id:
-        from workers.celery_app import celery_app as _app
-        _app.control.revoke(existing_id, terminate=False)
-        log.info("events.deferred_brief_revoked", asset_id=payload.asset_id, revoked_task=existing_id)
     task = assemble_brief.apply_async(args=[payload.event_type, event_dict], countdown=window_secs)
-    await redis.setex(pending_key, window_secs + 60, task.id)
+
+    await bus.mark_seen(payload.asset_id, payload.event_type)
 
     log.info("events.tag_out_ingested", event_id=payload.event_id, asset_id=payload.asset_id,
              stream_id=stream_id, brief_task_id=task.id)
@@ -762,7 +810,7 @@ async def ingest_tag_out(
 @router.post("/inspection-complete", summary="Ingest inspection completion event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_inspection_complete(
     payload: InspectionCompleteEvent,
-    current_user: CurrentUserDep,
+    current_user: IngestUserDep,
     redis: RedisDep,
     supabase: SupabaseDep,
     settings: SettingsDep,
@@ -770,12 +818,28 @@ async def ingest_inspection_complete(
 ) -> dict:
     """
     Receives an inspection completion event. Creates a Neo4j knowledge edge if document_id
-    provided. Routes to quarantine if confidence < 0.7. Triggers brief on failed result
-    or non-empty findings. Correlates with other events for the same asset.
+    provided, and that document must be an inspection report already in the vault: the edge is
+    compliance evidence, so it cannot point at an id the caller made up. Triggers brief on failed
+    result or non-empty findings. Correlates with other events for the same asset.
     """
     from api.services.graph import GraphService
 
-    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase)
+    site_scope(current_user, payload.site_id)
+    payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
+
+    if payload.document_id:
+        doc = await asyncio.to_thread(
+            lambda: supabase.table("documents")
+            .select("document_id, document_type")
+            .eq("document_id", payload.document_id)
+            .limit(1)
+            .execute()
+        )
+        if not doc.data or doc.data[0].get("document_type") != "inspection_report":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="document_id must be an inspection_report already in the vault.",
+            )
 
     # Scoped by inspection_type so a statutory and a routine inspection closing on the same
     # asset within the window are both recorded; only the same inspection re-reported collapses.
@@ -787,6 +851,25 @@ async def ingest_inspection_complete(
 
     now = datetime.now(UTC)
     event_dict = payload.model_dump(mode="json")
+
+    # Recorded first, as the system of record: if the graph edge or the quarantine row below
+    # fails, the event is already stored and a retry (`_store_event` accepts an
+    # identical re-post) finishes the job.
+    await _store_event(supabase, {
+        "event_id": payload.event_id,
+        "event_type": payload.event_type,
+        "source_system": payload.source_system,
+        "site_id": payload.site_id,
+        "asset_id": payload.asset_id,
+        "payload": event_dict,
+        "occurred_at": payload.occurred_at.isoformat(),
+        "received_at": payload.received_at.isoformat(),
+    })
+
+    await _materialise_event_node(
+        driver, payload.event_id, payload.event_type,
+        payload.occurred_at.isoformat(), payload.asset_id,
+    )
 
     # Create Neo4j knowledge edge if a supporting document is referenced
     edge_id = None
@@ -811,7 +894,9 @@ async def ingest_inspection_complete(
             valid_from=now,
             authority_level=4,
             document_id=payload.document_id,
-            confidence=payload.confidence,
+            # The reporter can lower the edge's confidence (routing it to human review) but never
+            # raise it above the server's own figure.
+            confidence=min(payload.confidence, INSPECTION_EVIDENCE_CONFIDENCE),
             verification_status="unverified",
         )
         edge_id = edge_result.get("edge_id")
@@ -824,7 +909,7 @@ async def ingest_inspection_complete(
                 "asset_id": payload.asset_id,
                 "content": f"Inspection {payload.inspection_type}: {payload.findings or payload.result}",
                 "input_type": "field_observation",
-                "submitted_by": payload.performed_by,
+                "submitted_by": current_user.get("user_id", "unknown"),
                 "session_context": {
                     "inspection_type": payload.inspection_type,
                     "result": payload.result,
@@ -834,24 +919,6 @@ async def ingest_inspection_complete(
             }).execute()
         )
         quarantine_item_id = qi.data[0]["item_id"]
-
-    await asyncio.to_thread(
-        lambda: supabase.table("operational_events").insert({
-            "event_id": payload.event_id,
-            "event_type": payload.event_type,
-            "source_system": payload.source_system,
-            "site_id": payload.site_id,
-            "asset_id": payload.asset_id,
-            "payload": event_dict,
-            "occurred_at": payload.occurred_at.isoformat(),
-            "received_at": payload.received_at.isoformat(),
-        }).execute()
-    )
-
-    await _materialise_event_node(
-        driver, payload.event_id, payload.event_type,
-        payload.occurred_at.isoformat(), payload.asset_id,
-    )
 
     bus = EventBusService(redis, settings)
     brief_task_id = None
@@ -874,6 +941,10 @@ async def ingest_inspection_complete(
     # Correlate with other events for same asset
     await bus.correlate_events(payload.asset_id, str(payload.event_id), payload.occurred_at, supabase)
 
+    await bus.mark_seen(
+        payload.asset_id, payload.event_type, business_id=f"{payload.asset_id}:{payload.inspection_type}"
+    )
+
     log.info("events.inspection_complete_ingested", event_id=payload.event_id, asset_id=payload.asset_id,
              result=payload.result, edge_id=edge_id, brief_triggered=trigger_brief)
     return {
@@ -895,6 +966,7 @@ async def get_plant_state_endpoint(
     settings: SettingsDep,
 ) -> dict:
     """Returns the active plant operating state for the operator dashboard banner."""
+    site_id = site_scope(current_user, site_id)  # admin: any site; others: only their own
     bus = EventBusService(redis, settings)
     state = await bus.get_plant_state(site_id, supabase)
     # Who set it and when, for the "Set by … · when" line. No row (or an expired one) means the site
@@ -928,6 +1000,8 @@ async def list_events(
     offset: int = Query(0, ge=0),
 ) -> dict:
     """Returns the paginated event feed used by the operational-events workspace."""
+    site = site_scope(current_user, None)  # None for admin (all sites); everyone else sees their own
+
     def fetch_events():
         query = (
             supabase.table("operational_events")
@@ -936,6 +1010,8 @@ async def list_events(
         )
         if event_type:
             query = query.eq("event_type", event_type)
+        if site:
+            query = query.eq("site_id", site)
         return query.range(offset, offset + limit - 1).execute()
 
     result = await asyncio.to_thread(fetch_events)
@@ -959,11 +1035,12 @@ async def get_event(
     """Returns an operational event with its correlated_event_ids for the frontend audit trail."""
     result = await asyncio.to_thread(
         lambda: supabase.table("operational_events")
-        .select("event_id, event_type, asset_id, occurred_at, payload, compound_event_id, redis_stream_id, received_at")
+        .select("event_id, event_type, asset_id, site_id, occurred_at, payload, compound_event_id, redis_stream_id, received_at")
         .eq("event_id", event_id)
         .execute()
     )
-    if not result.data:
+    site = site_scope(current_user, None)
+    if not result.data or (site and result.data[0].get("site_id") != site):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
 
     event = result.data[0]
@@ -991,21 +1068,70 @@ async def acknowledge_event(
     """
     Records cryptographically signed acknowledgment of a proactive brief.
     Audit trail: what knowledge was available, when delivered, confirmed by whom.
+
+    Who, in what role, when and the signature are all produced here from the verified token and the
+    server clock. The body's `user_id`, `role`, `acknowledged_at` and `signature` are ignored: the
+    audit trail the compliance role reads must not show acknowledgements the named person never made.
     """
+    user_id = current_user.get("user_id", "unknown")
+
+    # Each ack is a server-signed audit row, so it needs an event that exists on the caller's site
+    # (same 404 as `get_event`) and a caller with a stake in it: staff, or the recipient of a brief
+    # that event triggered. Otherwise any role could mint unlimited signed rows for any id.
+    site = site_scope(current_user, None)
+    event = await asyncio.to_thread(
+        lambda: supabase.table("operational_events")
+        .select("event_id, site_id")
+        .eq("event_id", event_id)
+        .limit(1)
+        .execute()
+    )
+    if not event.data or (site and event.data[0].get("site_id") != site):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
+    if current_user.get("role") not in _INGEST_ROLES:
+        brief = await asyncio.to_thread(
+            lambda: supabase.table("briefs")
+            .select("brief_id")
+            .eq("trigger_event_id", event_id)
+            .in_("recipient_user_id", _brief_recipients(current_user))
+            .limit(1)
+            .execute()
+        )
+        if not brief.data:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a recipient of this event.")
+
+    # Idempotent: one acknowledgement per user per event, a repeat returns the first.
+    # ponytail: check-then-insert, so two simultaneous first acks can both write; a unique index
+    # on audit_log would close that and is a schema change.
+    prior = await asyncio.to_thread(
+        lambda: supabase.table("audit_log")
+        .select("id")
+        .eq("action", "brief_acknowledged")
+        .eq("entity_id", event_id)
+        .eq("performed_by", user_id)
+        .limit(1)
+        .execute()
+    )
+    if prior.data:
+        return {"status": "acknowledged", "event_id": event_id, "user_id": user_id, "repeat": True}
+
+    now = datetime.now(UTC).isoformat()
+    signature = _sign_acknowledgment(app_settings.APP_SECRET_KEY, event_id, user_id, "acknowledged", now)
     await asyncio.to_thread(
         lambda: supabase.table("audit_log").insert({
             "action": "brief_acknowledged",
             "entity_type": "event",
             "entity_id": event_id,
-            "performed_by": payload.user_id,
+            "performed_by": user_id,
             "details": {
                 "event_id": event_id,
-                "timestamp": payload.acknowledged_at.isoformat(),
-                "signature": payload.signature,
-                "role": payload.role,
+                "timestamp": now,
+                "signature": signature,
+                "signature_alg": "HMAC-SHA256",
+                "role": current_user.get("role"),
                 "notes": payload.notes,
             },
         }).execute()
     )
-    log.info("events.brief_acknowledged", event_id=event_id, user_id=payload.user_id)
-    return {"status": "acknowledged", "event_id": event_id, "user_id": payload.user_id}
+    log.info("events.brief_acknowledged", event_id=event_id, user_id=user_id)
+    return {"status": "acknowledged", "event_id": event_id, "user_id": user_id}

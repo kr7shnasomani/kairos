@@ -13,8 +13,9 @@ async def test_health_response_shape(anon_client):
     assert "status" in body
 
 
-async def test_health_detailed(anon_client):
-    r = await anon_client.get("/health/detailed")
+async def test_health_detailed(admin_client):
+    # Gated behind auth (security-review L7): five store round-trips per call is not public.
+    r = await admin_client.get("/health/detailed")
     # 200 = all deps up; 503 = degraded but API is alive. Both are valid here.
     assert r.status_code in (200, 503)
     body = r.json()

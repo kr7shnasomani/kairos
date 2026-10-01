@@ -129,7 +129,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             <p className="mt-0.5 text-caption text-muted">Relationships connected to this asset.</p>
           </div>
           <Link
-            href={`/graph?asset=${a.asset_id}`}
+            href={`/graph?asset=${encodeURIComponent(a.asset_id)}`}
             className="shrink-0 text-caption font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
           >
             Open full graph →

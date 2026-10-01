@@ -70,17 +70,19 @@ class AlarmEvent(BaseEvent):
 
 
 class EventAck(BaseModel):
-    user_id: str
-    role: str
+    # Identity, role, time and signature are all server-side facts (token + clock). The fields stay
+    # on the model so older clients still parse, but the handler ignores them: trusting them let
+    # any role write an acknowledgement under someone else's name.
+    user_id: str | None = None
+    role: str | None = None
     acknowledged_at: datetime = Field(default_factory=_utc_now)
-    signature: str | None = None  # Cryptographic signature for audit trail
+    signature: str | None = None
     notes: str | None = None
 
 
 class DeviationFlagEvent(BaseModel):
     asset_id: str
     description: str
-    reported_by: str | None = None
     affected_topology_path: str | None = None
 
 
@@ -99,7 +101,7 @@ class PlantStateEvent(BaseModel):
 class TagOutEvent(BaseEvent):
     asset_id: str
     tag_out_reason: str
-    performed_by: str
+    performed_by: str | None = None  # source-system claim only; the audit actor is the token's user
     expected_return_date: datetime | None = None
     event_type: str = "equipment_tag_out"
 
@@ -108,8 +110,10 @@ class InspectionCompleteEvent(BaseEvent):
     asset_id: str
     inspection_type: str
     result: str = Field(..., description="passed, failed, conditional")
-    performed_by: str
+    performed_by: str | None = None  # source-system claim only; the audit actor is the token's user
     findings: str = ""
     document_id: str | None = None
+    # A reporter may lower this (below 0.7 routes the finding to quarantine) but cannot raise the
+    # evidence edge above INSPECTION_EVIDENCE_CONFIDENCE (routers/events.py).
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     event_type: str = "inspection_complete"

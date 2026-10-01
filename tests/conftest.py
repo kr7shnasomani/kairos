@@ -42,11 +42,17 @@ def _cleanup_test_data():
 _INTERNAL_KEY = os.getenv("INTERNAL_API_KEY", "kairos-internal-dev-key")
 
 ADMIN_EMAIL = "admin@kairos.local"
-ADMIN_PASSWORD = "KairosAdmin123!"
 ENGINEER_EMAIL = "engineer@kairos.local"
-ENGINEER_PASSWORD = "KairosEngineer123!"
 FIELD_EMAIL = "field_worker@kairos.local"
-FIELD_PASSWORD = "KairosField123!"
+
+
+def seed_password(role: str) -> str:
+    """A seeded user's password, from `.env` (KAIROS_SEED_PASSWORD_<ROLE>). Never committed."""
+    name = f"KAIROS_SEED_PASSWORD_{role.upper()}"
+    value = os.getenv(name)
+    if not value:
+        pytest.skip(f"{name} is not set (see .env.example)")
+    return value
 
 
 def uid() -> str:
@@ -61,7 +67,7 @@ def uid() -> str:
 def engineer_token():
     r = httpx.post(
         f"{BASE_URL}/auth/login",
-        json={"email": ENGINEER_EMAIL, "password": ENGINEER_PASSWORD},
+        json={"email": ENGINEER_EMAIL, "password": seed_password("engineer")},
         timeout=30,
     )
     assert r.status_code == 200, f"Engineer login failed: {r.text}"
@@ -72,7 +78,7 @@ def engineer_token():
 def field_token():
     r = httpx.post(
         f"{BASE_URL}/auth/login",
-        json={"email": FIELD_EMAIL, "password": FIELD_PASSWORD},
+        json={"email": FIELD_EMAIL, "password": seed_password("field_worker")},
         timeout=30,
     )
     assert r.status_code == 200, f"Field login failed: {r.text}"

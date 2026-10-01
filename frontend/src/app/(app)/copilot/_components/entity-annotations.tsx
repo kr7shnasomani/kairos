@@ -11,8 +11,9 @@ const ENTITY_TYPES = [
   "Location", "Event", "Document", "Procedure",
 ];
 
-/** Inline entity annotation chips. Low-confidence entities get confirm / correct / delete. */
-export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] }) {
+/** Inline entity annotation chips. Low-confidence entities get confirm / correct / delete,
+ *  unless `readOnly` (the demo role: annotations write to the corpus). */
+export function EntityAnnotations({ entities, readOnly = false }: { entities: ExtractedEntity[]; readOnly?: boolean }) {
   const [actions, setActions] = useState<Record<string, "confirmed" | "deleted" | "corrected">>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [correctedTypes, setCorrectedTypes] = useState<Record<string, string>>({});
@@ -89,7 +90,7 @@ export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] })
                   {action === "corrected" ? correctedTypes[k] : e.entity_type}
                 </span>
 
-                {lowConf && !action && !isEditing && (
+                {lowConf && !action && !isEditing && !readOnly && (
                   <span className="ml-1 flex items-center gap-0.5">
                     <button
                       onClick={() => annotate(e, true)}

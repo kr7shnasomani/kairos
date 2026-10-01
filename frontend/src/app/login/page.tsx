@@ -9,7 +9,16 @@ import { getMe, login } from "@/lib/auth";
 
 import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui";
+import { roleHome } from "@/components/use-role";
+
+// The one-click demo signs in as the read-only `demo` user. Both values are baked into the bundle,
+// so they are public by design: they must only ever be that account's credentials. Unset = no button.
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_EMAIL;
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+const DEMO_ENABLED = Boolean(DEMO_EMAIL && DEMO_PASSWORD);
+
 function workspacePath(role?: string) {
+  if (role === "demo") return roleHome("demo");
   return role === "field_worker" ? "/briefs" : "/management";
 }
 
@@ -44,9 +53,9 @@ export default function LoginPage() {
     void doLogin(email, password);
   }
 
-  // One-click demo → signs straight into the seeded admin account.
+  // One-click demo → signs into the read-only demo account (never an admin credential).
   function tryDemo() {
-    void doLogin("admin@kairos.local", "KairosAdmin123!");
+    if (DEMO_EMAIL && DEMO_PASSWORD) void doLogin(DEMO_EMAIL, DEMO_PASSWORD);
   }
 
   return (
@@ -143,9 +152,11 @@ export default function LoginPage() {
                 {busy ? "Signing in…" : "Sign in"}
                 {!busy && <span aria-hidden="true">›</span>}
               </Button>
-              <Button type="button" onClick={tryDemo} disabled={busy} className="min-h-11 w-full bg-surface text-sm font-medium">
-                Explore the live demo
-              </Button>
+              {DEMO_ENABLED && (
+                <Button type="button" onClick={tryDemo} disabled={busy} className="min-h-11 w-full bg-surface text-sm font-medium">
+                  Explore the live demo
+                </Button>
+              )}
             </form>
           </div>
         </section>

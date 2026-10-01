@@ -89,7 +89,7 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 | Purpose | Path |
 |---|---|
 | **Open work · pitfalls · benchmarks · conformance · CI detail** | **`docs/implementation/status.md`** |
-| Problem statements (one per hackathon) · 13-layer architecture | `docs/problem_statement/` · `ARCHITECTURE.md` |
+| 13-layer architecture | `ARCHITECTURE.md` |
 | REST API reference · backend services/workers/config | `docs/API.md` · `BACKEND.md` |
 | Infra (ports, stores, dev cmds) · Docker build & run modes | `docs/INFRA.md` · `DOCKER.md` |
 | Database schemas · frontend routes & wiring | `docs/DATABASE.md` · `FRONTEND.md` |
@@ -114,8 +114,8 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed → load-dataset`. Gotcha rebuilds: `--no-deps --build kairos-frontend` (new npm deps) · `--force-recreate kairos-backend-api` (NIM env).
 
 **Tests — Docker only, never the host.** Host package resolution differs from the pinned images and produces false results.
-- Service-free tier (**524 tests**, 46 files, no stack/secrets/network — CI's `unit` job runs exactly this list):
-  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo}.py`
+- Service-free tier (**837 tests**, 51 files, no stack/secrets/network — CI's `unit` job runs exactly this list; in the container 834 pass and 3 skip, because `infra/` and `.github/` are not mounted):
+  `docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api pytest -q tests/test_{pii,query_category,search_fusion,ingestion_formats,http_pool,model_validation,pid,auth_cache,config_guardrail,briefs_countersign,topology_verify,ot_coverage,phase_gate,extraction_path,timestamp_alignment,model_gate_classes,ner_parse,superseded_filter,brief_signing,attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm}.py`
 - Full suite (needs the stack; **local stores only, never cloud**): `docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120`
 
 ---
@@ -135,15 +135,18 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 - **Eyebrows are the area alone** (`Governance`, `Assure`) and UI copy carries **no `·` separators** — use a comma, or drop the separator for label+value (`L3 Standard`).
 - **Filled and secondary actions use `Button` / `ButtonLink`** (`components/ui.tsx`) — they carry the shared `.fill-sweep` hover. Never hand-roll a `bg-accent` button.
 - `PageHeader`'s `compact` is for per-record views (`/assets/[id]`) only; a top-level page keeps the full title size.
+- **End a session only through `clearSession()` (explicit sign-out: wipes caches, offline queue, Copilot history) or `expireSession()` (forced 401: keeps the queue).** Never remove the tokens by hand. `supersedeDocument` can answer `pending_moc_approval` (HTTP 202): branch on `status`, never treat a 2xx as done.
+- `next.config.ts` sets the CSP and security headers; `script-src` keeps `'unsafe-inline'` on purpose (Next 16 inline scripts), so do not add inline event handlers or `dangerouslySetInnerHTML`.
 - No `console.log` in committed code.
 
 ### Backend
 - **Neo4j edges — all 6 on every write:** `valid_from · valid_to · authority_level · document_id · confidence · verification_status`. `valid_to` uses sentinel `9999-12-31`, never NULL.
 - Vault: permanent. Never delete. Supersede by closing `valid_to`. Supabase Storage: immutable.
   **This is the narrow case — the broad rule is 🛑 NEVER WRITE TO A CLOUD STORE at the top of this file.**
+- **Event ingest: `mark_seen` runs last** (a failed ingest must stay retryable), and `operational_events` rows go in through `_store_event` (insert, 409 on a conflicting `event_id`), never an upsert. The pending-brief slot is per work order. Document authority 1 to 3 may be asserted only by `reliability` or `admin` (others are capped to 4), and superseding a 1 to 3 document needs an approved MoC.
 - Quarantine: one-way gate. `confidence < 0.7` → quarantine. Human-only promotion. No auto-promote.
 - Assets: `MERGE (a:Asset {asset_id: $id}) SET a += $props` — never CREATE.
-- Phase 2 synthesis **only** in `POST /search/synthesize`, never auto-triggered. It derives `query_category` when omitted, so the safety gate applies to every caller. The gate clears on confidence ≥ 0.7 **or** authority ≤ 3, and runs **twice** — on the evidence, then on the result.
+- Phase 2 synthesis **only** in `POST /search/synthesize`, never auto-triggered. The server retrieves its own evidence and always derives `query_category`; a client `context` or `query_category` is accepted and ignored, so the safety gate cannot be fed fake metadata. The gate clears on confidence ≥ 0.7 **or** authority ≤ 3, and runs **twice** — on the evidence, then on the result.
 - **Only *relevant, same-asset* evidence may clear the safety gate** (`_authority_candidates`, `services/llm.py`). Rank by `relevance_score`, **never by position** — `SearchService` sorts by `(authority_level, -rrf)`, so a top-K-by-position filter is a no-op.
 - **A conflict needs two *claims*.** `GraphService.NON_ASSERTING_RELATIONSHIPS` (`DOCUMENTED_BY`, `MENTIONS_PERSON`, `MENTIONS_ORGANISATION`, `CONTAINS_TOPOLOGY_ELEMENT`) records provenance/structure, so two of them never contradict. `detect_conflict` returns `None` for them **before** the Cypher, and `/governance/conflicts` filters the same set **in the query** (filtering in Python breaks `count`/`range`). Edges carry no value, so value-comparison would be a schema change — do not attempt it.
 - **Test artifacts are filtered on read, never deleted.** `services/corpus.py` is the one predicate (shared with `run_kg_completeness.py`); they were 87 of 108 active vault documents. An id with no `documents` row (`PROMOTED-<uuid>`) is **kept** — unclassifiable is not disposable — and every caller reports its excluded count. Test **assets** use the same module: `TEST_ASSET_PREFIXES` (`QA-TEST-` plus the integration suite's `ASSET-*` ids), applied **inside the Cypher** via `REAL_ASSET_CYPHER` (asset list, compliance, coverage) so `total` stays correct, and each of those responses reports `excluded_test_assets` (`excluded_test_asset_count`). Never import the purge script's prefix list: it deletes, this only hides.
@@ -157,9 +160,9 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 - **Timestamp drift = same event, different source systems.** Never `occurred_at` vs `ingested_at`.
 - EEMUA governor: `check_governor(user_id)` before every brief. ≤6/operator/hour. PTW always exempt.
 - Celery: lazy imports inside task body. 6 queues: `ingestion,extraction,attribution,transcription,elicitation,validation`.
-- Secrets: never hardcode. All via `api/config.py` Settings → env vars. **`.env` and `.env.example` stay in sync** — same variable names, same order and section headings. Adding a setting means adding it to both: `.env.example` carries the safe default, `.env` the real value. Drifted twice before (19 variables missing locally on 2026-09-23) and it hides nothing until something silently falls back to a code default.
-- **Authz fails closed.** `_ask_opa` returns `self.debug` when OPA is unreachable — never bare `True`. Any `read_*` action added to `kairos.rego` must also go in `_sensitive_actions`, or the catch-all grants it to every role. Never gate `OPTIONS` (CORS preflight carries no token, and this middleware is outermost). Read grants mirror `frontend/src/components/use-role.ts` — a role that can open a page but not call its API is a broken page, not a closed boundary.
-- **One token verifier: `dependencies.resolve_token`.** Never decode a Supabase JWT by hand — this project issues **ES256**, so an HS256 decode silently rejects every token and degrades authz to the dev bypass. Verify by probing the live API with a restricted persona and confirming a **403**; policy tests alone cannot tell you the layer is reached.
+- Secrets: never hardcode. Seeded user passwords live only in `.env` as `KAIROS_SEED_PASSWORD_*` (gitignored); the Go connector needs `CONNECTOR_SHARED_SECRET` and refuses to start without it. All via `api/config.py` Settings → env vars. **`.env` and `.env.example` stay in sync** — same variable names, same order and section headings. Adding a setting means adding it to both: `.env.example` carries the safe default, `.env` the real value. Drifted twice before (19 variables missing locally on 2026-09-23) and it hides nothing until something silently falls back to a code default.
+- **Authz fails closed.** `_ask_opa` returns `self.debug` when OPA is unreachable — never bare `True`. Any `read_*` action added to `kairos.rego` must also go in `_sensitive_actions`, or the catch-all grants it to every role. The event ingest routes need the `ingest_event` action (engineer, reliability, admin, and the internal key, which resolves to admin). The `demo` role (read-only public demo) is deny-by-default: it holds only the explicit read allow-list in `kairos.rego` plus `synthesize`, never `write_api`. Never gate `OPTIONS` (CORS preflight carries no token, and this middleware is outermost). Read grants mirror `frontend/src/components/use-role.ts` — a role that can open a page but not call its API is a broken page, not a closed boundary.
+- **One token verifier: `dependencies.resolve_token`.** Role and `site_id` are read from `app_metadata` only (users can edit `user_metadata`; `scripts/migrate_roles_to_app_metadata.py` must run before a deploy of that change). Never decode a Supabase JWT by hand — this project issues **ES256**, so an HS256 decode silently rejects every token and degrades authz to the dev bypass. Verify by probing the live API with a restricted persona and confirming a **403**; policy tests alone cannot tell you the layer is reached.
 - **Site scope comes from the token, never the query string** — `dependencies.site_scope`. A blank `site_id` means *no* rows, not *all* rows.
 
 ### Both
@@ -186,7 +189,7 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 | Routers / Services / Models | `backend/api/routers\|services\|models/*.py` |
 | Temporal workflow · Celery/Temporal workers | `backend/workflows/document_pipeline.py` · `backend/workers/` |
 | Go OT connectors | `backend/connectors/` |
-| Neo4j · Supabase schema (source of truth) · seed scripts | `db/neo4j/init_schema.cypher` · `db/schema.sql` · `backend/scripts/` |
+| Neo4j · Supabase schema (source of truth) · unapplied SQL · seed scripts | `db/neo4j/init_schema.cypher` · `db/schema.sql` · `db/migrations/` · `backend/scripts/` |
 | Golden dataset (mounted `/app/dataset`) | `dataset/` · canon: `dataset/00_Reference/00_KAIROS_CANON.md` |
 | Frontend API client · types · primitives · shell | `frontend/src/lib/api.ts` · `types.ts` · `components/ui.tsx` · `app-shell.tsx` |
 | Frontend design tokens · icon set | `frontend/src/app/globals.css` · `components/icon.tsx` (Phosphor; never hand-draw an `<svg>` icon) |

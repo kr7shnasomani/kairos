@@ -130,6 +130,7 @@ def _check_telemetry_baseline(asset_id: str, event_id: str) -> dict[str, Any]:
     try:
         ts = httpx.get(f"{_GO_URL}/ot/query",
                        params={"asset_id": asset_id, "tag": tag, "from": query_from, "to": query_to},
+                       headers={"X-Connector-Secret": os.getenv("CONNECTOR_SHARED_SECRET", "")},
                        timeout=15).json()
     except Exception as exc:
         log.warning("attribution.historian_unreachable", error=str(exc))

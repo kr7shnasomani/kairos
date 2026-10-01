@@ -29,7 +29,7 @@ frontend/
 ├── public/
 │   ├── logo.png                    # Brand logo — served at /logo.png; favicon source
 │   ├── shots/                       # Landing-page product screenshots (real captures of the app)
-│   └── sw.js                        # Service worker (PWA offline shell) — registered PROD-ONLY
+│   └── sw.js                        # Service worker (PWA offline shell, per-user API cache) — registered PROD-ONLY
 ├── src/
 │   ├── app/
 │   │   ├── icon.jpeg                # Auto-favicon (Next.js App Router convention)
@@ -235,22 +235,36 @@ Real Supabase-backed login — not a mock bypass.
 POST /auth/login  →  { access_token, refresh_token, user_id }
 ```
 
-Tokens stored in `localStorage` under keys `kairos-token` and `kairos-refresh`. `getMe()` calls `GET /auth/me` with `Authorization: Bearer <token>`. `logout()` clears both keys.
+Tokens stored in `localStorage` under keys `kairos-token` and `kairos-refresh`. `getMe()` calls `GET /auth/me` with `Authorization: Bearer <token>`. `logout()` calls `clearSession()`.
+
+**Two ways a session ends (`lib/api.ts`).**
+
+| Function | When | What it removes |
+|---|---|---|
+| `clearSession()` | Explicit sign-out | Both tokens, the `kairos-access` cookie, `sessionStorage` (Copilot history), every service-worker cache (`LOGOUT` message plus `caches.delete`), and the `kairos-queue` IndexedDB (`QUEUE_DB`). The next person on a shared tablet finds none of it |
+| `expireSession()` | A 401 the refresh token could not repair | The tokens, cookie and `sessionStorage` only. The offline queue and caches are **kept**, so a field worker whose session lapsed does not lose unsent acknowledgements and flags |
+
+Both fire a best-effort `POST /auth/logout` (`keepalive`, write timeout, never awaited, never allowed to throw) so the server revokes the session and a copied refresh token stops working; sign-out still works offline. Each wipe step is independent and wrapped in try/catch.
+
+**Offline queue is tagged with the user.** `idb.ts` stores each queued write with the JWT `sub` (`tokenUserId`) of whoever made it and replays an entry only for that same user. An entry from someone else, or from a build that recorded no user, is dropped rather than sent (replaying it would file it under the current user). With nobody signed in, nothing is replayed or deleted.
+
+**Every route param is `encodeURIComponent`-ed** in `api.ts` (a crafted id such as `x/../../admin?y=1#` stays one path segment), and `getArtifactUrl` only returns an `http(s)` URL, never a `javascript:` or `data:` one before it reaches `window.open`.
 
 **Auth guard** in `AppShell`: no token → redirect to `/login`. `/login` redirects already-authenticated
 users to `/briefs`. **Expired/invalid token** (e.g. Supabase JWT past its 1-hour TTL): even in dev
 (non-strict) the shell now **clears the session and redirects to `/login`** rather than silently falling
 back to the engineer dev-default — that used to read as a surprise role downgrade (`field_worker → engineer`).
 
-**Login page** (`/login`) pre-fills `engineer@kairos.local / KairosEngineer123!` for dev convenience:
+**Seeded users** (passwords are read from `.env`, never committed; see `.env.example` for the variable names):
 
-| Email | Password | Role |
+| Email | Password (env var in `.env`) | Role |
 |-------|----------|------|
-| `admin@kairos.local` | `KairosAdmin123!` | admin |
-| `engineer@kairos.local` | `KairosEngineer123!` | engineer |
-| `field_worker@kairos.local` | `KairosField123!` | field_worker |
-| `reliability@kairos.local` | `KairosReliability123!` | reliability |
-| `compliance@kairos.local` | `KairosCompliance123!` | compliance |
+| `admin@kairos.local` | `KAIROS_SEED_PASSWORD_ADMIN` | admin |
+| `engineer@kairos.local` | `KAIROS_SEED_PASSWORD_ENGINEER` | engineer |
+| `field_worker@kairos.local` | `KAIROS_SEED_PASSWORD_FIELD_WORKER` | field_worker |
+| `reliability@kairos.local` | `KAIROS_SEED_PASSWORD_RELIABILITY` | reliability |
+| `compliance@kairos.local` | `KAIROS_SEED_PASSWORD_COMPLIANCE` | compliance |
+| `demo@kairos.local` | `KAIROS_SEED_PASSWORD_DEMO` | demo |
 
 Seed with: `docker exec kairos-backend-api python scripts/seed_users.py`
 
@@ -308,7 +322,7 @@ export const API_BASE =
 | `disputeQuarantine(id, reason)` | `POST /governance/quarantine/{id}/dispute` |
 | `getDocuments()` | `GET /documents/?limit=50` |
 | `getDocument(id)` | `GET /documents/{id}` |
-| `synthesize(query, asOf?, onSources?, onDelta?)` | `POST /search/synthesize` — or `POST /search/synthesize/stream` when `onDelta` is supplied |
+| `synthesize(query, asOf?, onSources?, onDelta?)` | `POST /search/synthesize` — or `POST /search/synthesize/stream` when `onDelta` is supplied. It still sends the `context` it retrieved client-side, but the server **ignores** it and judges the answer on its own retrieval; the client keeps that context only to re-attach titles, excerpts and links to the response's `sources` by `document_id`. A source the server found and the client did not shows its id as the title with no excerpt |
 | `getRcaPack(assetId, code)` | `POST /search/rca-pack` |
 | `ackBrief(id, body)` | `POST /briefs/{id}/ack` |
 | `sendBriefFeedback(id, rating, notes)` | `POST /briefs/{id}/feedback` |
@@ -332,7 +346,7 @@ export const API_BASE =
 | `getEvents()` / `getEvent(id)` / `ackEvent(id)` | operational event surfaces |
 | `postTagOut / postAlarm / postShiftHandover / postInspectionComplete / postDeviationFlag` | demo event emitters |
 | `getMocList()` / `getMoc(id)` / `approveMoc(id)` | Management of Change |
-| `ingestDocument(form)` / `getDocumentStatus(id)` / `supersedeDocument(id, form)` | document ingest + pipeline status + supersede |
+| `ingestDocument(form)` / `getDocumentStatus(id)` / `supersedeDocument(id, newId)` | document ingest (the result carries `authority_level`, `authority_requested`, `authority_capped`) + pipeline status + supersede. `supersedeDocument` returns `SupersedeResponse`, whose `status` is `superseded` or `pending_moc_approval` (HTTP 202, authority 1 to 3): callers **must branch on `status`**, never treat a 2xx as done |
 | `confirmAssetIdentity(...)` | MDM identity confirmation (asset bootstrap) |
 | `triggerElicitation / getElicitationQuestions / submitElicitationResponses` | field micro-interview |
 | `getOffboardingList / getOffboarding / getOffboardingQuestions / submitOffboardingResponses / createOffboarding` | retiring-expert knowledge transfer |
@@ -615,6 +629,7 @@ volumes:
 **Env vars:**
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8000   # browser → host port-mapping; embedded at next build
+NEXT_PUBLIC_AUTH_STRICT=false               # build arg (Dockerfile + compose); baked in like the API URL. true turns a 401 into a forced re-login
 API_INTERNAL_URL=http://kairos-backend-api:8000  # SSR → Docker internal network
 NODE_ENV=development
 ```
@@ -630,10 +645,19 @@ docker compose up -d --no-deps --build kairos-frontend
 
 ## 13. CI/CD
 
-`.github/workflows/frontend.yml` runs on every push/PR that touches `frontend/` or the workflow file itself. Four jobs, all path-filtered:
+`.github/workflows/frontend.yml` runs on every push/PR that touches `frontend/` or the workflow file itself. It is **one job** (`ci`, one `npm ci`) whose steps run sequentially and fail fast:
 
-| Job | Command | What it checks |
+| Step | Command | What it checks |
 |-----|---------|----------------|
+| Type check | `npx tsc --noEmit` | TypeScript strict — zero errors required |
+| Lint | `npm run lint` | ESLint (Next.js config) — zero errors required |
+| Build | `npm run build` | Full Next.js production build — catches missing imports, invalid RSC boundaries |
+| Audit (production) | `npm audit --audit-level=high --omit=dev` | CVEs at high/critical severity in what ships to a browser |
+| Audit (dev) | `npm audit --audit-level=high` | Report only (`continue-on-error`) |
+
+No secrets are needed. **Vitest is not a CI step**: run it with the command in §14.
+
+-----|---------|----------------|
 | `typecheck` | `npx tsc --noEmit` | TypeScript strict — zero errors required |
 | `lint` | `npm run lint` | ESLint (Next.js config) — zero errors required |
 | `build` | `npm run build` | Full Next.js production build — catches missing imports, invalid RSC boundaries |
@@ -655,7 +679,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **271 passed / 75 files — fully green** (vitest, 2026-09-14). Needs the `./benchmark` mount; see [`status.md` § Verification snapshot](./implementation/status.md#verification-snapshot). Run via `docker compose run --rm --no-deps kairos-frontend npx vitest run`, or `docker exec kairos-frontend npx vitest run --maxWorkers=2` — an unbounded `docker exec` run OOMs because the dev server already holds ~1.85 GB of the 2 GB cap |
+| Test suite | **326 tests / 79 files**, all passing (2026-10-01; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---
@@ -669,10 +693,33 @@ the stale cache — an infinite refresh loop). The service worker uses **network
 (cache is an offline fallback only) and stale-while-revalidate for static assets; bump the `SHELL`
 cache version to bust a poisoned cache.
 
+**API reads are network-first and cached per user** (`kairos-data-v2`). The old `kairos-data-v1` cache was cache-first and unkeyed, so any user could be served another's data. Now a GET is fetched first, a successful response is stored under a key that includes the Bearer token's `sub` (`/__api-cache/{sub}/{url}`), and the cache is used only when the network fails. A request with no Bearer token, or one that is not a JWT, is not cached at all. Sign-out posts `{type: "LOGOUT"}` and the worker deletes every cache. **By design the caches survive session expiry** (`expireSession`), so a field worker can still read their last data offline; they are keyed by user, so the next person to sign in is never served them. Covered by `lib/service-worker.test.ts`, which runs `sw.js` against a fake worker scope.
+
 The IndexedDB write-queue (`lib/idb.ts`, `OfflineQueue`) is app-level (not the SW) and works in dev:
 writes made offline are queued and flushed on the `online` event; the queued count shows in the shell.
 
 ---
+
+## 15a. Security headers and CSP
+
+`next.config.ts` sets four headers on every route (`/:path*`) through `headers()`:
+
+| Header | Value |
+|---|---|
+| `Content-Security-Policy` | built by `contentSecurityPolicy(apiUrl, dev)`, below |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(self), geolocation=(), payment=(), usb=()` (voice notes need the microphone on this origin only) |
+
+CSP directives: `default-src 'self'`; `script-src 'self' 'unsafe-inline'` (plus `'unsafe-eval'` in development only, for HMR); `style-src 'self' 'unsafe-inline'`; `img-src 'self' data: blob:`; `font-src 'self' data:`; `media-src 'self' blob:`; `connect-src 'self' <API origin>` (derived from `NEXT_PUBLIC_API_URL`, falling back to `http://localhost:8000` on a bad value); `frame-src https://www.youtube-nocookie.com`; `worker-src 'self'`; `manifest-src 'self'`; `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`; `frame-ancestors 'none'`.
+
+**The `unsafe-inline` compromise.** `script-src` keeps `'unsafe-inline'` on purpose. Next 16 emits inline bootstrap and RSC-payload scripts on every page, so a hash cannot cover them, and a nonce needs per-request rendering, which would turn the static landing page and every cached shell dynamic. The rest of the policy is tight (no plugins, no foreign frames, no off-site form posts, only the API, YouTube's cookie-less embed and self-hosted fonts are reachable), but this means CSP is a second line of defence against XSS, not a guarantee, while tokens live in `localStorage`. Tested in `lib/security-headers.test.ts`. The API's own responses carry a separate header set from Caddy (`DEPLOY.md`).
+
+## 15b. Document ingest and supersede UI
+
+- **Authority levels** (`/documents/ingest` and `SupersedeAction`): the selector offers L1 to L5 only to roles in `AUTHORITY_ASSERT_ROLES` (`reliability`, `admin`, in `components/use-role.ts`, matching the backend constant). Every other role sees L4 and L5 and a hint that levels 1 to 3 need reliability or admin, because the backend would cap them to 4 anyway.
+- **Capped uploads are disclosed.** When the ingest response has `authority_capped: true`, the ingest page shows an "Authority lowered" status line naming the requested and stored level.
+- **Supersede is not always immediate.** For an authority 1 to 3 document the backend answers `202 pending_moc_approval`; `SupersedeAction` then shows "Awaiting MoC approval" (the old document is still current) with the MoC id and a link to `/governance/moc/{id}`, and tells the user to repeat the supersede with the same replacement after approval. A `403` (a role that may not supersede a level 1 to 3 document) gets its own message. The replacement is already stored in the vault in either case.
 
 ## 16. Intentional Non-Goals
 
@@ -682,6 +729,7 @@ These are deliberate decisions, not open gaps — the UI handles each honestly t
 |------|----------|
 | `/management/cross-site` live data | Cross-site pattern aggregation is a **roadmap** feature needing multi-site data (the architecture defines layers 0–12; the old "Layer 13" label was wrong and was corrected in the UI too). This is a single-site deployment, so the page shows an honest **"No cross-site data in this deployment"** empty state — no fabricated alerts. |
 | SSR bearer token | Login mirrors the access token into the `kairos-access` cookie in every mode, and every read sends the signed-in user's token (browser: storage; server components: the cookie). Strict mode only decides whether a 401 forces a re-login. The backend dev bypass applies only to a request with no session at all — it used to answer every SSR read, which showed a field worker the dev user's inbox and 404'd their own briefs. |
+| HttpOnly session cookies | **Not possible here.** The frontend (Vercel) and the API (EC2) are on different sites, so a cookie the API sets is not sent on the frontend's cross-site fetches and cannot be read by server components. Tokens stay in `localStorage` and the `kairos-access` mirror cookie, which is why the CSP below matters |
 | Offline app-shell | **Prod-only by design** — the service worker is disabled in dev (it fought HMR). The IndexedDB write-queue (`idb.ts`) works in dev. |
 
 **Browser verification:** ✅ complete. Every desktop route + all field routes verified against the golden

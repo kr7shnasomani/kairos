@@ -106,9 +106,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         RateLimitMiddleware,
         redis_url=settings.REDIS_URL,
-        # Enforced only in production (0 = pass-through) so dev + the test suite, which burst many
-        # requests from one IP, never trip it. It's a public-exposure guard, not a dev concern.
-        limit_per_minute=settings.RATE_LIMIT_PER_MINUTE if settings.APP_ENV == "production" else 0,
+        # Off only in development (0 = pass-through) so dev + the test suite, which burst many
+        # requests from one IP, never trip it. Any other APP_ENV is treated as public-facing.
+        limit_per_minute=0 if settings.is_development else settings.RATE_LIMIT_PER_MINUTE,
     )
 
     # -------------------------------------------------------------------------
@@ -145,7 +145,7 @@ def create_app() -> FastAPI:
         code = getattr(exc, "code", None)
         log.warning("supabase_api_error", code=code, detail=getattr(exc, "details", None), path=str(request.url))
         if code == "23503":  # foreign-key violation — the request referenced a record that does not exist
-            return JSONResponse(status_code=422, content={"detail": f"Referenced record does not exist: {getattr(exc, 'details', '')}"})
+            return JSONResponse(status_code=422, content={"detail": "A referenced record does not exist."})
         if code == "23505":  # unique violation
             return JSONResponse(status_code=409, content={"detail": "A record with these identifiers already exists."})
         return JSONResponse(status_code=500, content={"detail": "Database request failed. Check logs for details."})

@@ -36,7 +36,7 @@ jobs:
       dockerfiles: ${{ steps.filter.outputs.dockerfiles }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
@@ -56,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Run Ruff (Python Linter)
-        uses: astral-sh/ruff-action@v3
+        uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3.6.1
         with:
           src: "./backend"
           # Pinned deliberately. Unpinned, this job took whatever ruff was newest and its
@@ -78,7 +78,7 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: backend/connectors/go.sum
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           # golangci-lint v2 is required to typecheck Go 1.25 sources; v1.59 could not,
           # producing spurious "undefined: <pkg>" typecheck errors on every import.
@@ -92,10 +92,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Lint Backend Dockerfile
-        uses: hadolint/hadolint-action@v3.5.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: backend/Dockerfile
       - name: Lint Go Connector Dockerfile
-        uses: hadolint/hadolint-action@v3.5.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: backend/connectors/Dockerfile

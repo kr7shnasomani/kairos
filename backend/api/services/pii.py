@@ -9,7 +9,7 @@ is what the DPDP obligation actually requires.
 
 Detection is regex for structured identifiers (no model needed, no false negatives
 on format) plus caller-supplied PERSON names, which come from the existing NER
-service rather than a second name model.
+service rather than a second name model, plus context patterns for names the model never saw.
 """
 
 import re
@@ -28,13 +28,25 @@ log = structlog.get_logger(__name__)
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("EMAIL", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
     ("PAN", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")),
-    ("AADHAAR", re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")),
+    # Aadhaar is printed as 1234 5678 9012, 1234-5678-9012 or unspaced.
+    ("AADHAAR", re.compile(r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b")),
     ("EMPLOYEE_ID", re.compile(r"\bEMP[-/ ]?\d{3,6}\b", re.IGNORECASE)),
     ("SHIFT_ID", re.compile(r"\b(?:SHIFT|SH)[-/ ]?(?:ID[-/ ]?)?\d{2,6}\b", re.IGNORECASE)),
-    # Indian mobile: optional +91/0 prefix, then 10 digits starting 6-9. Guarded on both
-    # sides so equipment tags and part numbers (EQ-101, MS-4471-B) never match.
-    ("PHONE", re.compile(r"(?<![\w-])(?:\+91[-\s]?|0)?[6-9]\d{9}(?![\w-])")),
+    # Indian mobile: optional +91 / (+91) / 91 / 0 prefix, then 10 digits starting 6-9, optionally
+    # split 5+5 ("+91 98765 43210"). Guarded on both sides so equipment tags and part numbers
+    # (EQ-101, MS-4471-B) never match.
+    ("PHONE", re.compile(r"(?<![\w-])(?:\(?\+91\)?[-\s]?|91[-\s]|0)?[6-9]\d{4}[-\s]?\d{5}(?![\w-])")),
 ]
+
+# Names that no model saw. NER reads only the first part of a document, so a person first named
+# deeper in the text is not in the caller's list. These catch the two shapes plant paperwork uses:
+# an honorific, or a sign-off label. The name is the capture group, so the label stays readable.
+_NAME = r"[A-Z][a-z]+(?:\s+[A-Z]\.?)?(?:\s+[A-Z][a-z]+){0,2}"
+_NAME_CONTEXT = re.compile(
+    rf"\b(?:Mr|Mrs|Ms|Miss|Dr|Shri|Smt|Sri|Er)\.?\s+(?P<name>{_NAME})"
+    rf"|\b(?:Operator|Technician|Engineer|Supervisor|Inspector|Fitter|Prepared by|Reviewed by|Approved by|"
+    rf"Signed by|Witnessed by|Issued by|Authorised by|Authorized by|Performed by|Name)(?:\s*:\s*|\s+-\s+)(?P<name2>{_NAME})"
+)
 
 
 class PIIService:
@@ -57,6 +69,10 @@ class PIIService:
         for pii_type, pattern in _PATTERNS:
             for m in pattern.finditer(text):
                 spans.append({"text": m.group(0), "pii_type": pii_type, "start": m.start(), "end": m.end()})
+
+        for m in _NAME_CONTEXT.finditer(text):
+            group = "name" if m.group("name") else "name2"
+            spans.append({"text": m.group(group), "pii_type": "PERSON", "start": m.start(group), "end": m.end(group)})
 
         # Resolve overlaps: earliest start wins, longest match breaks ties.
         spans.sort(key=lambda s: (s["start"], -(s["end"] - s["start"])))

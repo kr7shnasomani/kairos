@@ -7,7 +7,9 @@ operator responses into quarantine for human review and graph promotion.
 import asyncio
 import hashlib
 import json
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
 from typing import Any
 
 import shortuuid
@@ -27,6 +29,46 @@ log = structlog.get_logger(__name__)
 router = APIRouter()
 
 _ELICITATION_QUEUE = "kairos-elicitation"
+
+# Staff who administer off-boarding programmes. Anyone else may see a programme only if they are
+# the person being offboarded (see `_require_staff_or_subject`).
+_STAFF_ROLES = frozenset({"engineer", "reliability", "admin"})
+
+_UNSAFE_PATH_CHARS = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _safe_segment(value: str | None, default: str) -> str:
+    """One storage-path segment from a client-supplied name: base name only, `[A-Za-z0-9._-]`.
+
+    The upload goes through the service-role client, which bypasses storage policies, so a name like
+    `../../x` must never reach the object path. Leading dots are stripped so `..` and hidden names
+    collapse to the default.
+    """
+    base = PurePosixPath((value or "").replace("\\", "/")).name
+    return _UNSAFE_PATH_CHARS.sub("_", base).lstrip(".")[:100] or default
+
+
+def _is_subject(session: dict, user: dict) -> bool:
+    """Is `user` the person this programme is about? Matched on id, or on e-mail as a fallback."""
+    uid = user.get("user_id")
+    email = (user.get("email") or "").lower()
+    return bool(uid and session.get("personnel_id") == uid) or bool(
+        email and (session.get("personnel_email") or "").lower() == email
+    )
+
+
+def _is_staff_or_subject(session: dict, user: dict) -> bool:
+    return user.get("role") in _STAFF_ROLES or _is_subject(session, user)
+
+
+def _require_staff_or_subject(session: dict, user: dict) -> None:
+    """403 unless the caller is staff or the person being offboarded. Programme rows carry the
+    person's e-mail and retirement date, and completing an item ends the knowledge-capture interview."""
+    if not _is_staff_or_subject(session, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Off-boarding programmes are restricted to staff and the person concerned.",
+        )
 
 
 class ElicitationTriggerRequest(BaseModel):
@@ -57,9 +99,7 @@ class ElicitationAnswer(BaseModel):
 
 class ElicitationResponseRequest(BaseModel):
     responses: list[ElicitationAnswer]
-    # Optional, defaulting to the authenticated user — matching the off-boarding responses
-    # endpoint below. Requiring it here meant the same action had two different contracts, and
-    # the value is knowable from the session anyway.
+    # Accepted for older clients and ignored: the submitter is always the authenticated user.
     submitted_by: str | None = None
 
 
@@ -188,7 +228,7 @@ async def submit_responses(
             "asset_id": asset_id,
             # Workflow input must be plain JSON, not Pydantic models.
             "responses": [r.model_dump(exclude_none=True) for r in payload.responses],
-            "submitted_by": payload.submitted_by or current_user.get("user_id", "unknown"),
+            "submitted_by": current_user.get("user_id", "unknown"),
             "questions": questions,
         },
         id=workflow_id,
@@ -209,13 +249,29 @@ async def submit_responses(
 async def ingest_voice_note(
     work_order_id: str,
     file: UploadFile,
-    submitted_by: str = Form(...),
+    submitted_by: str | None = Form(None),  # ignored: the submitter is the authenticated user
     current_user: CurrentUserDep = None,
     supabase: SupabaseDep = None,
 ) -> dict:
     settings = get_settings()
+    submitted_by = current_user.get("user_id", "unknown")
 
-    audio_bytes = await file.read()
+    # Reject oversized audio as early as the body allows: the declared size first, then a running
+    # total over 1 MB chunks, so an oversized or unsized upload is never held in memory whole.
+    max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+    too_big = HTTPException(
+        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"File exceeds the {settings.MAX_UPLOAD_MB} MB limit."
+    )
+    if file.size is not None and file.size > max_bytes:
+        raise too_big
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > max_bytes:
+            raise too_big
+        chunks.append(chunk)
+    audio_bytes = b"".join(chunks)
     sha256 = hashlib.sha256(audio_bytes).hexdigest()
 
     # SHA-256 dedup: skip re-upload if identical file already stored
@@ -233,7 +289,8 @@ async def ingest_voice_note(
             "message": "Identical audio already in quarantine",
         }
 
-    storage_path = f"voice_notes/{work_order_id}/{sha256[:8]}_{file.filename}"
+    safe_name = _safe_segment(file.filename, "audio.wav")
+    storage_path = f"voice_notes/{_safe_segment(work_order_id, 'unknown')}/{sha256[:8]}_{safe_name}"
     try:
         await asyncio.to_thread(
             lambda: supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
@@ -253,7 +310,7 @@ async def ingest_voice_note(
         storage_path=storage_path,
         sha256=sha256,
         submitted_by=submitted_by,
-        filename=file.filename or "audio.wav",
+        filename=safe_name,
     )
 
     log.info("elicitation.voice_note_queued",
@@ -285,7 +342,21 @@ class OffboardingCreateRequest(BaseModel):
 class OffboardingResponseRequest(BaseModel):
     item_id: str  # UUID of offboarding_session_items row
     responses: list[dict[str, Any]]  # [{question_index, answer}, ...]
-    submitted_by: str | None = None  # defaults to current user if not provided
+    submitted_by: str | None = None  # accepted and ignored: the submitter is the authenticated user
+
+
+async def _guard_session(supabase, session_id: str, user: dict) -> None:
+    """404 for an unknown programme, 403 unless `user` is staff or the person it is about."""
+    result = await asyncio.to_thread(
+        lambda: supabase.table("offboarding_sessions")
+        .select("personnel_id, personnel_email")
+        .eq("id", session_id)
+        .maybe_single()
+        .execute()
+    )
+    if not (result and result.data):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' not found")
+    _require_staff_or_subject(result.data, user)
 
 
 @router.post("/offboarding", summary="Start off-boarding interview programme", status_code=status.HTTP_201_CREATED)
@@ -405,7 +476,8 @@ async def list_offboarding_programmes(
         .order("created_at", desc=True)
         .execute()
     )
-    sessions = result.data or []
+    # Staff see every programme; anyone else sees only the one about them.
+    sessions = [s for s in (result.data or []) if _is_staff_or_subject(s, current_user)]
 
     # Compute completion percentage for each
     items: list[dict[str, Any]] = []
@@ -439,6 +511,7 @@ async def get_offboarding_programme(
     )
     if not (session_result and session_result.data):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' not found")
+    _require_staff_or_subject(session_result.data, current_user)
 
     items_result = await asyncio.to_thread(
         lambda: supabase.table("offboarding_session_items")
@@ -456,6 +529,7 @@ async def get_offboarding_questions(
     current_user: CurrentUserDep,
     supabase: SupabaseDep,
 ) -> dict:
+    await _guard_session(supabase, session_id, current_user)
     items_result = await asyncio.to_thread(
         lambda: supabase.table("offboarding_session_items")
         .select("id, session_number, equipment_family, status, questions, scheduled_for")
@@ -482,7 +556,10 @@ async def submit_offboarding_responses(
     current_user: CurrentUserDep,
     supabase: SupabaseDep,
 ) -> dict:
-    submitter = payload.submitted_by or current_user.get("user_id", "unknown")
+    # The submitter is the authenticated user; `payload.submitted_by` is accepted and ignored.
+    submitter = current_user.get("user_id", "unknown")
+    # Only staff or the person being offboarded may answer or complete a programme item.
+    await _guard_session(supabase, session_id, current_user)
     # Fetch the specific session item
     item_result = await asyncio.to_thread(
         lambda: supabase.table("offboarding_session_items")

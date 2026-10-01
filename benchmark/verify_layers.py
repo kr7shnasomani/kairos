@@ -20,6 +20,8 @@ import time
 import httpx
 
 API = os.getenv("VERIFY_API_URL", "http://localhost:8000")
+# From .env (gitignored); a KeyError here names the variable to set. Never hardcode it.
+ADMIN_PASSWORD = os.environ["KAIROS_SEED_PASSWORD_ADMIN"]
 GO = os.getenv("OT_CONNECTOR_URL", "http://kairos-backend-go:8090")
 FRONTEND = os.getenv("VERIFY_FRONTEND_URL", "http://kairos-frontend:3000")
 PID_IMAGE = "/app/dataset/02_Document_Corpus/pid_line3_isolation_boundary.png"
@@ -35,7 +37,7 @@ async def main(full: bool) -> None:
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:
         token = None
         try:
-            r = await c.post(f"{API}/auth/login", json={"email": "admin@kairos.local", "password": "KairosAdmin123!"})
+            r = await c.post(f"{API}/auth/login", json={"email": "admin@kairos.local", "password": ADMIN_PASSWORD})
             token = r.json().get("access_token")
         except Exception:
             pass
@@ -50,7 +52,8 @@ async def main(full: bool) -> None:
             _results.append((layer, check, ok, (time.perf_counter() - t) * 1000, note))
 
         async def GET(path: str, base: str = API, timeout: float = 20) -> tuple[bool, str]:
-            r = await c.get(f"{base}{path}", headers=headers, timeout=timeout)
+            h = {"X-Connector-Secret": os.getenv("CONNECTOR_SHARED_SECRET", "")} if base == GO else headers
+            r = await c.get(f"{base}{path}", headers=h, timeout=timeout)
             return r.status_code == 200, f"HTTP {r.status_code}"
 
         # --- fast checks (one representative action per layer) ---

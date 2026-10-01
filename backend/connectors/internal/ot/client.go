@@ -5,11 +5,26 @@ package ot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"time"
 )
+
+// maxBodyBytes caps what we read back from a historian.
+const maxBodyBytes = 4 << 20
+
+// scrubURL drops the request URL from a transport error so logs never carry the PI base URL.
+func scrubURL(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
+}
 
 // TimeSeriesPoint is a single measurement from the historian
 type TimeSeriesPoint struct {
@@ -81,7 +96,7 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 	}
 
 	// Step 1: resolve WebID from tag name
-	searchURL := fmt.Sprintf("%s/search?q=%s&scope=*&fields=WebId", c.BaseURL, q.Tag)
+	searchURL := fmt.Sprintf("%s/search?q=%s&scope=*&fields=WebId", c.BaseURL, url.QueryEscape(q.Tag))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("PI search request build: %w", err)
@@ -91,24 +106,24 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PI search request: %w", err)
+		return nil, fmt.Errorf("PI search request: %w", scrubURL(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	var searchResp piSearchResult
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBodyBytes)).Decode(&searchResp); err != nil {
 		return nil, fmt.Errorf("PI search decode: %w", err)
 	}
 	if len(searchResp.Items) == 0 {
-		return nil, fmt.Errorf("PI tag not found: %s", q.Tag)
+		return nil, fmt.Errorf("PI tag not found: %q", q.Tag)
 	}
 	webID := searchResp.Items[0].WebID
 
 	// Step 2: query stream/recorded
 	streamURL := fmt.Sprintf("%s/streams/%s/recorded?startTime=%s&endTime=%s&maxCount=%d",
-		c.BaseURL, webID,
-		q.From.UTC().Format(time.RFC3339),
-		q.To.UTC().Format(time.RFC3339),
+		c.BaseURL, url.PathEscape(webID),
+		url.QueryEscape(q.From.UTC().Format(time.RFC3339)),
+		url.QueryEscape(q.To.UTC().Format(time.RFC3339)),
 		max(q.MaxPoints, 50),
 	)
 	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
@@ -120,12 +135,12 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 
 	resp2, err := c.HTTPClient.Do(req2)
 	if err != nil {
-		return nil, fmt.Errorf("PI stream request: %w", err)
+		return nil, fmt.Errorf("PI stream request: %w", scrubURL(err))
 	}
 	defer func() { _ = resp2.Body.Close() }()
 
 	var streamResp piStreamRecorded
-	if err := json.NewDecoder(resp2.Body).Decode(&streamResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp2.Body, maxBodyBytes)).Decode(&streamResp); err != nil {
 		return nil, fmt.Errorf("PI stream decode: %w", err)
 	}
 
@@ -159,7 +174,7 @@ func (c *PIWebAPIClient) Health(ctx context.Context) error {
 	req.SetBasicAuth(c.Username, c.Password)
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		return scrubURL(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {

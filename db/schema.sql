@@ -321,6 +321,25 @@ ALTER TABLE briefs            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quarantine_items  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log         ENABLE ROW LEVEL SECURITY;
 
+-- Migration 017: the other 14 tables. Supabase exposes every `public` table through PostgREST, so
+-- without RLS the public anon key could read, write and delete them directly, bypassing the API,
+-- OPA and the audit log. No policies are defined on purpose: with RLS on and no policy, anon and
+-- authenticated get no rows, and the backend (service-role key, which bypasses RLS) is unaffected.
+ALTER TABLE asset_alias_map            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_asset_links       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extraction_jobs            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE operational_events         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE brief_feedback             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE knowledge_conflicts        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE moc_items                  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE elicitation_sessions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ner_annotations            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE extraction_overrides       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plant_operating_states     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE validation_corpus          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE offboarding_sessions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE offboarding_session_items  ENABLE ROW LEVEL SECURITY;
+
 -- The FastAPI backend uses the service-role key (bypasses RLS). These policies
 -- apply only to direct anon/authenticated Supabase access.
 DROP POLICY IF EXISTS briefs_recipient_isolation ON briefs;

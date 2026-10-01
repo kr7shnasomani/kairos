@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentPipelineStage, DocumentStatus } from "@/lib/types";
 import { ingestDocument, getDocumentStatus, type DocumentIngestResponse } from "@/lib/api";
-import { useRole, RESOLVE_ROLES } from "@/components/use-role";
+import { useRole, RESOLVE_ROLES, AUTHORITY_ASSERT_ROLES } from "@/components/use-role";
 import { Button, StatusBadge, Timeline, PageHeader } from "@/components/ui";
 
 import { Icon } from "@/components/icon";
@@ -43,6 +43,10 @@ export default function IngestPage() {
   const [status, setStatus] = useState<DocumentStatus | null>(null);
 
   const canIngest = RESOLVE_ROLES.includes(role);
+  // Levels 1 to 3 need reliability or admin; the backend caps anyone else to 4, so do not offer them.
+  const canAssert = AUTHORITY_ASSERT_ROLES.includes(role);
+  const levels = canAssert ? [1, 2, 3, 4, 5] : [4, 5];
+  const level = levels.includes(Number(authority)) ? authority : "4";
 
   // Poll the pipeline status until it reaches a terminal stage.
   useEffect(() => {
@@ -79,7 +83,7 @@ export default function IngestPage() {
       fd.append("file", file);
       fd.append("document_type", docType);
       fd.append("source_system", sourceSystem);
-      fd.append("authority_level", authority);
+      fd.append("authority_level", level);
       if (assetId.trim()) fd.append("asset_id", assetId.trim());
       const res = await ingestDocument(fd);
       setResult(res);
@@ -168,12 +172,15 @@ export default function IngestPage() {
                     {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </label>
+                <div>
                 <label className="block text-caption">
                   <span className="font-semibold text-ink">Authority level</span>
-                  <select value={authority} onChange={(e) => setAuthority(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9">
-                    {[1, 2, 3, 4, 5].map((l) => <option key={l} value={l}>L{l}</option>)}
+                  <select value={level} onChange={(e) => setAuthority(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9">
+                    {levels.map((l) => <option key={l} value={l}>L{l}</option>)}
                   </select>
                 </label>
+                {!canAssert && <p className="mt-1 text-label text-muted">Levels 1 to 3 need the reliability or admin role.</p>}
+                </div>
                 <label className="block text-caption">
                   <span className="font-semibold text-ink">Asset link <span className="font-normal text-muted">(optional)</span></span>
                   <input value={assetId} onChange={(e) => setAssetId(e.target.value)} placeholder="EQ-101" className="mt-1 min-h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-body sm:min-h-9" />
@@ -224,6 +231,13 @@ export default function IngestPage() {
                 ? "This exact file is already in the vault, so it was not stored again."
                 : "Stored unchanged and queued for extraction. Progress updates on the right."}
             </p>
+            {result.authority_capped && (
+              <p role="status" data-testid="ingest-authority-capped" className="mt-3 rounded-lg border border-line bg-surface-2 p-3 text-caption text-ink">
+                <span className="font-semibold">Authority lowered.</span> You asked for L{result.authority_requested}; it was
+                stored as L{result.authority_level}. Levels 1 to 3 can only be asserted by a reliability engineer or admin,
+                who can re-classify it.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={`/documents/${result.document_id}`} className="text-caption text-accent underline hover:no-underline">Open document ↗</Link>
               {docType === "pid_drawing" && (

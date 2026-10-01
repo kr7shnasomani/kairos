@@ -17,7 +17,12 @@ set -euo pipefail
 BASE="${KAIROS_URL:-http://localhost:3000}"
 API="${KAIROS_API_URL:-http://localhost:8000}"
 EMAIL="${KAIROS_EMAIL:-admin@kairos.local}"
-PASSWORD="${KAIROS_PASSWORD:-KairosAdmin123!}"
+# The admin password lives in .env (gitignored), never in this file.
+PASSWORD="${KAIROS_PASSWORD:-${KAIROS_SEED_PASSWORD_ADMIN:-}}"
+if [ -z "$PASSWORD" ] && [ -f "$(dirname "$0")/../.env" ]; then
+  PASSWORD=$(grep -E '^KAIROS_SEED_PASSWORD_ADMIN=' "$(dirname "$0")/../.env" | head -1 | cut -d= -f2-)
+fi
+[ -n "$PASSWORD" ] || { echo "Set KAIROS_PASSWORD or KAIROS_SEED_PASSWORD_ADMIN (see .env.example)" >&2; exit 2; }
 OUT="${OUT_DIR:-$(cd "$(dirname "$0")/.." && pwd)/frontend/public/shots}"
 
 # 16:9 at the app's design width, captured at 2x so it stays sharp on retina.

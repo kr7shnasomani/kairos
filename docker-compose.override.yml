@@ -62,7 +62,7 @@ services:
     build:
       target: builder
     ports:
-      - "8090:8090"
+      - "127.0.0.1:8090:8090"   # loopback only: the connector forwards to the API as admin
     volumes:
       - ./backend/connectors:/app
     command: ["go", "run", "./cmd/connector/..."]
@@ -73,33 +73,33 @@ services:
   # with a plain `docker compose up` they are inert.
   kairos-neo4j:
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
 
   kairos-qdrant:
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
 
   kairos-elasticsearch:
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9300:9300"
 
   kairos-redis:
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   kairos-temporal:
     ports:
-      - "7233:7233"
+      - "127.0.0.1:7233:7233"
 
   kairos-temporal-ui:
     ports:
-      - "8088:8080"
+      - "127.0.0.1:8088:8080"
 
   kairos-opa:
     ports:
-      - "8181:8181"
+      - "127.0.0.1:8181:8181"
 
 

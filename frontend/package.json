@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@xyflow/react": "^12.6.4",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.9.2"
@@ -28,7 +28,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",

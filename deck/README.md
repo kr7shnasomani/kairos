@@ -67,8 +67,8 @@ Two files, both read-only: `../docs/DIAGRAMS.md` for the architecture diagram
 and `../frontend/public/logo.png` for the mark. Nothing outside this folder is
 written.
 
-## Event-specific content
+## Brief-specific content
 
 Only the cover: the problem title, the three domain chips and the Domain field.
-Nothing anywhere names an organiser or an event, so the deck travels between
-submissions with one slide edited.
+Nothing anywhere names an organiser or an event, so the deck is reused
+across briefs with one slide edited.

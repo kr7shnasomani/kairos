@@ -235,6 +235,9 @@ class EventBusService:
 
         return compound_id
 
+    def _dedup_key(self, asset_id: str, event_type: str, business_id: str | None) -> str:
+        return f"kairos:dedup:{event_type}:{business_id or asset_id}"
+
     async def is_duplicate(
         self,
         asset_id: str,
@@ -242,8 +245,9 @@ class EventBusService:
         business_id: str | None = None,
     ) -> bool:
         """
-        Checks if a semantically identical event was published within the dedup window.
-        Dedup window default: 10 minutes (DEDUP_WINDOW_MINUTES).
+        True if a semantically identical event finished ingesting inside the dedup window
+        (DEDUP_WINDOW_MINUTES, default 10). Read-only: a caller records the event with `mark_seen`
+        once it has succeeded.
 
         `business_id` (work_order_id, ptw_id) scopes the key when the event carries one. The
         architecture asks dedup to collapse "the same real-world event arriving from multiple
@@ -251,10 +255,16 @@ class EventBusService:
         on one asset* into one, and the second technician never receives a brief. On a turnaround,
         two permits for the same asset inside ten minutes is routine, not a duplicate.
         """
-        scope = business_id or asset_id
-        dedup_key = f"kairos:dedup:{event_type}:{scope}"
-        exists = await self.redis.exists(dedup_key)
-        if not exists:
-            ttl = self.settings.DEDUP_WINDOW_MINUTES * 60
-            await self.redis.setex(dedup_key, ttl, "1")
-        return bool(exists)
+        return bool(await self.redis.exists(self._dedup_key(asset_id, event_type, business_id)))
+
+    async def mark_seen(self, asset_id: str, event_type: str, business_id: str | None = None) -> None:
+        """Records an event as ingested. Called last, so a failed ingest stays retryable: marking
+        at check time turned a connector's retry after a 500 into "deduplicated" and lost the
+        event, and with it a critical PTW brief.
+
+        ponytail: two identical events racing inside one request's runtime can both run. The
+        insert is idempotent on event_id and the brief cool-down absorbs the twin; a per-event
+        lock is the upgrade if a duplicate critical brief ever matters.
+        """
+        ttl = self.settings.DEDUP_WINDOW_MINUTES * 60
+        await self.redis.set(self._dedup_key(asset_id, event_type, business_id), "1", ex=ttl)

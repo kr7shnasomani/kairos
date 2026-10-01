@@ -124,12 +124,21 @@ def _brief_recipients(current_user: dict) -> list[str]:
     """Recipient ids a user may read: themselves plus their **site-wide** address
     (`site-{site_id}`). Site-wide briefs carry `recipient_user_id = site-{site_id}` and
     would otherwise be unopenable by any individual user. Mirrors the list endpoint's
-    `.or_()` scoping so detail/ack agree with the list."""
+    `.in_()` scoping so detail/ack agree with the list."""
     recipients = [current_user.get("user_id", "")]
     site_id = current_user.get("site_id", "")
     if site_id:
         recipients.append(f"site-{site_id}")
     return recipients
+
+
+def _may_read(brief: dict, current_user: dict) -> bool:
+    """Recipient (themselves or their site address), or any staff role for a PTW brief: a permit is a
+    posted safety document, not private correspondence (see `get_brief`)."""
+    return brief.get("recipient_user_id") in _brief_recipients(current_user) or (
+        bool(brief.get("requires_countersignature"))
+        and current_user.get("role") in {"engineer", "reliability", "admin"}
+    )
 
 
 @router.get("/", summary="Get pending briefs for the current user")
@@ -152,7 +161,6 @@ async def get_my_briefs(
     gov = await bus.get_governor_state(user_id)
 
     site_id = current_user.get("site_id", "")
-    site_recipient = f"site-{site_id}" if site_id else None
 
     query = (
         supabase.table("briefs")
@@ -163,7 +171,9 @@ async def get_my_briefs(
             "delivered_at, acknowledged_at, acknowledged_by, countersigned_by, countersigned_at, "
             "delivery_frozen, created_at"
         )
-        .or_(f"recipient_user_id.eq.{user_id},recipient_user_id.eq.{site_recipient}" if site_recipient else f"recipient_user_id.eq.{user_id}")
+        # `.in_`, not an `.or_()` f-string: `site_id` is a token claim, and a value such as
+        # `X,recipient_user_id.neq.x` inside a PostgREST filter string adds a condition of its own.
+        .in_("recipient_user_id", _brief_recipients(current_user))
         .order("created_at", desc=True)
         .limit(min(limit * _INBOX_FETCH_MULTIPLIER, _INBOX_FETCH_CAP))
     )
@@ -287,12 +297,7 @@ async def get_brief(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brief '{brief_id}' not found")
 
     brief = result.data[0]
-    is_recipient = brief.get("recipient_user_id") in _brief_recipients(current_user)
-    is_readable_permit = (
-        bool(brief.get("requires_countersignature"))
-        and current_user.get("role") in {"engineer", "reliability", "admin"}
-    )
-    if not (is_recipient or is_readable_permit):
+    if not _may_read(brief, current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brief '{brief_id}' not found")
     # Signers are stored as auth UUIDs; the sign-off panel shows who signed, not an opaque id.
     names = await display_names(supabase, [brief.get("acknowledged_by"), brief.get("countersigned_by")])
@@ -319,7 +324,7 @@ async def ack_brief(
 
     result = await asyncio.to_thread(
         lambda: supabase.table("briefs")
-        .select("brief_id, requires_countersignature")
+        .select("brief_id, requires_countersignature, acknowledged_by, acknowledged_at")
         .eq("brief_id", brief_id)
         .in_("recipient_user_id", _brief_recipients(current_user))
         .limit(1)
@@ -330,6 +335,12 @@ async def ack_brief(
 
     brief_row = result.data[0]
     requires_cs = brief_row.get("requires_countersignature", False)
+    # An acknowledgement is final. Re-acking overwrote `acknowledged_by` (and, for a PTW, could swap
+    # the acknowledger the countersigner is checked against) and replaced the signed audit row.
+    if brief_row.get("acknowledged_by") or brief_row.get("acknowledged_at"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"Brief '{brief_id}' is already acknowledged."
+        )
 
     update: dict = {"acknowledged_by": user_id}
     if not requires_cs:
@@ -480,6 +491,16 @@ async def submit_feedback(
     cited in the brief. Task 16 attribution worker performs the actual adjustment.
     """
     user_id = current_user.get("user_id", "")
+    # Same visibility rule as reading the brief: feedback on a brief you cannot open is a 404.
+    found = await asyncio.to_thread(
+        lambda: supabase.table("briefs")
+        .select("brief_id, recipient_user_id, requires_countersignature")
+        .eq("brief_id", brief_id)
+        .limit(1)
+        .execute()
+    )
+    if not found.data or not _may_read(found.data[0], current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brief {brief_id} not found.")
     try:
         await asyncio.to_thread(
             lambda: supabase.table("brief_feedback").insert({

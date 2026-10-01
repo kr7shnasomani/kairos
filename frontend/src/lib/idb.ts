@@ -1,8 +1,7 @@
 // IndexedDB write queue — stores failed POSTs for offline replay.
 // Only called client-side; no-ops when indexedDB is unavailable (SSR).
-import { getToken, refreshAccessToken, API_BASE } from "./api";
+import { getToken, refreshAccessToken, tokenUserId, API_BASE, QUEUE_DB as DB } from "./api";
 
-const DB = "kairos-queue";
 const STORE = "write-queue";
 
 interface QueuedWrite {
@@ -10,6 +9,8 @@ interface QueuedWrite {
   url: string;
   method: string;
   body: string;
+  /** `sub` of the user who queued it. A write is only replayed for that same user. */
+  user?: string;
 }
 
 function open(): Promise<IDBDatabase> {
@@ -28,7 +29,12 @@ export async function enqueueWrite(path: string, method: string, body: unknown):
   try {
     await new Promise<void>((res, rej) => {
       const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).add({ url: `${API_BASE}${path}`, method, body: JSON.stringify(body) });
+      tx.objectStore(STORE).add({
+        url: `${API_BASE}${path}`,
+        method,
+        body: JSON.stringify(body),
+        user: tokenUserId(getToken()),
+      });
       tx.oncomplete = () => res();
       tx.onerror = () => rej(tx.error);
     });
@@ -87,8 +93,17 @@ export async function flushQueue(): Promise<{ replayed: number; failed: number }
     let replayed = 0;
     let failed = 0;
     let refreshTried = false;
+    // Nobody signed in: keep everything for whoever signs in next (their own entries only).
+    if (!getToken()) return { replayed, failed: items.length };
+    const me = tokenUserId(getToken());
 
     for (const item of items) {
+      // Queued by someone else (or by a build that recorded no user): replaying it would file it
+      // under the current user, so it is dropped, never sent.
+      if ((item.user ?? null) !== me) {
+        await remove(item.id!);
+        continue;
+      }
       try {
         let r = await replay(item);
         // A token that expired while offline 401s every item — refresh once per flush.

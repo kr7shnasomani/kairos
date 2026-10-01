@@ -9,9 +9,17 @@ from pydantic import BaseModel, Field, computed_field
 
 
 class SynthesizeRequest(BaseModel):
-    query: str
-    context: list[dict[str, Any]] = Field(default_factory=list, description="Retrieved SearchResult dicts")
-    query_category: str | None = Field(None, description="Safety-critical category key if applicable")
+    # Bounded: one request can fan out to several paid provider calls (security review M11).
+    query: str = Field(..., max_length=2000)
+    # Accepted and IGNORED. The server retrieves its own evidence and derives the safety category
+    # itself, because a gate that reads authority, confidence and category from the request body can
+    # be cleared by whoever writes the request (security review H4). Kept in the schema so existing
+    # clients, which still send both, keep working.
+    context: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=50, description="Ignored. Evidence is retrieved server-side."
+    )
+    query_category: str | None = Field(None, description="Ignored. The category is derived server-side.")
+    as_of: str | None = Field(None, max_length=64, description="ISO8601 time-travel point for retrieval")
 
 
 class SynthesizeResponse(BaseModel):
@@ -50,7 +58,7 @@ class AnswerFeedbackRequest(BaseModel):
 class RCAPackRequest(BaseModel):
     asset_id: str
     incident_date: datetime
-    failure_code: str
+    failure_code: str = Field(..., max_length=200)
     include_quarantine: bool = False
 
 

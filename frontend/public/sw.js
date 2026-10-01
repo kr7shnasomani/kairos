@@ -1,11 +1,14 @@
 // Kairos Service Worker — shell cache + selective API data cache.
 // Navigations: network-first (fresh HTML + current chunk hashes always win online;
 // cache is offline fallback only). Static assets: stale-while-revalidate.
-// API GETs: cache-first-with-revalidate for offline reads. Write queue lives in idb.ts.
+// API GETs: network-first; the cache is an offline fallback only, and is keyed per signed-in user
+// (the Bearer token's `sub`) so one user's data is never served to another. Write queue lives in idb.ts.
+// Sign-out posts {type:"LOGOUT"}, which deletes every cache.
 // Registered in production only (app-shell.tsx) — in dev a cached shell fights HMR.
 
 const SHELL = "kairos-shell-v2";
-const DATA = "kairos-data-v1";
+// v2: v1 held unkeyed, cache-first entries that any user could be served.
+const DATA = "kairos-data-v2";
 
 // API paths worth caching offline (GET only)
 const DATA_PATTERNS = ["/briefs", "/assets", "/elicitation"];
@@ -25,6 +28,30 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// `sub` of the JWT the page sent, or null when there is none to key the cache on.
+function bearerSub(request) {
+  const auth = request.headers.get("Authorization") || "";
+  if (!auth.startsWith("Bearer ")) return null;
+  try {
+    const payload = auth.slice(7).split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(payload)).sub || null;
+  } catch {
+    return null;
+  }
+}
+
+// One entry per (user, URL): the Cache API keys by URL alone, so the user goes into the key.
+function cacheKey(url, sub) {
+  return new Request(`${self.location.origin}/__api-cache/${encodeURIComponent(sub)}/${encodeURIComponent(url)}`);
+}
+
+// Sign-out: forget every cached page and API response, whatever user they belonged to.
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "LOGOUT") {
+    e.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
+  }
+});
+
 self.addEventListener("fetch", (e) => {
   const { request } = e;
   if (request.method !== "GET") return;
@@ -36,19 +63,21 @@ self.addEventListener("fetch", (e) => {
 
   if (isApi) {
     const shouldCache = DATA_PATTERNS.some((p) => url.pathname.includes(p));
-    if (!shouldCache) return; // pass through uncached API calls
+    const sub = bearerSub(request);
+    if (!shouldCache || !sub) return; // uncached API calls, and anything not tied to a user, pass through
+    const key = cacheKey(request.url, sub);
     e.respondWith(
-      caches.open(DATA).then((cache) =>
-        cache.match(request).then((cached) => {
-          const fresh = fetch(request)
-            .then((res) => {
-              if (res.ok) cache.put(request, res.clone());
-              return res;
-            })
-            .catch(() => cached ?? Response.error());
-          return cached ?? fresh;
-        }),
-      ),
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(DATA).then((cache) => cache.put(key, copy));
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.open(DATA).then((cache) => cache.match(key)).then((cached) => cached ?? Response.error()),
+        ),
     );
     return;
   }

@@ -310,6 +310,16 @@ class GraphService:
                 created_at=datetime.now(UTC).isoformat(),
             )
 
+    @staticmethod
+    def topology_node_id(document_id: str, element_id: str) -> str:
+        """Graph node id of a P&ID element, scoped to its drawing.
+
+        The vision model numbers elements per drawing ("TOPO-EQ-001"), so a bare id MERGEs two
+        drawings onto one Concept and lets one document's edges, labels and verification attach to
+        another's elements. Supabase rows keep the raw element id; only the graph node is prefixed.
+        """
+        return f"{document_id}:{element_id}"
+
     async def merge_concept_node(self, concept_id: str, props: dict[str, Any] | None = None) -> None:
         """MERGE a Concept node into Neo4j (idempotent). Used for topology elements, regulations, etc."""
         cypher = """
@@ -662,13 +672,18 @@ class GraphService:
         rather than creating a new one — element-by-element, which is what the architecture
         requires before topology may be treated as canonical.
 
+        `element_id` is the raw drawing-local id. Drawings ingested before node ids were scoped by
+        document carry the bare id, so both forms are matched; the edge is still pinned to this
+        document, so the legacy form cannot touch another drawing's edge.
+
         Returns the number of edges updated (0 if the element has no edge, e.g. the edge write
         failed during extraction).
         """
         cypher = """
         MATCH (d:Document {document_id: $document_id})
               -[r:KNOWLEDGE_EDGE {relationship_type: 'CONTAINS_TOPOLOGY_ELEMENT'}]->
-              (c:Concept {concept_id: $element_id})
+              (c:Concept)
+        WHERE c.concept_id IN [$node_id, $element_id]
         SET r.verification_status = $verification_status,
             r.verified_by = $verified_by,
             r.verified_at = datetime()
@@ -678,6 +693,7 @@ class GraphService:
             result = await session.run(
                 cypher,
                 document_id=document_id,
+                node_id=self.topology_node_id(document_id, element_id),
                 element_id=element_id,
                 verification_status=verification_status,
                 verified_by=verified_by,

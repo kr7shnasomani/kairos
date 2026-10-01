@@ -22,9 +22,9 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
 you will reset, never on the dataset you are about to demo or benchmark.
 
-### Tier 1 — service-free (524 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (837 tests, no stack, no secrets, no network)
 
-These need nothing running. This is what CI's `unit` job executes on every push.
+These need nothing running. This is what CI's `unit` job executes on every push. The container run is **786 passed and 3 skipped** (2026-10-01): the Docker test image mounts only `./backend`, `./tests` and `./db`, so the checks in `test_sec_infra.py` that read `infra/`, `docker-compose*.yml` and `.github/` skip there (they run on a full checkout, and in CI, which has the whole repo).
 
 ```bash
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \
@@ -35,10 +35,22 @@ attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,
 quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
 form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
 ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
-document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo}.py
+document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm}.py
 ```
 
-All **46** files, **524 tests** (2026-09-27). Recent additions:
+All **51** files, **837 tests** (counted 2026-10-01; matches the 51 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
+
+**Security pass, 2026-10-01: the five `test_sec_*.py` files.** Each is named for the review group it covers; all run against in-memory fakes, with nothing written to any store. Finding ids (H1, M4, ...) are the 2026-09-30 security review's, listed one per line in `implementation/status.md` § Accepted risks and deploy checklist.
+
+| File | Covers |
+|---|---|
+| `test_sec_auth.py` | Role and `site_id` come from `app_metadata` only and a self-edited `user_metadata` grants nothing (H1); the roles migration is dry-run by default and never overwrites (`scripts/migrate_roles_to_app_metadata.py`); constant-time internal key compare (L4); `APP_ENV` is normalised and only `development` is development (L5); the boot guard needs `MOC_WEBHOOK_SECRET` (H7); login, refresh and DB errors do not echo upstream text (L6); `POST /auth/logout` revokes and drops the cache (L1, server-side half); `/health/detailed` is gated while `/health/`, `/docs` and `/openapi.json` stay public (L7); the seeder refuses blank passwords and no seeded password is committed; display names ignore `user_metadata` |
+| `test_sec_authz.py` | `ingest_event` mapping, OPA grants and `_sensitive_actions` (H2); site scope on event reports, plant state, asset reads and create, events reads, audit pack (H3 route gate, M8); inspection `document_id` must be an `inspection_report` and the evidence confidence is capped (H3); acknowledgements use the token actor, are idempotent and 404/403 correctly, deviation-flag, tag-out and elicitation actors come from the token (M6); annotation corpus roles, dedup and rate limit (M7); off-boarding programmes limited to staff and the subject (M9); voice-upload size and path sanitising (M11, M12); inbox `.in_()` filter (M2); final acks and feedback visibility (L11); MoC webhook HMAC with timestamp, skew, raw body, fail-closed and replay (H7); OPA path and rate-limit exemption cannot be forged through `Host` |
+| `test_sec_documents.py` | Document type allow-list, safe filenames, `authority_capped` with the audit record, unknown asset, `occurred_at` bounds (H5, M12); normalised content type and forced-download signed URLs (L10); storage errors leak no text (L6); supersede gate: self, inactive replacement, role, MoC created once, approved applies, rejected blocks, operational documents immediate (H6); PDF page, DPI, pixel and spreadsheet ceilings and non-retryable `BadFile` (M11); confirmed-aliases-only pipeline (M13); per-document topology node ids (L12); broader PII patterns and late names (L9) |
+| `test_sec_infra.py` | RLS on every schema table and migration 017 covering the 14 late ones (M1); Caddy body cap and headers (M11); dev connector port bound to loopback and callers sending `X-Connector-Secret` (M14); third-party Actions pinned to commit SHAs (L15). Skips for the files the container does not mount |
+| `test_sec_llm.py` | Forged client `context` and `query_category` cannot clear the gate, the server retrieves its own evidence, bad `as_of` is 422, request bounds (H4, M11); the stream writes the audit row and `pending_moc` (M3); escaped document text and system-message rules, lowest `CONFIDENCE` wins, last `SOURCES_USED` wins, phantom citations and missing confidence refuse, RCA prompt escaping and citation filtering, NER default confidence below 0.7 (M4); formerly ungated wordings are classified, every named asset must be anchored, aliases resolve (M5); RCA pack site boundary (M8); NER honours the configured base URL (L8) |
+
+Existing files changed with it: `test_event_reorder.py` (a duplicate check never records the event, only `mark_seen` after a successful ingest does; `_store_event` inserts, accepts an identical retry, never overwrites another event; the pending-brief slot is per work order; a PTW never cancels another brief; the 4-hour cool-down is per trigger type), `test_authz_boundary.py`, `test_config_guardrail.py`, `test_query_category.py` and `test_synthesis_stream.py` (server-side evidence), plus the stack-tier `test_auth.py`, `test_health.py`, `test_ot_connector.py` and `conftest.py` (seed passwords from `.env`, connector secret).
 `test_alias_expansion.py` — a query naming a confirmed alias (P-101) also searches its canonical asset.
 `test_ner_fallback.py` — NIM NER calls are capped at 4 concurrent; a timeout or 5xx is retried but a 4xx
 is not; a long document is extracted in chunks and merged, and a failed chunk keeps the others while
@@ -113,7 +125,23 @@ service-free suites — every conformance test among them — never ran on a pus
 ```bash
 ```
 
+### Frontend and Go tests (outside the pytest list, not run by CI)
+
+**Frontend (vitest).** `docker compose run --rm --no-deps kairos-frontend npx vitest run` (see `FRONTEND.md` §14 for the memory caveat). Three files were added by the security pass:
+
+| File | Covers |
+|---|---|
+| `src/lib/security-headers.test.ts` (3) | `next.config.ts` ships CSP, nosniff, referrer and permissions policies on `/:path*`; the CSP allows off-site only the API origin and the YouTube embed and has no `unsafe-eval` in production; development adds `unsafe-eval`, and a bad API URL falls back to localhost (L2) |
+| `src/lib/service-worker.test.ts` (4) | Runs `public/sw.js` against a fake worker scope: an API read goes to the network first even when a cached copy exists, the cache is used only when the network fails and only for the same user, a request with no user to key on is not touched, and a `LOGOUT` message deletes every cache (M10) |
+| `src/lib/session-security.test.ts` (9) | Route params are `encodeURIComponent`-ed and `api.ts` has no unencoded interpolation left (L3); `clearSession` revokes server side, wipes caches, the queue DB and Copilot history and tells the service worker, while a forced expiry keeps the offline queue and caches; sign-out never blocks when the backend or browser APIs fail; queued writes record the user's `sub`, another user's writes are dropped instead of replayed, and the queue is untouched when nobody is signed in (M10, L1) |
+
+The existing ingest and supersede tests gained cases for the authority selector (levels 1 to 3 only for `reliability` and `admin`, H5), the "Authority lowered" notice, and the `pending_moc_approval` supersede state.
+
+**Go (`go test ./...`, or `make test-connectors` against a running stack).** `backend/connectors/cmd/connector/auth_test.go` (`TestRequireSecret`, `TestValidateConfig`, `TestReceiveWorkOrderBodyLimit`, `TestReceiveWorkOrderDoesNotEchoUpstream`) and `backend/connectors/internal/ot/client_test.go` (`TestPIQueryEscapesTagAndScrubsURL`) cover the `X-Connector-Secret` check, the boot refusal of missing or default secrets, the 1 MiB body cap, no upstream error echo, and PI tag escaping with the historian URL scrubbed from errors (M14, L14).
+
 ### Tier 2 — full integration suite (needs the stack)
+
+> **Stack-tier tests not yet updated for the 2026-10-01 rules.** `test_events.py` and `test_governance.py` (and any test that posts events as `field_worker`, supersedes a level 1 to 3 document in one call, or acknowledges an event it is not a recipient of) predate `ingest_event`, the supersede MoC gate, the 409 on a repeated acknowledgement and the `event_id` conflict rule. They write to cloud stores, so updating and re-running them is a separate decision (`status.md` § Security pass, step 6). Do not read a red result there as a regression until they are.
 
 ```bash
 # Full suite
@@ -145,7 +173,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 524 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 837 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud
@@ -169,7 +197,7 @@ gh secret set GROQ_API_KEY
 > Token Factory → NIM → OpenRouter → Gemini cascade, and elicitation calls the LLM. Gemini's free tier is a few hundred requests/day and
 > is shared with the benchmark harnesses, so a busy day of pushes exhausts it; once it 429s,
 > synthesis silently returns no answer and *measured answer quality collapses* (observed:
-> 24/25 → 13/25). Tier-1 gives 415 green tests with **zero** provider calls, which is the
+> 24/25 → 13/25). Tier-1 gives 837 service-free tests with **zero** provider calls, which is the
 > signal CI should be providing. Enable tier 2 only for a deliberate pre-release run, against
 > a throwaway Supabase project.
 
@@ -239,9 +267,7 @@ tests/                        ← project root (NOT inside backend/)
 pytest.ini                    ← project root
 ```
 
-Suite size: **576 tests collected** across 50 files (`pytest tests/ --collect-only`, 2026-08-23).
-The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded** — 164 tests
-have landed since. **There is no current full-suite pass count**: re-run tier 2 against local stores
+Suite size: **576 tests collected** across 50 files for the full suite at `pytest tests/ --collect-only` on 2026-08-23; it has grown since (the service-free tier alone is now 837 tests in 51 files). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
 to get one, and do not quote 412 as a pass figure for the present tree. **1 known transient flake**
 (`test_briefs.py::test_attribution_worker_queues_recheck` — a work-order POST occasionally 500s under
 concurrent load; passes deterministically in isolation).
@@ -377,7 +403,7 @@ have to hit the production project.
 |---|---|
 | `test_health_returns_200` | `GET /health` → 200 |
 | `test_health_response_shape` | Response has `status`, `timestamp` fields |
-| `test_health_detailed` | `GET /health/detailed` → all 5 service pings succeed |
+| `test_health_detailed` | `GET /health/detailed` as `admin_client` (the route needs a sign-in) → all 5 service pings succeed |
 
 ### `test_auth.py` — Authentication (Layer 0, 8 tests)
 | Test | What it verifies |
@@ -684,13 +710,14 @@ Hits the **Go service at port 8090** (`http://kairos-backend-go:8090` inside Doc
 
 Seeded by `docker exec kairos-backend-api python scripts/seed_users.py`:
 
-| Email | Password | Role |
+| Email | Password (env var in `.env`) | Role |
 |---|---|---|
-| `admin@kairos.local` | `KairosAdmin123!` | admin |
-| `engineer@kairos.local` | `KairosEngineer123!` | engineer |
-| `field_worker@kairos.local` | `KairosField123!` | field_worker |
-| `reliability@kairos.local` | `KairosReliability123!` | reliability |
-| `compliance@kairos.local` | `KairosCompliance123!` | compliance |
+| `admin@kairos.local` | `KAIROS_SEED_PASSWORD_ADMIN` | admin |
+| `engineer@kairos.local` | `KAIROS_SEED_PASSWORD_ENGINEER` | engineer |
+| `field_worker@kairos.local` | `KAIROS_SEED_PASSWORD_FIELD_WORKER` | field_worker |
+| `reliability@kairos.local` | `KAIROS_SEED_PASSWORD_RELIABILITY` | reliability |
+| `compliance@kairos.local` | `KAIROS_SEED_PASSWORD_COMPLIANCE` | compliance |
+| `demo@kairos.local` | `KAIROS_SEED_PASSWORD_DEMO` | demo |
 
 > **Admin client in tests:** `admin_client` does NOT use Supabase JWT. It uses `INTERNAL_API_KEY` (`kairos-internal-dev-key`) which never expires. This eliminates mid-run JWT expiry failures on long test suite runs.
 

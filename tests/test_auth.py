@@ -1,10 +1,10 @@
 """Auth — Task 19: JWT exchange, refresh, /me, role enforcement."""
 
-from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD
+from tests.conftest import ADMIN_EMAIL, seed_password
 
 
 async def test_login_admin(anon_client):
-    r = await anon_client.post("/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    r = await anon_client.post("/auth/login", json={"email": ADMIN_EMAIL, "password": seed_password("admin")})
     assert r.status_code == 200
     body = r.json()
     assert "access_token" in body
@@ -50,7 +50,7 @@ async def test_invalid_token_rejected(anon_client):
 
 
 async def test_refresh_token(anon_client):
-    login = await anon_client.post("/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    login = await anon_client.post("/auth/login", json={"email": ADMIN_EMAIL, "password": seed_password("admin")})
     assert login.status_code == 200
     refresh_token = login.json()["refresh_token"]
 

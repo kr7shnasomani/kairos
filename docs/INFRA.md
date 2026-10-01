@@ -72,13 +72,17 @@ All services run as Docker containers. Start with `make dev` (or `docker compose
 |---------|-----|
 | Frontend | http://localhost:3000 |
 | FastAPI docs | http://localhost:8000/docs |
-| FastAPI health | http://localhost:8000/health/detailed |
+| FastAPI health | http://localhost:8000/health/ (liveness, open). `/health/detailed` needs a signed-in user's Bearer token |
 | Temporal UI | http://localhost:8088 |
 | Neo4j Browser | Aura console (cloud) — or http://localhost:7474 with `--profile local-stores` |
 | Qdrant Dashboard | Qdrant Cloud console — or http://localhost:6333/dashboard with `--profile local-stores` |
 | Grafana / Tempo | Grafana Cloud (hosted — traces + dashboards) |
 | OPA | http://localhost:8181/health |
-| Go Connector | http://localhost:8090/health |
+| Go Connector | http://localhost:8090/health (every other route needs `X-Connector-Secret`) |
+
+**Dev ports bind to loopback.** `docker-compose.override.yml` publishes the datastore, Temporal, OPA and Go connector ports as `127.0.0.1:<port>:<port>`, so a dev machine on a shared network does not expose them (the connector forwards to the API as admin). They are still reachable from the host at `localhost`. The base file publishes only 3000 and, on `127.0.0.1`, 8000.
+
+**`CONNECTOR_SHARED_SECRET`** (default `kairos-connector-dev-secret` in `.env.example` and compose) is passed to the API, the Celery worker and the connector. The connector refuses to start without it, and outside `APP_ENV=development` refuses the default.
 
 ---
 
@@ -268,7 +272,7 @@ docker exec kairos-backend-api python scripts/seed_regulations.py
 # Run tests — full suite (needs the stack up; use local stores, never cloud)
 docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120
 
-# Run the service-free tests with NO stack running at all (524 tests, 46 files, no secrets, no network).
+# Run the service-free tests with NO stack running at all (837 tests, 51 files, no secrets, no network).
 # This is what CI's tier-1 `unit` job runs. Re-measured 2026-09-15. The list must match AGENTS.md,
 # docs/TESTS.md and .github/workflows/tests.yml.
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \
@@ -279,7 +283,7 @@ attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,
 quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
 form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
 ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
-document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo}.py
+document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm}.py
 
 # Lint the backend exactly as CI does (pinned ruff + backend/ruff.toml)
 docker run --rm -v "$(pwd)/backend:/b" -w /b ghcr.io/astral-sh/ruff:0.16.0 check .
@@ -297,8 +301,8 @@ docker logs kairos-backend-api 2>&1 | tail -30
 docker logs kairos-celery-worker 2>&1 | tail -30
 docker logs kairos-temporal-activity-worker 2>&1 | tail -20
 
-# Trigger EAM sync (Go connector)
-curl -X POST http://localhost:8090/eam/sync
+# Trigger EAM sync (Go connector; the secret is the CONNECTOR_SHARED_SECRET value from .env)
+curl -X POST -H "X-Connector-Secret: $CONNECTOR_SHARED_SECRET" http://localhost:8090/eam/sync
 ```
 
 ### After `make nuke`
@@ -312,5 +316,5 @@ make dev → make init-all → make seed → make load-dataset
 The first minutes after `make dev` are CPU-bound (Turbopack compiling each route on first visit,
 Elasticsearch booting, cold Aura connections). OPA decisions then take >2 s, `_ask_opa` times out, and a page
 that fires several reads at once trips the frontend's 4 s budget ("signal timed out"). Wait for
-`curl -s localhost:8000/health/detailed` to report `"status":"ready"`, then open `/management` once before
+`/health/detailed` (needs a Bearer token now; the Go connector's and the API's own `/health/` need none) to report `"status":"ready"`, then open `/management` once before
 demoing. Nothing is broken; a retry succeeds once warm.

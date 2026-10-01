@@ -9,7 +9,8 @@ OT_BASE_URL = os.getenv("OT_CONNECTOR_URL", "http://localhost:8090")
 
 @pytest.fixture
 async def ot_client():
-    async with httpx.AsyncClient(base_url=OT_BASE_URL, timeout=15.0) as client:
+    headers = {"X-Connector-Secret": os.getenv("CONNECTOR_SHARED_SECRET", "kairos-connector-dev-secret")}
+    async with httpx.AsyncClient(base_url=OT_BASE_URL, timeout=15.0, headers=headers) as client:
         yield client
 
 

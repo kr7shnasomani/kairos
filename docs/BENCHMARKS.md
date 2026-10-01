@@ -62,6 +62,8 @@ and slower — a poor fit for a platform whose pitch is reproducibility and prov
 - **Per-question routing** — each question pulls context from the *right* source: hybrid `/search`,
   the asset's graph `/knowledge`, and/or `/aliases`. Not everything is forced through `/search`.
 - **Retrieval** — keyword-in-context signal (does the fact actually reach the synthesis context?).
+
+> **Caveat since 2026-10-01: routing no longer feeds synthesis.** `POST /search/synthesize` now retrieves its own evidence (top 6 of the hybrid search, plus verified P&ID topology for isolation questions) and **ignores** the `context` the harness sends (security review H4: the safety gate must not read evidence from the request). The harness still builds the routed context for the retrieval signal above, but the synthesized answer is judged on the server's own retrieval, so a question whose fact lives only in a graph `/knowledge` or `/aliases` item can now score as retrieved yet fail to answer. `run_benchmark.py` has not been changed or re-run for this. **Every answer-quality figure in this file was measured before the change; re-run before quoting one**.
 - **Answer quality** — the synthesized answer must **state the required fact(s) without negating them**:
   `must_all` = every token (exact / multi-part facts like part numbers, pressures, valve sets); `answer_any`
   = any correct-answer token (comparative questions whose correct keyword differs from the retrieval keyword);

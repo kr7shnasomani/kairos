@@ -3,7 +3,7 @@
 
 <div align="center">
 
-[Live Demo](https://kairos-deterium.vercel.app) · [Problem Statement](./docs/problem_statement/) · [Solution](./docs/ARCHITECTURE.md) · [Demo Video](https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view) · [Documentation](./docs/)
+[Live Demo](https://kairos-deterium.vercel.app) · [Solution](./docs/ARCHITECTURE.md) · [Demo Video](https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view) · [Documentation](./docs/)
 
 A 13-layer platform organised into five planes: **perception, knowledge, governance, retrieval, and delivery**. A FastAPI core orchestrates five datastores, durable Temporal workflows, Celery workers, and Go OT connectors, with a Next.js interface on top.
 
@@ -39,7 +39,7 @@ A 13-layer platform organised into five planes: **perception, knowledge, governa
 
 ## Overview
 
-Asset-intensive facilities, such as refineries, plants, pipelines, and power stations, run on knowledge scattered across a dozen disconnected systems. P&IDs live in one archive, maintenance history in another, standard operating procedures in a third, inspection records and regulatory filings elsewhere again. A technician standing in front of a failing pump cannot see that the same seal failed twice before, that the OEM revised the spec eighteen months ago, or that an isolation valve is overdue for inspection. The most dangerous gaps are the ones nobody knows to query, and a quarter of the experienced engineers who hold that context in their heads are retiring within the decade.
+Asset-intensive facilities, such as refineries, plants, pipelines, and power stations, run on knowledge scattered across disconnected systems. P&IDs live in one archive, maintenance history in another, standard operating procedures in a third, inspection records and regulatory filings elsewhere again. A technician standing in front of a failing pump cannot see that the same seal failed twice before, that the OEM revised the spec eighteen months ago, or that an isolation valve is overdue for inspection. The most dangerous gaps are the ones nobody knows to query, and the people who hold that context in their heads are retiring faster than they are being replaced.
 
 **Kairos** turns that fragmented, tribal knowledge into a single **governed, temporal knowledge graph** and delivers the right information to the right person at the exact moment it is needed, doing so *proactively* with a source citation behind every claim. It ingests heterogeneous documents, extracts and links their entities, records how every fact changes over time, and surfaces answers, briefs, root-cause analyses, and compliance evidence on any device.
 
@@ -149,7 +149,7 @@ To reset to a clean, deterministic state at any time: `make nuke && make dev && 
 
 > Supabase, Neo4j, Qdrant, and Grafana are **cloud** services (credentials in `.env`). The local Neo4j/Qdrant containers only run with `docker compose --profile local-stores up` (`:7474` / `:6333`). Secrets use Supabase Vault.
 
-**Demo users** (seeded by `make seed`, pre-fillable on the login screen):
+**Demo users** (seeded by `make seed`, sign in at `/login`):
 
 | Email | Role | Sees |
 |---|---|---|
@@ -159,7 +159,10 @@ To reset to a clean, deterministic state at any time: `make nuke && make dev && 
 | `compliance@kairos.local` | compliance | read-only: compliance cockpit + audit trail |
 | `field_worker@kairos.local` | field_worker | mobile-first field app (hamburger navigation) |
 
-Passwords are in `backend/scripts/seed_users.py`. The personas are worth walking separately —
+Passwords are not in the repository. Set one per role in your gitignored `.env`
+(names in `.env.example`) before `make seed`, which refuses to run without them:
+`KAIROS_SEED_PASSWORD_ADMIN`, `KAIROS_SEED_PASSWORD_ENGINEER`, `KAIROS_SEED_PASSWORD_FIELD_WORKER`,
+`KAIROS_SEED_PASSWORD_RELIABILITY`, `KAIROS_SEED_PASSWORD_COMPLIANCE`. The personas are worth walking separately —
 role-based governance is the point of the product, and it only *shows* when you log in as someone
 who cannot do everything: an engineer resolves conflicts but is **refused** quarantine promotion,
 while reliability is allowed.
@@ -175,7 +178,7 @@ kairos/
 ├── frontend/           # Next.js point-of-action web app (field mobile + desktop)
 ├── benchmark/          # Retrieval/answer-quality harness + deterministic grader (results in RESULTS.md)
 ├── dataset/            # Golden demo + benchmark corpus (docs · events · telemetry)
-├── db/                 # Neo4j Cypher schema · consolidated Supabase schema · maintenance SQL
+├── db/                 # Neo4j Cypher schema · consolidated Supabase schema · pending migrations · maintenance SQL
 ├── docs/               # Product & technical documentation (this folder)
 ├── fixtures/           # Backend mock-by-design data (P&ID topology fallback, test audio)
 ├── infra/              # Caddy (HTTPS) · OPA policies · Temporal config · Grafana Cloud

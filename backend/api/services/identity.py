@@ -29,7 +29,10 @@ async def display_names(supabase, user_ids) -> dict[str, str]:
 
 
 async def display_name(supabase, user_id: str | None) -> str | None:
-    """Auth user's `name` metadata, else email; `None` when the id is not an auth user.
+    """Auth user's `name` from `app_metadata`, else the email local part; `None` when not an auth user.
+
+    `user_metadata` is editable by the user (PUT /auth/v1/user), so a name read from it would let
+    anyone appear as someone else on a PTW sign-off. `app_metadata` is service-role-only.
 
     Loaders and connectors write non-UUID ids ("demo-loader", "eam-sync-service"), so a failed lookup
     is normal and must never fail the read that asked for it.
@@ -40,5 +43,5 @@ async def display_name(supabase, user_id: str | None) -> str | None:
         user = await asyncio.to_thread(lambda: supabase.auth.admin.get_user_by_id(user_id).user)
     except Exception:  # noqa: BLE001 — display nicety only
         return None
-    meta = user.user_metadata or {}
-    return meta.get("name") or user.email
+    meta = user.app_metadata or {}
+    return meta.get("name") or (user.email or "").split("@")[0] or None

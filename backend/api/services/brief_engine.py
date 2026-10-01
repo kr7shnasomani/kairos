@@ -521,8 +521,10 @@ class BriefEngine:
     async def deliver(self, brief: Brief, redis) -> str:
         """
         Saves brief to Supabase and publishes to Redis briefs stream.
-        Cool-down: if a brief for the same (recipient, asset) was delivered within
-        the last 4 hours, skips delivery and returns the existing brief_id.
+        Cool-down: if a brief of the same kind (`trigger_event_type`) for the same (recipient,
+        asset) was delivered within the last 4 hours, skips delivery and returns the existing
+        brief_id. Kind matters: the "failed twice" and failed-inspection briefs are not repeats of
+        the work-order brief that preceded them, and must not be swallowed by it.
         PTW briefs (priority='critical') always bypass cool-down.
         """
         if brief.asset_id and brief.priority != "critical":
@@ -532,6 +534,7 @@ class BriefEngine:
                 .select("brief_id")
                 .eq("recipient_user_id", brief.recipient_user_id)
                 .eq("asset_id", brief.asset_id)
+                .eq("trigger_event_type", brief.trigger_event_type)
                 .gte("created_at", cooldown_floor)
                 .limit(1)
                 .execute()

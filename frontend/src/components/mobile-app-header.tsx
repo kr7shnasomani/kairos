@@ -2,7 +2,8 @@ import { Icon } from "@/components/icon";
 type MobileAppHeaderProps = {
   onOpenMenu: () => void;
   onOpenSearch: () => void;
-  onCreate: () => void;
+  /** Absent for read-only roles: no create button. */
+  onCreate?: () => void;
   onOpenUser: () => void;
   userInitial: string;
 };
@@ -17,7 +18,9 @@ export function MobileAppHeader({ onOpenMenu, onOpenSearch, onCreate, onOpenUser
         <Icon name="magnifying-glass" className="size-4 shrink-0" />
         <span className="min-w-0 truncate">Search…</span>
       </button>
-      <button type="button" onClick={onCreate} aria-label="Ingest document" className="fill-sweep grid size-10 shrink-0 place-items-center bg-accent text-on-accent sm:size-11"><Icon name="plus" className="relative z-10 size-5" /></button>
+      {onCreate && (
+        <button type="button" onClick={onCreate} aria-label="Ingest document" className="fill-sweep grid size-10 shrink-0 place-items-center bg-accent text-on-accent sm:size-11"><Icon name="plus" className="relative z-10 size-5" /></button>
+      )}
       <button type="button" onClick={onOpenUser} aria-label="Open user menu" className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-label font-bold text-muted">{userInitial}</button>
     </header>
   );

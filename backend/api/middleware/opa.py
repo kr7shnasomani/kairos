@@ -32,7 +32,24 @@ _ACTION_MAP = (
     ("/governance/conflicts", "resolve_admin_conflict"),
     ("/documents", "ingest_document"),
     ("/assets", "write_assets"),
+    # The Copilot's POSTs get their own action so the read-only `demo` role can use them without
+    # being granted the `write_api` catch-all. Every other role gets it from the catch-all as before.
+    ("/search/synthesize", "synthesize"),
+    # The operational-event feed. Listed by route, not by the `/events` prefix, so field-worker
+    # flows (deviation-flag, ack) and the engineer-only plant-state stay on the `write_api` catch-all.
+    ("/events/work-order", "ingest_event"),
+    ("/events/ptw", "ingest_event"),
+    ("/events/shift-handover", "ingest_event"),
+    ("/events/alarm", "ingest_event"),
+    ("/events/tag-out", "ingest_event"),
+    ("/events/inspection-complete", "ingest_event"),
 )
+
+# Inbound webhooks authenticated by their own HMAC, not a user token. The plant's MoC system has
+# no Kairos login, so OPA (which needs a user) would reject every legitimate call. Exact paths:
+# `routers/governance.py` makes the signature mandatory wherever auth is enforced, so exempting the
+# route here removes a layer that could never have applied, not a layer that was doing work.
+_SIGNED_WEBHOOKS = frozenset({("POST", "/governance/moc/webhook")})
 
 # Shell context every authenticated role needs, sitting under an otherwise-gated prefix.
 # `components/app-shell.tsx` renders plant state for *every* persona — a field worker who cannot
@@ -67,10 +84,25 @@ _READ_ACTION_MAP = (
     ("/events", "read_events"),
 )
 
+# The read-only `demo` role is deny-by-default, so the reads other roles leave unenforced must be
+# named for it. Anything under neither this map nor `_READ_ACTION_MAP` resolves to `_DEMO_FALLBACK`,
+# which no rule grants (offboarding/personnel, annotations, elicitation, ...). Only the demo role
+# pays the extra OPA call; for every other role these GETs stay unenforced, as the UI expects.
+_DEMO_READ_ACTION_MAP = (
+    ("/search", "read_search"),
+    ("/briefs", "read_briefs"),
+    ("/assets", "read_assets"),
+)
+_DEMO_FALLBACK = "read_other"
 
-def action_for(method: str, path: str) -> str | None:
-    """OPA action for this request, or None when the route is not policy-enforced."""
+
+def action_for(method: str, path: str, role: str | None = None) -> str | None:
+    """OPA action for this request, or None when the route is not policy-enforced.
+
+    `role` only matters for "demo": see `_DEMO_READ_ACTION_MAP`."""
     if any(path.startswith(p) for p in _SKIP_PREFIXES):
+        return None
+    if (method, path) in _SIGNED_WEBHOOKS:
         return None
     if method in _WRITE_METHODS:
         for prefix, name in _ACTION_MAP:
@@ -83,6 +115,8 @@ def action_for(method: str, path: str) -> str | None:
         for prefix, name in _READ_ACTION_MAP:
             if path.startswith(prefix):
                 return name
+        if role == "demo":
+            return next((n for p, n in _DEMO_READ_ACTION_MAP if path.startswith(p)), _DEMO_FALLBACK)
     return None
 
 
@@ -94,24 +128,36 @@ class OPAMiddleware(BaseHTTPMiddleware):
         self.debug = debug
 
     async def dispatch(self, request: Request, call_next):
-        action = action_for(request.method, request.url.path)
+        # `scope["path"]`, never `request.url.path`: url is rebuilt from the Host header, so
+        # `Host: x/health` turns `/events/work-order` into `/health/events/work-order`, which the
+        # skip list then treats as exempt and OPA is never asked. The scope path is what routes.
+        path = request.scope["path"]
+        action = action_for(request.method, path)
+        user = None
         if action is None:
-            return await call_next(request)
+            # Unenforced for most roles, but the read-only demo role is deny-by-default. Only a
+            # GET that carries a token costs a lookup, and it is the cached one the route repeats.
+            if request.method not in _READ_METHODS:
+                return await call_next(request)
+            user = await self._user_from_request(request)
+            action = action_for(request.method, path, (user or {}).get("role"))
+            if action is None:
+                return await call_next(request)
 
-        user = await self._user_from_request(request)
+        user = user or await self._user_from_request(request)
         if user is None:
             if self.debug:
                 return await call_next(request)  # no token in dev → pass through
             return JSONResponse({"detail": "Authentication required"}, status_code=401)
 
-        allowed = await self._ask_opa(user, action, request.url.path)
+        allowed = await self._ask_opa(user, action, path)
         if not allowed:
             log.info(
                 "opa.denied",
                 user_id=user.get("user_id"),
                 role=user.get("role"),
                 action=action,
-                path=request.url.path,
+                path=path,
             )
             return JSONResponse(
                 {"detail": f"Forbidden: role '{user.get('role')}' is not permitted to perform this action"},

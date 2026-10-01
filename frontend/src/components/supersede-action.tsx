@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ingestDocument, supersedeDocument } from "@/lib/api";
-import { useRole, RESOLVE_ROLES } from "@/components/use-role";
+import { useRole, RESOLVE_ROLES, AUTHORITY_ASSERT_ROLES } from "@/components/use-role";
 import { Button, Modal } from "@/components/ui";
 import type { AuthorityLevel } from "@/lib/types";
 
@@ -18,12 +19,17 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  // Set instead of `done` when the backend held the supersede for MoC approval (HTTP 202).
+  const [pendingMoc, setPendingMoc] = useState<{ mocId: string | null; newId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState<string>("procedure");
   const [authority, setAuthority] = useState<AuthorityLevel>(3);
 
   if (!RESOLVE_ROLES.includes(role)) return null;
+  // Levels 1 to 3 need reliability or admin; the backend caps anyone else to 4 at ingest.
+  const levels = AUTHORITY_ASSERT_ROLES.includes(role) ? [1, 2, 3, 4, 5] : [4, 5];
+  const level = levels.includes(authority) ? authority : 4;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,7 +39,7 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
     const fd = new FormData();
     fd.append("file", file);
     fd.append("document_type", docType);
-    fd.append("authority_level", String(authority));
+    fd.append("authority_level", String(level));
     fd.append("source_system", "manual_upload");
     // The replacement describes the same equipment, so it links to the same asset.
     if (assetId) fd.append("asset_id", assetId);
@@ -47,12 +53,21 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
         setError("That file is identical to this document — upload the revised version.");
         return;
       }
-      await supersedeDocument(documentId, ingested.document_id);
+      const res = await supersedeDocument(documentId, ingested.document_id);
+      if (res.status === "pending_moc_approval") {
+        // Nothing is superseded yet: the old document stays current until the MoC is approved.
+        setPendingMoc({ mocId: res.moc_id, newId: ingested.document_id });
+        return;
+      }
       setDone(ingested.document_id);
       // Refresh the page so the version chain + blast radius update
       router.refresh();
-    } catch {
-      setError("Supersede failed — the replacement could not be saved. Try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message.includes("HTTP 403")
+          ? "Superseding a level 1 to 3 document needs the reliability or admin role."
+          : "Supersede failed — the replacement could not be saved. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -62,7 +77,7 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
     <>
       <Button
         variant="ghost"
-        onClick={() => { setOpen(true); setDone(null); setError(null); }}
+        onClick={() => { setOpen(true); setDone(null); setPendingMoc(null); setError(null); }}
         className="text-caption"
       >
         Supersede document
@@ -70,7 +85,31 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
 
       {open && (
         <Modal title="Supersede document" onClose={() => setOpen(false)}>
-          {done ? (
+          {pendingMoc ? (
+            <div className="space-y-3" role="status">
+              <p className="text-body text-ink">
+                Awaiting MoC approval. <span className="font-semibold text-accent">{documentId}</span> is
+                still current; it is not superseded yet.
+              </p>
+              <p className="text-caption text-muted">
+                The replacement <span className="font-semibold text-accent">{pendingMoc.newId}</span> is
+                stored in the vault. Change request{" "}
+                <span className="font-semibold text-accent">{pendingMoc.mocId ?? "pending"}</span> must be
+                approved by a reliability engineer or admin
+                {pendingMoc.mocId && (
+                  <>
+                    {" "}
+                    on{" "}
+                    <Link href={`/governance/moc/${encodeURIComponent(pendingMoc.mocId)}`} className="text-accent underline hover:no-underline">
+                      the MoC page
+                    </Link>
+                  </>
+                )}
+                . After approval, repeat this supersede with the same replacement to apply it.
+              </p>
+              <Button variant="ghost" onClick={() => setOpen(false)}>Close</Button>
+            </div>
+          ) : done ? (
             <div className="space-y-3">
               <p className="text-body text-ink">
                 Document <span className="font-semibold text-accent">{documentId}</span> superseded.
@@ -123,11 +162,11 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
                     Authority level
                   </span>
                   <select
-                    value={authority}
+                    value={level}
                     onChange={(e) => setAuthority(Number(e.target.value) as AuthorityLevel)}
                     className="h-9 rounded-lg border border-line bg-surface-2 px-2 text-caption outline-none focus:border-accent"
                   >
-                    {[1, 2, 3, 4, 5].map((l) => (
+                    {levels.map((l) => (
                       <option key={l} value={l}>L{l}</option>
                     ))}
                   </select>

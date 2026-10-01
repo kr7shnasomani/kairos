@@ -1,9 +1,10 @@
 // Vault document list: every ingested source, active or superseded.
 import Link from "next/link";
 import { getDocuments, isForbidden } from "@/lib/api";
-import { ButtonLink, EmptyState, PageHeader } from "@/components/ui";
+import { EmptyState, PageHeader } from "@/components/ui";
 import { StatPills } from "@/components/stat-pills";
 import { DocumentsTable } from "./_components/documents-table";
+import { IngestDocumentAction } from "./_components/ingest-action";
 
 export default async function DocumentsPage() {
   const res = await getDocuments().catch((e) => { if (isForbidden(e)) return null; throw e; });
@@ -26,7 +27,7 @@ export default async function DocumentsPage() {
             >
               Compare
             </Link>
-            <ButtonLink href="/documents/ingest" variant="primary">Ingest document</ButtonLink>
+            <IngestDocumentAction />
           </>
         }
       />

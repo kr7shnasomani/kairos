@@ -6,10 +6,12 @@ Manages knowledge conflicts, MoC items, quarantine review, and blast-radius repo
 import asyncio
 import hashlib
 import hmac
+import json
+import time
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
 
 from api.dependencies import (
     CurrentUserDep,
@@ -587,42 +589,81 @@ async def _resolve_moc_conflict(
     )
 
 
+# A signed request older (or newer) than this is rejected, so a captured body cannot be replayed
+# later. Five minutes covers ordinary clock skew between the plant's MoC system and this API.
+MOC_WEBHOOK_MAX_SKEW_SECONDS = 300
+
+
+def verify_moc_webhook(
+    secret: str | None, raw_body: bytes, signature: str | None, timestamp: str | None,
+    *, dev_unsigned_ok: bool, now: float | None = None,
+) -> None:
+    """Raise 401/503 unless the request is a fresh, correctly signed MoC webhook.
+
+    The signature is HMAC-SHA256 over `"{timestamp}." + raw request bytes`, hex, in
+    `X-Webhook-Signature`, with the unix-seconds `timestamp` in `X-Webhook-Timestamp`. It covers the
+    bytes exactly as received: re-serialising the parsed JSON (the old check) meant the sender and
+    this server had to agree on key order and spacing, and the timestamp was not covered at all.
+
+    Fails closed. With no secret configured the only unsigned path is `dev_unsigned_ok`, which the
+    caller derives from `Settings.dev_bypass_allowed` (APP_ENV=development and APP_DEBUG). Anywhere
+    auth is enforced a missing secret is a 503, never a skipped check.
+    """
+    if not secret:
+        if dev_unsigned_ok:
+            log.warning("moc.webhook_unsigned_dev")
+            return
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MoC webhook is not configured (MOC_WEBHOOK_SECRET).",
+        )
+    if not signature or not timestamp:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-Webhook-Signature or X-Webhook-Timestamp header",
+        )
+    try:
+        sent_at = float(timestamp)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook timestamp") from None
+    if abs((time.time() if now is None else now) - sent_at) > MOC_WEBHOOK_MAX_SKEW_SECONDS:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Stale webhook timestamp")
+    expected = hmac.new(
+        secret.encode(), timestamp.encode() + b"." + raw_body, hashlib.sha256
+    ).hexdigest()  # hmac.new is the stdlib constructor alias
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+
+
 @router.post("/moc/webhook", summary="Receive MoC resolution webhook from plant MoC system")
 async def receive_moc_webhook(
+    request: Request,
     supabase: SupabaseDep,
     driver: Neo4jDep,
-    payload: dict = Body(...),
+    settings: SettingsDep,
     x_webhook_signature: str | None = Header(None),
+    x_webhook_timestamp: str | None = Header(None),
 ) -> dict:
     """
     Receives MoC resolution from the plant's EAM/SAP MoC system.
     On approval: closes old validity window, promotes new fact to canonical, clears conflict.
     On rejection: logs outcome, keeps conflict open.
+
+    Authenticated by HMAC (`verify_moc_webhook`), not by a user token, and exempt from OPA for that
+    reason. `approved_by` is only trustworthy because the body is signed, so the signature cannot
+    be optional anywhere auth is enforced.
     """
-    # Signature check when secret is configured.
-    #
-    # Configuring the secret is what turns verification on; once on, an unsigned request is
-    # REJECTED rather than accepted. The previous condition (`moc_secret and x_webhook_signature`)
-    # made the check opt-in *by the caller* — anyone could skip verification by omitting the
-    # header, which is the one party you cannot trust to choose. Combined with the missing
-    # Settings field (getattr always returned None) no MoC webhook was ever verified.
-    from api.config import get_settings
-    settings = get_settings()
-    moc_secret = settings.MOC_WEBHOOK_SECRET
-    if moc_secret:
-        if not x_webhook_signature:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing X-Webhook-Signature header",
-            )
-        import json
-        expected = hmac.new(
-            moc_secret.encode(),
-            json.dumps(payload, sort_keys=True).encode(),
-            hashlib.sha256,
-        ).hexdigest()  # hmac.new is the stdlib constructor alias
-        if not hmac.compare_digest(expected, x_webhook_signature):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+    raw_body = await request.body()
+    verify_moc_webhook(
+        settings.MOC_WEBHOOK_SECRET, raw_body, x_webhook_signature, x_webhook_timestamp,
+        dev_unsigned_ok=settings.dev_bypass_allowed,
+    )
+    try:
+        payload = json.loads(raw_body)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Body must be a JSON object") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Body must be a JSON object")
 
     moc_id = payload.get("moc_id")
     resolution_status = payload.get("status")  # "approved" or "rejected"
@@ -638,6 +679,10 @@ async def receive_moc_webhook(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"MoC '{moc_id}' not found")
 
     moc = moc_result.data[0]
+    if moc.get("status") == "approved":
+        # Final, like the in-app approve route: also stops an in-window replay of a captured body
+        # from flipping an approved MoC back to rejected.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="MoC already approved.")
     conflict_id = moc.get("conflict_id")
     now = datetime.now(UTC)
     now_iso = now.isoformat()

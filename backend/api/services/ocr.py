@@ -44,6 +44,34 @@ def ocr_review_reason(result: dict[str, Any]) -> str | None:
         return "low_confidence_spans"
     return None
 
+# Resource ceilings. These files are uploader-controlled, and rasterising or flattening them runs in
+# the one ingestion worker, so an unbounded page, DPI, row or archive size is a way to take it down.
+# A file over a ceiling is treated as unreadable (routes to human review), never silently truncated.
+MAX_PDF_PAGES = 100
+MAX_RASTER_DPI = 150
+MAX_RASTER_PIXELS = 16_000_000          # per page; A0 at 96 DPI is about 14 million
+MIN_RASTER_DPI = 30                     # below this a page is too large to read legibly
+MAX_RASTER_TOTAL_BYTES = 150 * 1024 * 1024  # PNG bytes held in memory across all pages
+MAX_SPREADSHEET_ROWS = 50_000           # rows scanned across all sheets, empty ones included
+MAX_SPREADSHEET_COLUMNS = 256
+MAX_SPREADSHEET_UNZIPPED_BYTES = 200 * 1024 * 1024  # declared uncompressed size of the .xlsx archive
+
+
+def capped_dpi(width_pt: float, height_pt: float, dpi: int) -> int | None:
+    """The DPI to rasterise a page at: `dpi` clamped to the DPI ceiling and to the pixel ceiling.
+
+    Returns None when the page is degenerate or so large that the pixel ceiling would leave it
+    unreadable, so the caller rejects the file instead of rendering a huge bitmap.
+    """
+    if width_pt <= 0 or height_pt <= 0:
+        return None
+    dpi = min(dpi, MAX_RASTER_DPI)
+    area_in2 = (width_pt / 72) * (height_pt / 72)
+    if area_in2 * dpi * dpi > MAX_RASTER_PIXELS:
+        dpi = int((MAX_RASTER_PIXELS / area_in2) ** 0.5)
+    return dpi if dpi >= MIN_RASTER_DPI else None
+
+
 _TEXT_MIMES = ("text/plain", "text/markdown", "text/csv")
 
 # Spreadsheets: work-order exports, asset registries, inspection logs.
@@ -285,6 +313,13 @@ class OCRService:
         try:
             import fitz
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            if doc.page_count > MAX_PDF_PAGES:
+                pages = doc.page_count
+                doc.close()
+                log.warning("ocr.pdf_too_many_pages", pages=pages, limit=MAX_PDF_PAGES)
+                return {"text": "", "blocks": [], "overall_confidence": 0.0,
+                        "requires_review": True, "block_count": 0, "extraction_method": "error",
+                        "extraction_path": "unknown", "handwriting_suspect": False}
             blocks = []
             for page_num, page in enumerate(doc):
                 text = page.get_text().strip()
@@ -339,20 +374,31 @@ class OCRService:
         instead of loading the whole workbook.
         """
         try:
+            import zipfile
+
             import openpyxl
 
+            # A small archive can declare gigabytes once inflated (shared strings are read whole).
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
+                if sum(i.file_size for i in archive.infolist()) > MAX_SPREADSHEET_UNZIPPED_BYTES:
+                    log.warning("ocr.spreadsheet_too_large", reason="unzipped_size")
+                    return ""
             wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
         except Exception as exc:
             log.warning("ocr.spreadsheet_open_failed", error=str(exc))
             return ""
 
         lines: list[str] = []
+        scanned = 0
         try:
             for sheet in wb.worksheets:
-                rows = [
-                    "\t".join("" if c is None else str(c) for c in row)
-                    for row in sheet.iter_rows(values_only=True)
-                ]
+                rows = []
+                for row in sheet.iter_rows(values_only=True):
+                    scanned += 1
+                    if scanned > MAX_SPREADSHEET_ROWS:
+                        log.warning("ocr.spreadsheet_too_large", reason="rows", limit=MAX_SPREADSHEET_ROWS)
+                        return ""
+                    rows.append("\t".join("" if c is None else str(c) for c in row[:MAX_SPREADSHEET_COLUMNS]))
                 rows = [r for r in rows if r.strip()]
                 if rows:
                     lines.append(f"# Sheet: {sheet.title}")
@@ -425,12 +471,26 @@ class OCRService:
             try:
                 import fitz
                 doc = fitz.open(stream=file_bytes, filetype="pdf")
-                pages = []
-                for page in doc:
-                    # 96 DPI keeps base64 under the 180KB CV API inline limit for typical A4
-                    pix = page.get_pixmap(dpi=96)
-                    pages.append((pix.tobytes("png"), "image/png"))
-                doc.close()
+                try:
+                    if doc.page_count > MAX_PDF_PAGES:
+                        log.warning("ocr.pdf_too_many_pages", pages=doc.page_count, limit=MAX_PDF_PAGES)
+                        return []
+                    pages = []
+                    total = 0
+                    for page in doc:
+                        # 96 DPI keeps base64 under the 180KB CV API inline limit for typical A4
+                        dpi = capped_dpi(page.rect.width, page.rect.height, 96)
+                        if dpi is None:
+                            log.warning("ocr.pdf_page_size_rejected", width_pt=page.rect.width, height_pt=page.rect.height)
+                            return []
+                        png = page.get_pixmap(dpi=dpi).tobytes("png")
+                        total += len(png)
+                        if total > MAX_RASTER_TOTAL_BYTES:
+                            log.warning("ocr.pdf_raster_too_large", limit=MAX_RASTER_TOTAL_BYTES)
+                            return []
+                        pages.append((png, "image/png"))
+                finally:
+                    doc.close()
                 return pages
             except Exception as exc:
                 log.error("ocr.rasterize_failed", error=str(exc))

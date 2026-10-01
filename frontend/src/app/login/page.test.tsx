@@ -15,8 +15,18 @@ vi.mock("@/lib/api", () => ({ getToken: () => null }));
 
 import LoginPage from "./page";
 
+// The demo credentials are read once at module load (Next inlines NEXT_PUBLIC_* at build time), so
+// each case sets the env first and then loads a fresh copy of the page.
+async function loadPage() {
+  vi.resetModules();
+  return (await import("./page")).default;
+}
+
 describe("LoginPage", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllEnvs();
+  });
 
   beforeEach(() => {
     mocks.push.mockReset();
@@ -48,5 +58,27 @@ describe("LoginPage", () => {
     expect(screen.getByTestId("login-context")).toHaveTextContent("Evidence-linked operations");
     expect(screen.getByTestId("login-form-panel")).toHaveTextContent("Sign in to Kairos");
     expect(screen.getByLabelText(/email/i)).toHaveClass("min-h-11");
+  });
+
+  it("hides the demo button when no demo credentials are configured", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_EMAIL", "");
+    vi.stubEnv("NEXT_PUBLIC_DEMO_PASSWORD", "");
+    const Page = await loadPage();
+    render(<Page />);
+
+    expect(screen.queryByRole("button", { name: /live demo/i })).toBeNull();
+  });
+
+  it("signs the demo button in with the configured read-only credentials and lands on the Copilot", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DEMO_EMAIL", "demo@kairos.local");
+    vi.stubEnv("NEXT_PUBLIC_DEMO_PASSWORD", "public-demo-pw");
+    mocks.getMe.mockResolvedValue({ role: "demo" });
+    const Page = await loadPage();
+    render(<Page />);
+
+    fireEvent.click(screen.getByRole("button", { name: /live demo/i }));
+
+    await waitFor(() => expect(mocks.login).toHaveBeenCalledWith("demo@kairos.local", "public-demo-pw"));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/copilot"));
   });
 });

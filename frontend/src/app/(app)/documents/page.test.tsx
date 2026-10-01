@@ -5,7 +5,7 @@ import DocumentsPage from "./page";
 
 const mocks = vi.hoisted(() => ({ getDocuments: vi.fn(), push: vi.fn() }));
 
-vi.mock("@/lib/api", () => ({ getDocuments: mocks.getDocuments }));
+vi.mock("@/lib/api", () => ({ getDocuments: mocks.getDocuments, getToken: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
 
 function doc(i: number, over: Partial<VaultDocument> = {}): VaultDocument {
