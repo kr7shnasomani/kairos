@@ -7,7 +7,7 @@
 # =============================================================================
 
 # ---- builder --------------------------------------------------------------
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum* ./
 RUN go mod download
@@ -15,7 +15,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /kairos-connector ./cmd/connector/...
 
 # ---- release --------------------------------------------------------------
-FROM alpine:3.20 AS release
+FROM alpine:3.24 AS release
 # hadolint ignore=DL3018
 RUN apk --no-cache add ca-certificates wget \
     && addgroup -S -g 1001 kairos && adduser -S -u 1001 -G kairos kairos
