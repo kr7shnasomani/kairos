@@ -1,6 +1,7 @@
 "use client";
 
 // Field form to flag a physical deviation from the P&ID — freezes briefs for the asset.
+import { DemoGate } from "@/components/demo-gate";
 import { useState } from "react";
 import { postDeviationFlag } from "@/lib/api";
 import { Button, PageHeader } from "@/components/ui";
@@ -55,6 +56,7 @@ export default function DeviationPage() {
   }
 
   return (
+    <DemoGate>
     <div data-testid="deviation-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         className="mb-6"
@@ -144,5 +146,6 @@ export default function DeviationPage() {
       </aside>
       </div>
     </div>
+    </DemoGate>
   );
 }

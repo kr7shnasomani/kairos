@@ -5,6 +5,7 @@ import OffboardingSessionPage from "./page";
 vi.mock("next/navigation", () => ({ useParams: () => ({ sessionId: "P-1" }) }));
 vi.mock("@/components/voice-recorder", () => ({ VoiceRecorder: () => <div>Voice recorder</div> }));
 vi.mock("@/lib/api", () => ({
+  getToken: () => null,
   getOffboarding: vi.fn().mockResolvedValue({
     data: {
       id: "P-1", personnel_id: "U-1", personnel_email: "priya.sharma@plant.in", retirement_date: "2026-09-30", total_sessions: 3, status: "active", created_at: "2026-01-01",

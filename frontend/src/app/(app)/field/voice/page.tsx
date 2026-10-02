@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import { useState } from "react";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { submitVoiceNote } from "@/lib/api";
@@ -35,6 +36,7 @@ export default function VoiceCapturePage() {
   }
 
   return (
+    <DemoGate>
     <div data-testid="field-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         className="mb-6"
@@ -144,5 +146,6 @@ export default function VoiceCapturePage() {
         </aside>
       </div>
     </div>
+    </DemoGate>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 // Voice-note capture deep-linked from a work order — transcribed and routed to quarantine.
+import { DemoGate } from "@/components/demo-gate";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { VoiceRecorder } from "@/components/voice-recorder";
@@ -38,6 +39,7 @@ export default function VoicePage() {
   }
 
   return (
+    <DemoGate>
     <div data-testid="work-order-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         compact
@@ -127,5 +129,6 @@ export default function VoicePage() {
         </aside>
       </div>
     </div>
+    </DemoGate>
   );
 }

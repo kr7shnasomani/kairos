@@ -6,6 +6,7 @@ import ConflictsPage from "./page";
 const mocks = vi.hoisted(() => ({ getConflicts: vi.fn(), resolveConflict: vi.fn() }));
 
 vi.mock("@/lib/api", () => ({
+  getToken: () => null,
   getConflicts: mocks.getConflicts,
   resolveConflict: mocks.resolveConflict,
 }));

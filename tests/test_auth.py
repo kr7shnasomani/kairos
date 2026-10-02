@@ -59,3 +59,53 @@ async def test_refresh_token(anon_client):
     body = r.json()
     assert "access_token" in body
     assert body["token_type"] == "bearer"
+
+
+# ---------------------------------------------------------------------------
+# The `demo` role (security review C1): reads everything an admin reads, writes only the Copilot's
+# (synthesize, rca-pack, answer feedback), deny-by-default for every other write.
+# ---------------------------------------------------------------------------
+
+import pytest
+
+
+async def test_me_demo_role(demo_client):
+    r = await demo_client.get("/auth/me")
+    assert r.status_code == 200
+    assert r.json()["role"] == "demo"
+
+
+@pytest.mark.parametrize("path", [
+    "/assets/", "/documents/", "/briefs/", "/events/", "/audit-log/", "/compliance/dashboard",
+    "/governance/conflicts", "/governance/moc", "/governance/model-gate/history",
+    "/elicitation/offboarding", "/annotations/stats",
+])
+async def test_demo_can_read_what_an_admin_reads(demo_client, path):
+    r = await demo_client.get(path)
+    assert r.status_code == 200, (path, r.text)
+
+
+@pytest.mark.parametrize(("path", "body"), [
+    ("/events/work-order", {"source_system": "x", "site_id": "SITE_001", "work_order_id": "WO-X", "asset_id": "X",
+                            "failure_code": "X", "description": "x"}),
+    ("/events/plant-state", {"site_id": "SITE_001", "state": "shutdown"}),
+    ("/assets/", {"tag_number": "T", "name": "n", "equipment_class": "PUMP", "criticality": "critical",
+                  "site_id": "SITE_001", "facility_id": "F", "eam_source": "t", "confirmed_by_user_id": "d"}),
+    ("/annotations/", {"document_id": "D", "entity_text": "t", "entity_type": "T", "is_correct": True}),
+    ("/governance/moc/MOC-X/approve", {}),
+    ("/briefs/00000000-0000-0000-0000-000000000000/ack", {}),
+    ("/briefs/00000000-0000-0000-0000-000000000000/feedback", {"rating": "incorrect"}),
+])
+async def test_demo_is_refused_writes(demo_client, path, body):
+    """Refused by OPA before the handler runs, so none of these touch a store."""
+    r = await demo_client.post(path, json=body)
+    assert r.status_code == 403, (path, r.text)
+
+
+async def test_demo_is_refused_document_ingest(demo_client):
+    r = await demo_client.post(
+        "/documents/ingest",
+        files={"file": ("test_demo.txt", b"demo", "text/plain")},
+        data={"document_type": "procedure"},
+    )
+    assert r.status_code == 403

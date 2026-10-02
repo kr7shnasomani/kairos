@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRole, ADMIN_ROLES } from "./use-role";
+import { useRole, ADMIN_VIEW_ROLES } from "./use-role";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,7 +23,7 @@ export function SystemTabs() {
   // cannot be called directly — `null.startsWith` throws and takes the whole page with it.
   const pathname = usePathname() ?? "";
   const role = useRole();
-  const isAdmin = ADMIN_ROLES.includes(role);
+  const isAdmin = ADMIN_VIEW_ROLES.includes(role);
   const tabs = TABS.filter((t) => !t.adminOnly || isAdmin);
   // A single tab is not navigation: non-admins only have Settings.
   if (tabs.length < 2) return null;

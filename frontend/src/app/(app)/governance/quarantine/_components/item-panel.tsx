@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { QuarantineItem } from "@/lib/types";
 import { relativeTime, triggerLabel } from "@/lib/utils";
 import { Button, StatusBadge } from "@/components/ui";
+import { DemoGate } from "@/components/demo-gate";
 import { SlaChip, formatContent } from "./columns";
 import type { ActionMode } from "./actions";
 
@@ -170,6 +171,7 @@ export function ItemPanel({
 
         <footer className="absolute bottom-0 left-0 right-0 border-t border-line bg-surface/90 px-6 py-4 pb-safe backdrop-blur-md">
           {pending ? (
+            <DemoGate>
             <div className="flex flex-col gap-3">
               {/* In the sticky footer with the other decisions — placed in the scrolling body it sat under
                   this footer and could not be reached without scrolling first. */}
@@ -195,6 +197,7 @@ export function ItemPanel({
                 <p className="text-center text-xs text-muted">Promotion requires the reliability or admin role.</p>
               )}
             </div>
+            </DemoGate>
           ) : (
             <div className="flex items-center justify-center py-2">
               <span className={`inline-flex items-center gap-2 text-sm font-medium ${item.review_status === "promoted" ? "text-verified" : "text-danger"}`}>

@@ -14,8 +14,11 @@ vi.mock("@/lib/api", () => ({
 
 // The "Run gate now" button is admin-gated; render as admin so it appears.
 vi.mock("@/components/use-role", () => ({
+  useIsDemo: () => false,
+  visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role),
   useRole: () => "admin",
   ADMIN_ROLES: ["admin"],
+  ADMIN_VIEW_ROLES: ["admin", "demo"],
 }));
 
 function run(i: number, passed = true): ModelGateResult {

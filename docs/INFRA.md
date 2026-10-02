@@ -179,11 +179,9 @@ Grafana Cloud instance. (Pre-cloud, dashboards ran in a local `kairos-grafana` c
 **Both dashboards are imported and live** (2026-08-15) at `/d/kairos-ingestion` and
 `/d/kairos-operational`, wired to `grafanacloud-prom` and `grafanacloud-traces`.
 
-Import from **`infra/grafana/dashboards-import/`**, not the `provisioning/` copies. The
-provisioning JSONs hardcode datasource uids (`grafana-prom-datasource`, `tempo`) that do not exist
-in a Cloud stack, so importing them raw wires every panel to a missing datasource; the
-`dashboards-import/` versions use `__inputs` placeholders, which is what makes Grafana show a
-datasource picker on the import screen.
+Import from **`infra/grafana/dashboards-import/`**. Those JSONs use `__inputs` placeholders for the
+datasources, which is what makes Grafana show a datasource picker on the import screen. (The old
+`provisioning/` copies hardcoded datasource uids that do not exist in a Cloud stack, and were deleted.)
 
 > **Custom metrics require telemetry in *every* process that records them.** `services/metrics.py`
 > instruments are no-ops without a MeterProvider, and the Celery worker never called
@@ -203,8 +201,7 @@ datasource picker on the import screen.
 | `infra/policies/kairos.rego` | OPA RBAC rules | **Active** (mounted by `kairos-opa`) |
 | `infra/temporal/dynamicconfig.yaml` | Temporal server dynamic config | **Active** (mounted by `kairos-temporal`) |
 | `infra/caddy/Caddyfile` | HTTPS for the API (deployment only; the frontend is on Vercel) | **Active** under `--profile prod` |
-| `infra/grafana/provisioning/dashboards/*.json` | Grafana dashboard definitions | **Legacy** — not mounted (obs is Grafana Cloud); **keep** — importable into Grafana Cloud |
-| `infra/grafana/provisioning/datasources/`, `infra/otel/otel-config.yaml`, `infra/tempo/tempo.yaml` | Local Grafana/OTEL-collector/Tempo configs | **Dead** — their containers were removed; no runtime use |
+| `infra/grafana/dashboards-import/*.json` | Grafana dashboard definitions | Not mounted (obs is Grafana Cloud); importable into Grafana Cloud |
 | `docker-compose.yml` + `docker-compose.override.yml` | Base (prod-safe) + auto-loaded dev override | **Active** |
 | `backend/.dockerignore` | Strips `__pycache__`, `.pyc`, `.pytest_cache`, `connectors/` from the backend build context. Keeps `tests/` + `scripts/` (run inside the container). | **Active** |
 | `backend/connectors/.dockerignore` | Strips Go test artifacts and vendor dir from the Go build context. | **Active** |
@@ -272,7 +269,7 @@ docker exec kairos-backend-api python scripts/seed_regulations.py
 # Run tests — full suite (needs the stack up; use local stores, never cloud)
 docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120
 
-# Run the service-free tests with NO stack running at all (837 tests, 51 files, no secrets, no network).
+# Run the service-free tests with NO stack running at all (839 tests, 52 files, no secrets, no network).
 # This is what CI's tier-1 `unit` job runs. Re-measured 2026-09-15. The list must match AGENTS.md,
 # docs/TESTS.md and .github/workflows/tests.yml.
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \
@@ -283,7 +280,7 @@ attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,
 quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
 form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
 ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
-document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm}.py
+document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm,cr_fixes}.py
 
 # Lint the backend exactly as CI does (pinned ruff + backend/ruff.toml)
 docker run --rm -v "$(pwd)/backend:/b" -w /b ghcr.io/astral-sh/ruff:0.16.0 check .

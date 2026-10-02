@@ -21,6 +21,10 @@ log = structlog.get_logger(__name__)
 
 router = APIRouter()
 
+# The event loop holds only a weak reference to a task, so a fire-and-forget one can be garbage
+# collected before it runs. Keep each until it is done.
+_background_tasks: set[asyncio.Task] = set()
+
 # Inbox fetch headroom. The row limit is applied AFTER the frozen/governor filters,
 # so the query fetches wider than the caller's `limit` and the page is trimmed once
 # the filters have run. The cap keeps a large `limit` from becoming an unbounded scan.
@@ -518,7 +522,9 @@ async def submit_feedback(
         raise
 
     if payload.rating == "incorrect":
-        asyncio.create_task(_recheck_brief_sources(brief_id, user_id, supabase))
+        task = asyncio.create_task(_recheck_brief_sources(brief_id, user_id, supabase))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     return {"status": "received", "brief_id": brief_id, "rating": payload.rating}
 

@@ -42,7 +42,7 @@ from api.routers.briefs import _brief_recipients, _sign_acknowledgment
 from api.services.brief_engine import BriefEngine
 from api.services.event_bus import EventBusService
 from api.services.identity import display_name
-from api.utils.failure_families import FAILURE_FAMILIES
+from api.utils.failure_families import failure_family
 from workers.attribution import evaluate_outcome
 from workers.brief_assembly import assemble_brief
 
@@ -61,6 +61,17 @@ IngestUserDep = Annotated[dict, Depends(require_role(*_INGEST_ROLES))]
 # assertion about a vault document, so it sits above the 0.7 quarantine line but stays
 # `unverified` until a human verifies the edge. A caller may go lower, never higher.
 INSPECTION_EVIDENCE_CONFIDENCE = 0.85
+
+
+def _count_recurrences(prior_rows: list[dict], family: str) -> int:
+    """Prior work orders in the same failure family. A blank code has no family, so two work
+    orders that both omit one are not a recurrence. Same mapping on both sides of the compare."""
+    if not family:
+        return 0
+    return sum(
+        1 for row in prior_rows
+        if failure_family((row.get("payload") or {}).get("failure_code")) == family
+    )
 
 
 async def _store_event(supabase, row: dict) -> None:
@@ -176,7 +187,7 @@ async def ingest_work_order(
     recurring_detected = False
     recurring_brief_task_id = None
     recurrence_count = 0
-    this_family = FAILURE_FAMILIES.get(payload.failure_code, payload.failure_code)
+    this_family = failure_family(payload.failure_code)
     try:
         cutoff_90 = (datetime.now(UTC) - timedelta(days=90)).isoformat()
         prior_wos = await asyncio.to_thread(
@@ -188,10 +199,7 @@ async def ingest_work_order(
             .gte("occurred_at", cutoff_90)
             .execute()
         )
-        recurrence_count = sum(
-            1 for row in (prior_wos.data or [])
-            if FAILURE_FAMILIES.get((row.get("payload") or {}).get("failure_code", ""), "?") == this_family
-        )
+        recurrence_count = _count_recurrences(prior_wos.data or [], this_family)
         if recurrence_count >= 1:
             recurring_detected = True
     except Exception as exc:

@@ -6,7 +6,8 @@ import { useState } from "react";
 import type { Brief } from "@/lib/types";
 import { priorityMeta, relativeTime, triggerLabel } from "@/lib/utils";
 import { ackBrief, countersignBrief, sendBriefFeedback } from "@/lib/api";
-import { PROMOTE_ROLES, READ_ONLY_ROLES, useMe } from "./use-role";
+import { PROMOTE_ROLES, useMe } from "./use-role";
+import { DemoGate } from "./demo-gate";
 import { AuthorityBadge, Button, EvidenceLineage, PageHeader, SourceChip, StatusBadge } from "./ui";
 
 import { Icon } from "@/components/icon";
@@ -32,12 +33,8 @@ export function BriefDetail({ brief }: { brief: Brief }) {
   // Only the brief's addressee (the user, or their whole site for site-wide briefs) can give the first
   // signature — the API scopes /ack to recipients. Staff may still OPEN someone else's PTW brief to
   // countersign it, and used to be offered a signature box whose submit 404'd as "check your connection".
-  // The demo role is read-only: it never gets the signature box, the ack button or the rating chips,
-  // even for a site-wide brief that is addressed to its site.
-  const readOnly = !me || READ_ONLY_ROLES.includes(me.role);
-  const writer = me && !READ_ONLY_ROLES.includes(me.role) ? me : null;
   const isRecipient =
-    !!writer && (brief.recipient_user_id === writer.user_id || brief.recipient_user_id === `site-${writer.site_id}`);
+    !!me && (brief.recipient_user_id === me.user_id || brief.recipient_user_id === `site-${me.site_id}`);
   const isFrozen = brief.frozen || brief.delivery_frozen;
   const quarantineCount = brief.sources.filter((s) => s.is_quarantine).length;
   const hasLowConfidence = quarantineCount > 0;
@@ -228,6 +225,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
       </div>
 
       {/* PTW dual sign-off or standard ack */}
+      <DemoGate>
       <section data-testid="brief-acknowledgment" className="rounded-xl border border-line bg-surface p-5 shadow-sm lg:sticky lg:top-6" aria-label="Acknowledgment">
         {isComplete ? (
           <div className="space-y-2">
@@ -301,7 +299,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
               )}
 
               {/* Phase 2 feedback chips */}
-              {!readOnly && <div className="ml-auto flex items-center gap-1.5">
+              <div className="ml-auto flex items-center gap-1.5">
                 <span className="text-caption text-muted">Accurate?</span>
                 {(["accurate", "missing_context", "incorrect"] as FeedbackRating[]).map((r) => (
                   <button
@@ -317,7 +315,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
                     {r.replace("_", " ")}
                   </button>
                 ))}
-              </div>}
+              </div>
             </div>
             {ackError && <p className="mt-2 text-caption text-danger">{ackError}</p>}
             {feedbackSent && (
@@ -329,6 +327,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
           </div>
         )}
       </section>
+      </DemoGate>
         </aside>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ExtractedEntity } from "@/lib/copilot";
 import { createAnnotation } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { DemoGate } from "@/components/demo-gate";
 
 const ENTITY_TYPES = [
   "Asset", "Equipment", "Part", "Substance", "Parameter",
@@ -11,9 +12,9 @@ const ENTITY_TYPES = [
   "Location", "Event", "Document", "Procedure",
 ];
 
-/** Inline entity annotation chips. Low-confidence entities get confirm / correct / delete,
- *  unless `readOnly` (the demo role: annotations write to the corpus). */
-export function EntityAnnotations({ entities, readOnly = false }: { entities: ExtractedEntity[]; readOnly?: boolean }) {
+/** Inline entity annotation chips. Low-confidence entities get confirm / correct / delete.
+ *  The demo account sees the chips but the controls are disabled: corrections write to the corpus. */
+export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] }) {
   const [actions, setActions] = useState<Record<string, "confirmed" | "deleted" | "corrected">>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [correctedTypes, setCorrectedTypes] = useState<Record<string, string>>({});
@@ -43,6 +44,7 @@ export function EntityAnnotations({ entities, readOnly = false }: { entities: Ex
   if (visible.length === 0) return null;
 
   return (
+    <DemoGate>
     <div>
       <p className="mb-2 text-micro font-bold uppercase tracking-[0.1em] text-muted">
         Extracted entities
@@ -90,7 +92,7 @@ export function EntityAnnotations({ entities, readOnly = false }: { entities: Ex
                   {action === "corrected" ? correctedTypes[k] : e.entity_type}
                 </span>
 
-                {lowConf && !action && !isEditing && !readOnly && (
+                {lowConf && !action && !isEditing && (
                   <span className="ml-1 flex items-center gap-0.5">
                     <button
                       onClick={() => annotate(e, true)}
@@ -159,5 +161,6 @@ export function EntityAnnotations({ entities, readOnly = false }: { entities: Ex
         })}
       </div>
     </div>
+    </DemoGate>
   );
 }

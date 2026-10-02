@@ -1,6 +1,7 @@
 "use client";
 
 // Operational event detail: payload, correlated events, acknowledge action.
+import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import type { OperationalEvent, EventPriority } from "@/lib/types";
@@ -19,14 +20,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const [event, setEvent] = useState<OperationalEvent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const [acking, setAcking] = useState(false);
   const [ackError, setAckError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    getEvent(id).then(({ data }) => { if (alive) { setEvent(data); setLoading(false); } });
+    getEvent(id)
+      .then(({ data }) => { if (alive) { setEvent(data); setLoading(false); } })
+      .catch((e) => { if (alive) { setLoadError(e instanceof Error ? e.message : String(e)); setLoading(false); } });
     return () => { alive = false; };
-  }, [id]);
+  }, [id, reload]);
 
   async function handleAck() {
     setAcking(true);
@@ -52,7 +57,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
       {loading && <div className="mt-6"><DetailSkeleton /></div>}
 
-      {!loading && !event && (
+      {!loading && loadError && (
+        <section role="alert" className="mt-6 rounded-xl border border-line bg-surface p-8 text-center">
+          <p className="text-body font-medium text-ink">Couldn&apos;t load this event.</p>
+          <p className="mt-1 text-caption text-muted">{loadError}</p>
+          <Button className="mt-4" onClick={() => { setLoading(true); setLoadError(null); setReload((n) => n + 1); }}>Retry</Button>
+        </section>
+      )}
+
+      {!loading && !loadError && !event && (
         <div className="mt-6"><EmptyState message={`Event ${id} not found.`} action={{ label: "Back to events", href: "/events" }} /></div>
       )}
 
@@ -169,9 +182,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
               <div className="border-t border-line px-4 py-4 sm:px-5">
                 {!event.acknowledged ? (
-                  <Button className="h-11 w-full" variant="primary" onClick={handleAck} disabled={acking}>
-                    {acking ? "Acknowledging…" : "Acknowledge event"}
-                  </Button>
+                  <DemoGate>
+                    <Button className="h-11 w-full" variant="primary" onClick={handleAck} disabled={acking}>
+                      {acking ? "Acknowledging…" : "Acknowledge event"}
+                    </Button>
+                  </DemoGate>
                 ) : event.acknowledged_by ? (
                   <p className="text-caption text-verified">Acknowledged by <span className="font-semibold">{event.acknowledged_by}</span></p>
                 ) : (

@@ -1,4 +1,8 @@
-"""Briefs — Tasks 17-18: EEMUA 191 governor, brief delivery, ack, feedback."""
+"""Briefs — Tasks 17-18: EEMUA 191 governor, brief delivery, ack, feedback.
+
+Security pass (2026-09-30 review, L11): an acknowledgement is final (a second ack is a 409) and
+feedback needs read access to the brief, so a brief you cannot open is a 404 for ack and feedback too.
+"""
 
 from uuid import uuid4
 
@@ -67,16 +71,15 @@ async def test_brief_feedback_requires_rating(admin_client):
         "rating": "accurate",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     })
-    # 404 because the brief doesn't exist, but the route is wired
-    assert r.status_code in (200, 404, 422)
+    # Feedback needs read access to the brief, so an unknown brief is a 404
+    assert r.status_code == 404
 
 
-async def test_ack_brief_via_ptw(admin_client):
-    """
-    POST PTW with issuing_engineer_id=service-kairos-connector assembles a brief immediately.
-    ACK that brief → 200 with status field present.
-    PTW briefs have requires_countersignature=True → status=pending_countersignature.
-    """
+async def _ptw_brief_id(admin_client):
+    """POST a PTW for a fresh asset with the connector as issuing engineer; return the brief id.
+
+    PTW briefs are addressed to the issuing engineer (here the admin test identity) and carry
+    requires_countersignature=True, so only that user and staff may open them."""
     from datetime import datetime, timezone
     from tests.conftest import uid as _uid
 
@@ -111,12 +114,42 @@ async def test_ack_brief_via_ptw(admin_client):
     assert r.status_code == 202
     brief_id = r.json().get("brief_id")
     assert brief_id is not None, "PTW handler must return brief_id immediately"
+    return brief_id
+
+
+async def test_ack_brief_via_ptw(admin_client):
+    """
+    POST PTW with issuing_engineer_id=service-kairos-connector assembles a brief immediately.
+    ACK that brief → 200 with status field present.
+    PTW briefs have requires_countersignature=True → status=pending_countersignature.
+    """
+    brief_id = await _ptw_brief_id(admin_client)
 
     r2 = await admin_client.post(f"/briefs/{brief_id}/ack")
     assert r2.status_code == 200
     body = r2.json()
     assert body["brief_id"] == brief_id
     assert "status" in body  # "acknowledged" or "pending_countersignature" for PTW
+
+
+async def test_second_ack_is_409(admin_client):
+    """An acknowledgement is final: re-acking would swap the acknowledger the countersigner is checked against."""
+    brief_id = await _ptw_brief_id(admin_client)
+    assert (await admin_client.post(f"/briefs/{brief_id}/ack")).status_code == 200
+    assert (await admin_client.post(f"/briefs/{brief_id}/ack")).status_code == 409
+
+
+async def test_non_recipient_cannot_ack_or_rate_a_brief(admin_client, field_client):
+    """A brief addressed to someone else is a 404 for a non-staff caller, for ack and feedback alike."""
+    from datetime import datetime, timezone
+
+    brief_id = await _ptw_brief_id(admin_client)
+    assert (await field_client.post(f"/briefs/{brief_id}/ack")).status_code == 404
+    feedback = await field_client.post(f"/briefs/{brief_id}/feedback", json={
+        "rating": "accurate",
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    })
+    assert feedback.status_code == 404
 
 
 async def test_attribution_worker_queues_recheck(admin_client):

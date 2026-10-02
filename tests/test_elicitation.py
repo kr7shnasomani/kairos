@@ -1,6 +1,11 @@
-"""Elicitation — Tasks 19, 29-31: voice notes, micro-interview trigger, off-boarding."""
+"""Elicitation — Tasks 19, 29-31: voice notes, micro-interview trigger, off-boarding.
 
-from tests.conftest import uid
+Security pass (2026-09-30 review, M9): off-boarding programmes (reads and responses) are open to
+staff (engineer, reliability, admin) and to the person the programme is about, matched on
+`personnel_id` or e-mail; anyone else gets 403 and the list shows them only their own.
+"""
+
+from tests.conftest import FIELD_EMAIL, uid
 
 
 # ---------------------------------------------------------------------------
@@ -226,3 +231,55 @@ async def test_submit_elicitation_responses(admin_client, shared_asset_id):
     body = r.json()
     assert "item_id" in body
     assert body["status"] == "quarantined"
+
+
+# ---------------------------------------------------------------------------
+# Off-boarding access (M9): staff or the person concerned only
+# ---------------------------------------------------------------------------
+
+async def _programme(client, email):
+    from datetime import date, timedelta
+    r = await client.post("/elicitation/offboarding", json={
+        "personnel_id": f"EMP-{uid()}",
+        "personnel_email": email,
+        "retirement_date": (date.today() + timedelta(days=40)).isoformat(),
+        "session_interval_days": 7,
+    })
+    assert r.status_code == 201
+    return r.json()["session_id"]
+
+
+async def test_offboarding_programme_is_readable_only_by_staff_or_the_person_concerned(
+    admin_client, engineer_client, reliability_client, field_client, compliance_client
+):
+    about_someone_else = await _programme(admin_client, f"other_{uid()}@kairos.local")
+    about_the_field_worker = await _programme(admin_client, FIELD_EMAIL)
+
+    for client in (engineer_client, reliability_client):  # staff
+        assert (await client.get(f"/elicitation/offboarding/{about_someone_else}")).status_code == 200
+
+    # The field worker is the subject of one programme and a stranger to the other.
+    assert (await field_client.get(f"/elicitation/offboarding/{about_the_field_worker}")).status_code == 200
+    assert (await field_client.get(f"/elicitation/offboarding/{about_someone_else}")).status_code == 403
+    assert (await field_client.get(f"/elicitation/offboarding/{about_someone_else}/questions")).status_code == 403
+    assert (await compliance_client.get(f"/elicitation/offboarding/{about_someone_else}")).status_code == 403
+
+
+async def test_offboarding_list_shows_a_non_staff_user_only_their_own(admin_client, field_client):
+    mine = await _programme(admin_client, FIELD_EMAIL)
+    other = await _programme(admin_client, f"other_{uid()}@kairos.local")
+
+    ids = {p["id"] for p in (await field_client.get("/elicitation/offboarding")).json()["items"]}
+    assert mine in ids
+    assert other not in ids
+
+
+async def test_offboarding_responses_are_refused_to_a_stranger(admin_client, field_client):
+    session_id = await _programme(admin_client, f"other_{uid()}@kairos.local")
+    items = (await admin_client.get(f"/elicitation/offboarding/{session_id}/questions")).json()["items"]
+
+    r = await field_client.post(f"/elicitation/offboarding/{session_id}/responses", json={
+        "item_id": items[0]["id"],
+        "responses": [{"question_index": 0, "answer": "Not my programme"}],
+    })
+    assert r.status_code == 403

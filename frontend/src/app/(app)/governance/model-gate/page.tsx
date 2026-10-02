@@ -16,7 +16,8 @@ import { fmtNum, fmtPct, fmtRelTime } from "@/lib/format";
 import { useReducedMotion } from "@/lib/motion";
 import type { ModelGateResult } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
-import { useRole, ADMIN_ROLES } from "@/components/use-role";
+import { useRole, ADMIN_VIEW_ROLES } from "@/components/use-role";
+import { DemoGate } from "@/components/demo-gate";
 
 import { Icon } from "@/components/icon";
 // There is no fixed F1 bar. The backend fails a run when any entity type or asset class scores below
@@ -76,7 +77,7 @@ export default function ModelGatePage() {
   const history = state.status === "live" ? state.data : null;
   const reduced = useReducedMotion();
   const role = useRole();
-  const isAdmin = ADMIN_ROLES.includes(role);
+  const isAdmin = ADMIN_VIEW_ROLES.includes(role);
   const [running, setRunning] = useState(false);
   const [queued, setQueued] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -166,9 +167,11 @@ export default function ModelGatePage() {
           // Running the gate is admin-only on the backend (403 otherwise), so only
           // admins see the trigger. Everyone else views history read-only.
           isAdmin ? (
-            <Button variant="primary" onClick={handleRun} disabled={running || queued} className="min-h-11">
-              {running ? "Triggering…" : queued ? "Running…" : "Run gate now"}
-            </Button>
+            <DemoGate>
+              <Button variant="primary" onClick={handleRun} disabled={running || queued} className="min-h-11">
+                {running ? "Triggering…" : queued ? "Running…" : "Run gate now"}
+              </Button>
+            </DemoGate>
           ) : undefined
         }
       />

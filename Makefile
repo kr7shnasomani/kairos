@@ -5,8 +5,7 @@
 # listed: the repo has a `benchmark/` directory, so without this Make considers the
 # target satisfied by the directory and prints "'benchmark' is up to date" while
 # silently running nothing — exit 0, no benchmark, a green CI step that did no work.
-.PHONY: help dev prod stop nuke logs ps \
-        api workers connectors \
+.PHONY: help dev prod stop nuke logs ps sync-check deploy-backend deploy-frontend local-refresh \
         init-neo4j init-qdrant init-all \
         seed load-dataset redate-demo purge-test-data wipe-local reset-local \
         test test-api test-connectors \
@@ -49,7 +48,6 @@ dev:
 	@echo "    Neo4j Browser:   http://localhost:7474"
 	@echo "    Qdrant UI:       http://localhost:6333/dashboard"
 	@echo "    Temporal UI:     http://localhost:8088"
-	@echo "    Grafana:         http://localhost:3001  (admin / kairos_dev_password)"
 	@echo ""
 
 # Production / AWS server: base file only (no override) plus the `prod` profile, which adds
@@ -65,6 +63,22 @@ prod:
 	@echo ""
 	@echo "  Kairos backend (production) — reachable only through Caddy on 80/443. See docs/DEPLOY.md."
 	@echo ""
+
+# Keep local, GitHub, the EC2 backend and the Vercel frontend identical. See docs/DEPLOY.md "Staying in sync".
+sync-check:
+	@./tools/sync_check.sh
+
+deploy-backend:
+	@./tools/deploy_backend.sh
+
+deploy-frontend:
+	@./tools/deploy_frontend.sh
+
+# Rebuild the local images from the working tree and recreate the containers that use them.
+local-refresh:
+	docker compose build kairos-backend-api kairos-backend-go kairos-frontend
+	docker compose up -d --no-deps kairos-backend-api kairos-celery-worker kairos-temporal-activity-worker kairos-elicitation-worker kairos-backend-go kairos-frontend
+	docker restart kairos-opa   # OPA only reads its policy at startup
 
 stop:
 	docker compose down

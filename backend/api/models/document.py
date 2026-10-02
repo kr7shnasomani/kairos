@@ -188,33 +188,6 @@ class SearchResponse(BaseModel):
     pending_moc: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class ConflictItem(BaseModel):
-    conflict_id: str
-    track: str = Field(..., description="administrative, engineering")
-    asset_id: str | None = None
-    parameter: str
-    source_a: dict[str, Any]
-    source_b: dict[str, Any]
-    authority_a: int
-    authority_b: int
-    severity: str
-    status: str = Field(..., description="open, pending_moc, resolved")
-    sla_deadline: datetime | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class QuarantineItem(BaseModel):
-    item_id: str
-    asset_id: str | None = None
-    content: str
-    input_type: str = Field(..., description="field_observation, voice_note, elicitation_response, deviation_flag")
-    submitted_by: str
-    submitted_at: datetime
-    reviewer_id: str | None = None
-    review_status: str = Field(default="pending", description="pending, promoted, disputed, archived")
-    linked_work_order_id: str | None = None
-
-
 class PromoteQuarantineRequest(BaseModel):
     authority_level: int = Field(..., ge=1, le=5, description="1=Regulatory 2=Engineering 3=OEM 4=Procedure 5=Field")
     relationship_type: str = Field(..., description="Neo4j relationship type for the promoted edge, e.g. DOCUMENTED_BY")

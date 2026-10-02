@@ -106,24 +106,11 @@ def partition_test_artifacts(rows: Iterable[dict]) -> set[str]:
     }
 
 
-async def test_artifact_ids(supabase, document_ids: Collection[str]) -> set[str]:
-    """Resolve which of `document_ids` are test artifacts, by looking their file names up in the vault.
-
-    Read-only. Ids absent from `documents` are **not** returned — see the module docstring: an
-    unresolvable id is unclassifiable, not disposable.
-
-    On a lookup failure this returns an empty set, so the caller shows everything rather than
-    silently hiding evidence because Supabase was unreachable. Failing open is the correct
-    direction here: the cost is visible noise, where failing closed would blank a real graph.
-    """
-    return partition_test_artifacts(await document_rows(supabase, document_ids))
-
-
 async def document_rows(supabase, document_ids: Collection[str]) -> list[dict]:
     """`documents` rows (`document_id`, `file_name`) for the given ids, chunked.
 
     Shared by the test-artifact filter and by callers that need a readable source name, so one
-    lookup serves both. Returns `[]` on any failure — callers fail open (see `test_artifact_ids`).
+    lookup serves both. Returns `[]` on any failure — callers fail open (see `partition_test_artifacts`).
     """
     ids = [d for d in dict.fromkeys(document_ids) if d]
     rows: list[dict] = []

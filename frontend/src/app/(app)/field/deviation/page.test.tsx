@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DeviationPage from "./page";
 
-vi.mock("@/lib/api", () => ({ postDeviationFlag: vi.fn() }));
+vi.mock("@/lib/api", () => ({ getToken: () => null, postDeviationFlag: vi.fn() }));
 
 describe("DeviationPage", () => {
   afterEach(cleanup);

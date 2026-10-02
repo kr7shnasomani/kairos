@@ -15,6 +15,8 @@ vi.mock("@/lib/api", () => ({
   requestQuarantineInfo: vi.fn(),
 }));
 vi.mock("@/components/use-role", () => ({
+  useIsDemo: () => false,
+  visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role),
   useRole: () => "engineer",
   PROMOTE_ROLES: ["engineer"],
 }));

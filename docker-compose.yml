@@ -72,6 +72,11 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # The dev container (docker-compose.override.yml, target dev) reads these at runtime; the
+      # production image bakes the same values from build.args above. Keep both so local matches Vercel.
+      NEXT_PUBLIC_AUTH_STRICT: ${NEXT_PUBLIC_AUTH_STRICT:-false}
+      NEXT_PUBLIC_DEMO_EMAIL: ${NEXT_PUBLIC_DEMO_EMAIL:-}
+      NEXT_PUBLIC_DEMO_PASSWORD: ${NEXT_PUBLIC_DEMO_PASSWORD:-}
       API_INTERNAL_URL: http://kairos-backend-api:8000
       NODE_ENV: production
     depends_on:

@@ -5,6 +5,8 @@ import IngestPage from "./page";
 
 let mockRole = "engineer";
 vi.mock("@/components/use-role", () => ({
+  useIsDemo: () => false,
+  visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role),
   useRole: () => mockRole,
   RESOLVE_ROLES: ["engineer", "reliability", "admin"],
   AUTHORITY_ASSERT_ROLES: ["reliability", "admin"],

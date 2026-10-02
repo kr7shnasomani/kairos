@@ -232,10 +232,23 @@ def test_dev_bypass_allowed(env, debug, expected):
 
 
 # =============================================================================
-# The read-only `demo` role (security review C1): deny-by-default, explicit allow list
+# The `demo` role (security review C1): sees everything, writes only an explicit safe list
 # =============================================================================
 
 _REGO = Path(__file__).resolve().parents[1] / "infra" / "policies" / "kairos.rego"
+_needs_rego = pytest.mark.skipif(not _REGO.exists(), reason="infra/ is not mounted in this container")
+
+# The only writes the demo identity may make. Each was checked in the handler: it appends one row to
+# the audit log and touches nothing shared. Brief ack and brief feedback are deliberately NOT here:
+# ack closes a brief for every recipient, and an "incorrect" rating queues a confidence recheck
+# on the brief's source documents.
+DEMO_SAFE_WRITES = {
+    ("POST", "/search/synthesize"),
+    ("POST", "/search/synthesize/stream"),
+    ("POST", "/search/rca-pack"),
+    ("POST", "/search/feedback"),
+}
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def _demo_grants() -> set[str]:
@@ -244,87 +257,100 @@ def _demo_grants() -> set[str]:
     return set(re.findall(r'"([a-z_*]+)"', line.split(":", 1)[1]))
 
 
-@pytest.mark.skipif(not _REGO.exists(), reason="infra/ is not mounted in this container")
+@_needs_rego
 def test_demo_role_has_an_explicit_allow_list_and_is_not_in_the_catch_all():
     text = _REGO.read_text()
     assert _demo_grants() == {
-        "read_search", "read_briefs", "read_assets", "read_documents",
-        "read_compliance", "read_nonconformance", "synthesize",
+        "read_search", "read_briefs", "read_assets", "read_documents", "read_events",
+        "read_compliance", "read_nonconformance", "read_audit", "read_governance", "read_other",
+        "synthesize", "rca_pack", "answer_feedback",
     }
     # The catch-all grants every non-sensitive action to the roles it names. If demo were named
     # there it would inherit write_api, and with it every write route.
     catch_all = text[text.index("Catch-all"):]
     assert "demo" not in catch_all[catch_all.index("allow if"):]
-    assert "synthesize" not in text[text.index("_sensitive_actions :="):]
+    sensitive = text[text.index("_sensitive_actions :="):]
+    sensitive = sensitive[: sensitive.index("}")]
+    for action in ("read_audit", "read_governance", "read_events", "read_other", "read_search"):
+        assert f'"{action}"' in sensitive
+    for action in ("synthesize", "rca_pack", "answer_feedback"):
+        assert f'"{action}"' not in sensitive  # the staff roles keep these through the catch-all
 
 
-# (method, path) a demo token may call, with the action OPA is asked about
-_DEMO_ALLOWED = [
-    ("GET", "/search/", "read_search"),
-    ("GET", "/search/assets/EQ-101", "read_search"),
-    ("POST", "/search/synthesize", "synthesize"),
-    ("POST", "/search/synthesize/stream", "synthesize"),
-    ("GET", "/briefs/", "read_briefs"),
-    ("GET", "/briefs/B-1", "read_briefs"),
-    ("GET", "/assets/", "read_assets"),
-    ("GET", "/assets/EQ-101/knowledge", "read_assets"),
-    ("GET", "/documents/", "read_documents"),
-    ("GET", "/compliance/dashboard", "read_compliance"),
-    ("GET", "/governance/conflicts", "read_nonconformance"),
-]
-
-# Everything else a demo token might try. Each must resolve to an action the demo role lacks.
-_DEMO_DENIED = [
-    ("POST", "/documents/ingest"),
-    ("POST", "/documents/D-1/supersede"),
-    ("POST", "/documents/D-1/ocr-review/release"),
-    ("POST", "/documents/D-1/topology/verify"),
-    ("POST", "/assets/"),
-    ("POST", "/assets/bulk"),
-    ("POST", "/assets/EQ-1/aliases/x/confirm"),
-    ("POST", "/events/work-order"),
-    ("POST", "/events/ptw"),
-    ("POST", "/events/plant-state"),
-    ("POST", "/events/deviation-flag"),
-    ("POST", "/events/abc/ack"),
-    ("POST", "/briefs/B-1/ack"),
-    ("POST", "/briefs/B-1/countersign"),
-    ("POST", "/briefs/B-1/feedback"),
-    ("POST", "/governance/quarantine/Q-1/promote"),
-    ("POST", "/governance/conflicts/C-1/resolve"),
-    ("POST", "/governance/moc/M-1/approve"),
-    ("POST", "/governance/model-gate/run"),
-    ("POST", "/annotations/"),
-    ("POST", "/elicitation/offboarding"),
-    ("POST", "/search/feedback"),
-    ("POST", "/search/rca-pack"),
-    ("PUT", "/anything/new"),
-    ("DELETE", "/anything/new"),
-    ("GET", "/audit-log/"),
-    ("GET", "/governance/model-gate/history"),
-    ("GET", "/governance/moc"),
-    ("GET", "/events/"),
-    ("GET", "/elicitation/offboarding"),
-    ("GET", "/elicitation/offboarding/S-1"),
-    ("GET", "/annotations/"),
-    ("GET", "/some/route/added/later"),
-]
-
-
-@pytest.mark.skipif(not _REGO.exists(), reason="infra/ is not mounted in this container")
-@pytest.mark.parametrize(("method", "path", "action"), _DEMO_ALLOWED)
-def test_demo_may_read_and_use_the_copilot(method, path, action):
-    resolved = action_for(method, path, "demo")
+@_needs_rego
+@pytest.mark.parametrize(
+    ("path", "action"),
+    [
+        ("/search/", "read_search"),
+        ("/briefs/B-1", "read_briefs"),
+        ("/assets/EQ-101/knowledge", "read_assets"),
+        ("/documents/", "read_documents"),
+        ("/events/", "read_events"),
+        ("/compliance/dashboard", "read_compliance"),
+        ("/governance/conflicts", "read_nonconformance"),
+        ("/governance/model-gate/history", "read_governance"),
+        ("/audit-log/", "read_audit"),
+        ("/elicitation/offboarding", "read_other"),
+        ("/annotations/", "read_other"),
+        ("/some/route/added/later", "read_other"),
+    ],
+)
+def test_demo_can_read_everything_an_admin_reads(path, action):
+    resolved = action_for("GET", path, "demo")
     assert resolved == action
     assert resolved in _demo_grants()
 
 
-@pytest.mark.skipif(not _REGO.exists(), reason="infra/ is not mounted in this container")
-@pytest.mark.parametrize(("method", "path"), _DEMO_DENIED)
-def test_demo_is_refused_everything_else(method, path):
-    resolved = action_for(method, path, "demo")
-    assert resolved is not None, "an unenforced route would bypass OPA for the demo role"
-    assert resolved not in _demo_grants()
+@_needs_rego
+@pytest.mark.parametrize(
+    ("method", "path", "action"),
+    [(m, p, a) for (m, p), a in [
+        (("POST", "/search/synthesize"), "synthesize"),
+        (("POST", "/search/synthesize/stream"), "synthesize"),
+        (("POST", "/search/rca-pack"), "rca_pack"),
+        (("POST", "/search/feedback"), "answer_feedback"),
+    ]],
+)
+def test_demo_safe_writes_resolve_to_named_actions(method, path, action):
+    assert action_for(method, path, "demo") == action
+    assert action in _demo_grants()
+
+
+@_needs_rego
+def test_every_non_get_route_in_the_app_is_denied_for_demo_except_the_safe_list():
+    """Introspects the real app, so a write route added tomorrow is refused until someone names it."""
+    import re as _re
+
+    from api.main import create_app
+
+    granted = _demo_grants()
+    seen, safe_seen = 0, set()
+    for route in create_app().routes:
+        methods = set(getattr(route, "methods", None) or ()) & _WRITE_METHODS
+        path = getattr(route, "path", None)
+        if not methods or not path:
+            continue
+        concrete = _re.sub(r"\{[^}]+\}", "x", path)  # /documents/{document_id}/supersede -> /documents/x/supersede
+        for method in methods:
+            action = action_for(method, concrete, "demo")
+            if action is None:
+                # unenforced on purpose: auth handshake and the HMAC-signed MoC webhook
+                assert concrete.startswith("/auth/") or concrete == "/governance/moc/webhook", (method, path)
+                continue
+            seen += 1
+            if (method, concrete) in DEMO_SAFE_WRITES:
+                safe_seen.add((method, concrete))
+                assert action in granted, (method, path, action)
+            else:
+                assert action not in granted, f"demo could {method} {path} ({action})"
+    assert seen > 30, "route introspection found suspiciously few write routes"
+    assert safe_seen == DEMO_SAFE_WRITES, "the safe-write list names a route that does not exist"
+
+
+@_needs_rego
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE", "POST"])
+def test_an_unknown_write_route_is_denied_for_demo(method):
+    assert action_for(method, "/brand/new/thing", "demo") not in _demo_grants()
 
 
 def test_other_roles_keep_the_unenforced_reads_and_the_same_decisions():
@@ -333,9 +359,10 @@ def test_other_roles_keep_the_unenforced_reads_and_the_same_decisions():
         assert action_for("GET", "/search/", role) is None
         assert action_for("GET", "/elicitation/offboarding", role) is None
         assert action_for("GET", "/audit-log/", role) == "read_audit"
-    # Copilot POSTs now carry their own action; every other role gets it from the rego catch-all.
+    # Copilot POSTs carry their own actions; every staff role gets them from the rego catch-all.
     assert action_for("POST", "/search/synthesize") == "synthesize"
-    assert action_for("POST", "/search/feedback") == "write_api"
+    assert action_for("POST", "/search/feedback") == "answer_feedback"
+    assert action_for("POST", "/search/rca-pack") == "rca_pack"
 
 
 def test_demo_never_gated_on_preflight_or_health():

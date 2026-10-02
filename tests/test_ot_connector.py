@@ -105,3 +105,12 @@ async def test_eam_work_order_forwarding(ot_client, shared_asset_id):
     body = r.json()
     assert body["status"] in ("accepted", "deduplicated")
     assert "event_id" in body
+
+
+async def test_ot_connector_requires_the_shared_secret():
+    """Every route but /health needs X-Connector-Secret (security review M14)."""
+    async with httpx.AsyncClient(base_url=OT_BASE_URL, timeout=15.0) as bare:
+        assert (await bare.get("/health")).status_code == 200
+        assert (await bare.get("/ot/query", params={"asset_id": "A", "tag": "T"})).status_code == 401
+        wrong = await bare.get("/ot/query", params={"asset_id": "A", "tag": "T"}, headers={"X-Connector-Secret": "wrong"})
+        assert wrong.status_code == 401

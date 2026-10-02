@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button, EvidenceLineage, PageHeader, RefusalCard } from "@/components/ui";
 import { Card } from "@/components/ui-card";
 import { DetailSkeleton } from "@/components/skeleton";
@@ -35,6 +35,8 @@ export default function RcaPage() {
   const [pack, setPack] = useState<RcaPack | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Latest request wins: a slower, older pack must not overwrite (or unset loading for) a newer one.
+  const latest = useRef(0);
 
   function assemble(a = asset, c = code, d = incidentDate, q = includeQuarantine) {
     setAsset(a);
@@ -42,10 +44,11 @@ export default function RcaPage() {
     setLoading(true);
     setPack(null);
     setFailed(false);
+    const mine = ++latest.current;
     getRcaPack(a, c, `${d}T00:00:00Z`, q)
-      .then((p) => setPack(p))
-      .catch(() => setFailed(true))
-      .finally(() => setLoading(false));
+      .then((p) => { if (mine === latest.current) setPack(p); })
+      .catch(() => { if (mine === latest.current) setFailed(true); })
+      .finally(() => { if (mine === latest.current) setLoading(false); });
   }
 
   return (

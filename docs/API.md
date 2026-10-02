@@ -43,6 +43,8 @@ Supabase issues ES256 JWTs. Tokens expire after 1 hour. Role and site are stored
 | `compliance@kairos.local` | `KAIROS_SEED_PASSWORD_COMPLIANCE` | `compliance` |
 | `demo@kairos.local` | `KAIROS_SEED_PASSWORD_DEMO` | `demo` |
 
+The `demo` account backs the login page's "Explore the live demo" button. It can read everything an admin can read and use the Copilot, but every other write returns `403` (see the role table in `BACKEND.md`). Its password is public by design (`NEXT_PUBLIC_DEMO_PASSWORD`), so never reuse it.
+
 **Dev mode:** When `APP_DEBUG=True` **and** `APP_ENV == "development"` (the only value that enables any dev bypass; `production`, `staging` or a typo all count as non-development, and the value is trimmed and lower-cased), any request without an `Authorization` header is treated as `{user_id: "dev-user", role: "engineer", site_id: "SITE_001"}`. Both conditions are required — see `Settings.dev_bypass_allowed`. The same rule governs the OPA pass-through, the per-IP rate limit (`RATE_LIMIT_PER_MINUTE`, off only in development) and the boot guard that refuses default secrets.
 
 **Service bypass:** Bearer token matching `INTERNAL_API_KEY` (default: `kairos-internal-dev-key`, compared in constant time) returns a service admin account without calling Supabase. Used by the Go connector and Celery workers.

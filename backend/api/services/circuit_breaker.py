@@ -1,6 +1,6 @@
 """
 Circuit Breaker Service — Layer 7: SPC-Based Extraction Gate.
-Z-score test on 7-day rolling override count vs. 30-day historical baseline.
+Z-score test on the latest 7-day override count vs. a baseline of the three weeks before it.
 Halts graph writes for an asset_class when z_score > 2.0.
 """
 
@@ -12,6 +12,24 @@ from typing import Any
 import structlog
 
 log = structlog.get_logger(__name__)
+
+_WEEKS = 4  # week 0 is the current 7 days, weeks 1 to 3 are the baseline
+_FLAT_BASELINE_STD = 1.0
+
+
+def _weekly_counts(timestamps: list[str], now: datetime) -> list[int]:
+    """Count timestamps into `_WEEKS` strict 7-day windows, window 0 being the latest 7 days.
+
+    Anything older than `_WEEKS * 7` days is dropped rather than folded into the last window
+    (that made the oldest bucket 9 days wide). A future timestamp counts as the current week.
+    """
+    counts = [0] * _WEEKS
+    for ts in timestamps:
+        days_ago = (now - datetime.fromisoformat(ts.replace("Z", "+00:00"))).total_seconds() / 86400
+        week = max(int(days_ago // 7), 0)
+        if week < _WEEKS:
+            counts[week] += 1
+    return counts
 
 
 class CircuitBreakerService:
@@ -65,31 +83,18 @@ class CircuitBreakerService:
             }
 
         now = datetime.now(UTC)
-        thirty_days_ago = (now - timedelta(days=30)).isoformat()
-        seven_days_ago = (now - timedelta(days=7)).isoformat()
+        window_start = (now - timedelta(days=_WEEKS * 7)).isoformat()
 
         all_rows = await asyncio.to_thread(
             lambda: self.supabase.table("extraction_overrides")
             .select("created_at")
             .eq("asset_class", asset_class)
-            .gte("created_at", thirty_days_ago)
+            .gte("created_at", window_start)
             .execute()
         )
-        rows = all_rows.data or []
-
-        # Current 7-day count
-        current_7d = sum(1 for r in rows if r["created_at"] >= seven_days_ago)
-
-        # Bucket last 30 days into 4 weekly windows (bucket 0 = most recent 7 days)
-        week_counts = [0, 0, 0, 0]
-        for row in rows:
-            ts = row["created_at"]
-            ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            days_ago = (now - ts_dt).total_seconds() / 86400
-            bucket = min(int(days_ago // 7), 3)
-            week_counts[bucket] += 1
-
-        historical = week_counts[1:]  # weeks 1–3 are the baseline; exclude current week
+        week_counts = _weekly_counts([r["created_at"] for r in (all_rows.data or [])], now)
+        current_7d = week_counts[0]
+        historical = week_counts[1:]  # the older weeks are the baseline; week 0 is the test value
 
         if all(c == 0 for c in historical):
             return {
@@ -99,13 +104,13 @@ class CircuitBreakerService:
                 "override_count_7d": current_7d,
             }
 
-        try:
-            mean = statistics.mean(historical)
-            std = statistics.stdev(historical) if len(set(historical)) > 1 else 0.0
-        except statistics.StatisticsError:
-            return {"halted": False, "z_score": 0.0, "reason": "stats_error", "override_count_7d": current_7d}
-
-        z_score = 0.0 if std == 0 else (current_7d - mean) / std
+        mean = statistics.mean(historical)
+        # A flat baseline (e.g. [1, 1, 1]) has std 0, which made every z-score 0 and the breaker
+        # unable to trip however many overrides arrived. Floor it at one override per week, so a
+        # flat baseline halts when the week exceeds mean + 2 (z > 2 at unit std). One per week is
+        # the smallest spread a count series can show; a smaller k would halt on ordinary noise.
+        std = statistics.stdev(historical) or _FLAT_BASELINE_STD
+        z_score = (current_7d - mean) / std
         halted = z_score > 2.0
 
         if halted:

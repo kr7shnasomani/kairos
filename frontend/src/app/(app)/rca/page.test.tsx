@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { rcaFor } from "@/lib/rca";
 import type { RcaPack } from "@/lib/types";
@@ -97,5 +97,23 @@ describe("RcaPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     expect(await screen.findByTestId("rca-result-grid")).toBeInTheDocument();
+  });
+
+  it("ignores an older pack that resolves after a newer request", async () => {
+    let resolveOld: (p: RcaPack) => void = () => {};
+    mocks.getRcaPack
+      .mockImplementationOnce(() => new Promise<RcaPack>((r) => { resolveOld = r; }))
+      .mockResolvedValueOnce(rcaFor("HE-301", "TUBE-FOUL"));
+
+    render(<RcaPage />);
+    fireEvent.click(screen.getByRole("button", { name: /mechanical seal failure/ }));
+    fireEvent.click(screen.getByRole("button", { name: /tube fouling/ }));
+    expect(await screen.findByTestId("rca-result-grid")).toBeInTheDocument();
+    expect(screen.getByText("HE-301")).toBeInTheDocument();
+
+    await act(async () => resolveOld(rcaFor("EQ-101", "SEAL-FAIL")));
+
+    expect(screen.getByText("HE-301")).toBeInTheDocument();
+    expect(screen.queryByText("SEAL-FAIL")).not.toBeInTheDocument();
   });
 });

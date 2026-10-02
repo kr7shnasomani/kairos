@@ -1,5 +1,5 @@
 // OT historian client interface and implementations
-// Supports: OSIsoft PI Web API, OPC-UA, Honeywell Uniformance, Generic REST
+// Supports: OSIsoft PI Web API and a mock historian (the default)
 package ot
 
 import (
@@ -214,38 +214,3 @@ func (c *MockHistorianClient) Query(ctx context.Context, q TimeSeriesQuery) ([]T
 }
 
 func (c *MockHistorianClient) Health(ctx context.Context) error { return nil }
-
-// =============================================================================
-// OPC-UA Client
-// =============================================================================
-
-type OPCUAClient struct {
-	EndpointURL string
-}
-
-func NewOPCUAClient(endpointURL string) *OPCUAClient {
-	return &OPCUAClient{EndpointURL: endpointURL}
-}
-
-// Query always fails loudly. It previously returned an empty slice with a nil error once an
-// endpoint was configured, which is indistinguishable from "the historian has no readings for
-// this tag" — a caller would record an absence of data as evidence. An unimplemented connector
-// must be impossible to mistake for a working one that found nothing.
-//
-// Implementing this for real needs the gopcua client plus an OPC-UA server to verify against;
-// until then the honest answer is that this path does not serve data.
-func (c *OPCUAClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSeriesPoint, error) {
-	if c.EndpointURL == "" {
-		return nil, fmt.Errorf("OPC-UA not configured: set OPCUA_ENDPOINT_URL in .env")
-	}
-	return nil, fmt.Errorf(
-		"OPC-UA client is registered but not implemented in this build (endpoint %s); "+
-			"no telemetry is served on this path", c.EndpointURL)
-}
-
-func (c *OPCUAClient) Health(ctx context.Context) error {
-	if c.EndpointURL == "" {
-		return fmt.Errorf("OPC-UA not configured")
-	}
-	return fmt.Errorf("OPC-UA client is registered but not implemented in this build")
-}

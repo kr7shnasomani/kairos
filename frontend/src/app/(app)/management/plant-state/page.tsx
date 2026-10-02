@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import type { PlantOperatingState, PlantState } from "@/lib/types";
 import { getPlantState, setPlantState } from "@/lib/api";
 import { getMe } from "@/lib/auth";
-import { ADMIN_ROLES } from "@/components/use-role";
+import { ADMIN_VIEW_ROLES } from "@/components/use-role";
+import { DemoGate } from "@/components/demo-gate";
 import { Modal, StatusBadge, Button, PageHeader } from "@/components/ui";
 import { fmtRelTime } from "@/lib/format";
 import { STATE_META, STATES, toneToken } from "./_components/state-meta";
@@ -28,7 +29,7 @@ export default function PlantStatePage() {
     getMe().then((u) => {
       if (!alive || !u) return;
       setSiteId(u.site_id);
-      setIsAdmin(ADMIN_ROLES.includes(u.role));
+      setIsAdmin(ADMIN_VIEW_ROLES.includes(u.role));
       // Returned, not fire-and-forget: `getPlantState` now throws on failure instead of
       // returning a fixture, and an unreturned inner promise would reject outside the
       // outer .catch() — an unhandled rejection with the page stuck on its loading state.
@@ -110,6 +111,7 @@ export default function PlantStatePage() {
       )}
 
       {isAdmin && (
+        <DemoGate>
         <section className="rounded-xl border border-line bg-surface p-5 shadow-sm">
           <p className="text-label font-bold uppercase tracking-[0.1em] text-muted">Transition to</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -166,6 +168,7 @@ export default function PlantStatePage() {
           )}
           {error && <p className="mt-3 text-body text-danger">{error}</p>}
         </section>
+        </DemoGate>
       )}
         </main>
 

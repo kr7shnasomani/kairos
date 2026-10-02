@@ -2,9 +2,9 @@
 
 **Repository:** `kr7shnasomani/kairos`, branch `main`, commit `a1d7ed4` (latest at the time of review)
 **Date:** 2026-10-01
-**Companion document:** the 2026-09-30 security review. Security and authorization findings live there and are **not repeated** here. Its findings and their status are listed one per line in [`implementation/status.md` § Accepted risks and deploy checklist](./implementation/status.md#accepted-risks-and-deploy-checklist-from-the-2026-09-30-security-review).
+**Companion document:** the 2026-09-30 security review (recorded in `docs/implementation/status.md`). Security and authorization findings live there and are **not repeated** here. Its findings and their status are listed one per line in [`implementation/status.md` § Accepted risks and deploy checklist](./implementation/status.md#accepted-risks-and-deploy-checklist-from-the-2026-09-30-security-review).
 
-> **Status, 2026-10-01.** This file is the open backlog except for the items below, which the security pass fixed or settled. They are left in the text for history; do not re-file them.
+> **Status, 2026-10-02.** This file is the open backlog except for the items below, which the security pass and the cheap-fixes pass fixed or settled. They are left in the text for history; do not re-file them.
 >
 > | Item | Status | Where |
 > |---|---|---|
@@ -14,8 +14,24 @@
 > | **B16** creating an asset overwrites the Supabase row (same upsert as security M8) | Fixed with M8 | `POST /assets/` is create-only: an `insert`, `409` on a conflict, site-scoped |
 > | **S6** unused Python dependencies | Fixed, except `numpy` | `python-jose`, `passlib`, `flower`, `rich`, `tenacity`, `python-dateutil` and `pytz` are removed; `numpy` stays pinned because `qdrant-client` 1.9.1 needs it. `pip-audit` now reports nothing |
 > | **S7** vendored agent skills for tech the repo does not use | Done by the owner | Removed from `.agents/skills/`; `.agents/SKILL_MANIFEST.md` marks the ones that moved to the global skills as not vendored |
+> | **B8** recurrence never matches failure codes outside the family table | Fixed | `utils/failure_families.failure_family()` (strip, upper, fall back to the code itself) is used on both sides by `_count_recurrences` in `routers/events.py`; a blank code never counts |
+> | **B11** circuit breaker never trips on a steady baseline | Fixed | Strict 7-day windows over 28 days; a flat baseline uses std 1.0 so it halts above mean plus 2 (`services/circuit_breaker.py`); the recomputed `current_7d` and the dead `StatisticsError` handler are gone |
+> | **B12** `last_inspection_date` always null | Fixed in the query | It matches `:KNOWLEDGE_EDGE {relationship_type: 'INSPECTION_RECORD'}` now. The cloud graph holds no such edges yet, so the value stays empty until inspections are ingested |
+> | **B13** briefs never get vector evidence | Fixed | `brief_engine._vector_search` uses `QDRANT_COLLECTION_DOCUMENTS`, as the RCA route does |
+> | **B30**, **B32** and 9 Low frontend items | Fixed | Copilot `nextId` is never reset; an empty registry or vault renders its empty state; `relativeTime` says "in 5m" for the future and an overdue SLA says "overdue"; event detail and the elicitation page handle an error and empty questions; the newest RCA request wins; an SSE `error` frame rejects the answer; date-only strings parse as local dates in the Copilot composer and page (the RCA and graph pages still use the UTC form); the ack and feedback response types match `briefs.py` |
+> | Low backend | Fixed | `/search?as_of=garbage` is 422; the feedback recheck task is held until done; the false "no Event node is ever written" comment is corrected |
+> | **C1** no-op try/catch wrappers in `api.ts` | Fixed, except two | 35 removed; the `synthesize` and `rcaPack` wrappers stay because they use their own error messages |
+> | **S8** dead observability configs | Done | `infra/otel`, `infra/tempo`, `infra/grafana/provisioning` removed; `dashboards-import/` kept |
+> | **S9** dead backend code | Done, except two | Removed `middleware/auth.py`, `models/graph_nodes.py`, the stub `workers/ingestion.py` (and its Celery entries), four unused models and `link_entities`, `corpus.test_artifact_ids`. Left: `GraphService.health_check` (unreferenced) and `run_form_extraction` with `forms.py` |
+> | **S12** smaller dead items | Partly | Removed dead Go code (`internal/eam`, `relay.go`, `OPCUAClient`, plus the unused `go-redis` dependency) and phantom Makefile entries. Left: `requirements-cv.txt` (still referenced by `ruff.toml`, a `requirements.txt` comment and the docs) |
 >
-> Everything else below (B1, B4, B5, B6, B8 to B15, the other S items, the performance and test-gap lists) is **still open**.
+> **Not a bug:** the 30-minute "late-arrival window" in `workflows/document_pipeline.py` is the document-to-event correlation window for timestamp drift, which borrows the `LATE_ARRIVAL_WINDOW_MINUTES` setting name. The docs give 5 minutes for the brief delay and say nothing about this use, so which value is right is a decision, not a fix.
+>
+> **New finding:** the Makefile targets `test-connectors` and `lint` run `go` and `golangci-lint` inside the alpine release image, which has neither, so they cannot work as written.
+>
+> These fixes are pinned by `tests/test_cr_fixes.py` (backend) and the extended frontend tests.
+>
+> Everything else below (B1, B4, B5, B6, B9, B10, B14, B15, B17 to B29, B31, B33, the remaining Low items, the other S items, the other C items, the performance and test-gap lists) is **still open**.
 
 ## How this was produced
 

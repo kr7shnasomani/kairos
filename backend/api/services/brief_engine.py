@@ -659,8 +659,10 @@ class BriefEngine:
     async def _vector_search(self, query: str, asset_id: str) -> list[dict[str, Any]]:
         try:
             vector = await self.llm.embed(query, task="retrieval.query")
+            # `kairos_documents`: ingestion never writes the knowledge collection (see the same
+            # note in `routers/search.py`), so searching it returned nothing for every brief.
             return await self.vector.search(
-                self.settings.QDRANT_COLLECTION_KNOWLEDGE,
+                self.settings.QDRANT_COLLECTION_DOCUMENTS,
                 vector,
                 asset_id=asset_id,
                 limit=5,

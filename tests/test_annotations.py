@@ -1,4 +1,10 @@
-"""Annotations — Task 21: Active Learning Annotation Interface (Layer 3)."""
+"""Annotations — Task 21: Active Learning Annotation Interface (Layer 3).
+
+Security pass (2026-09-30 review, M7): any role may record a correction, but only reliability and
+admin feed the validation corpus (the ground truth the model gate scores against). Repeat overrides
+are de-duplicated and one user is limited to 60 corrections an hour; both of those need more writes
+than a test should make, so they are not exercised here.
+"""
 
 from tests.conftest import uid
 
@@ -120,3 +126,38 @@ async def test_annotation_missing_required_fields(admin_client):
         # missing entity_text, entity_type, is_correct
     })
     assert r.status_code == 422
+
+
+async def _corpus_size(client):
+    r = await client.get("/governance/validation-corpus/stats")
+    assert r.status_code == 200
+    return r.json()["total_corpus_size"]
+
+
+async def test_correct_annotation_from_an_engineer_does_not_feed_the_validation_corpus(admin_client, engineer_client):
+    doc_id = await _ingest_doc(admin_client)
+    before = await _corpus_size(admin_client)
+
+    r = await engineer_client.post("/annotations/", json={
+        "document_id": doc_id,
+        "entity_text": "bearing housing",
+        "entity_type": "COMPONENT",
+        "is_correct": True,
+    })
+    assert r.status_code == 201  # the correction itself is still recorded
+    assert await _corpus_size(admin_client) == before
+
+
+async def test_correct_annotation_from_reliability_is_accepted(admin_client, reliability_client):
+    doc_id = await _ingest_doc(admin_client)
+    before = await _corpus_size(admin_client)
+
+    r = await reliability_client.post("/annotations/", json={
+        "document_id": doc_id,
+        "entity_text": "pump impeller",
+        "entity_type": "COMPONENT",
+        "is_correct": True,
+    })
+    assert r.status_code == 201
+    # Reliability feeds the corpus. The stats read is a capped page, so assert "never less", not "+1".
+    assert await _corpus_size(admin_client) >= before

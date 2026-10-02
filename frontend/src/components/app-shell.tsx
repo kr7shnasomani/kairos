@@ -10,7 +10,7 @@ import { getMe, logout } from "@/lib/auth";
 import { getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
 import { flushQueue } from "@/lib/idb";
 import { getUserInitials } from "@/lib/user-initials";
-import { ADMIN_ROLES, READ_ONLY_ROLES, routeAllowed, roleHome } from "./use-role";
+import { ADMIN_VIEW_ROLES, READ_ONLY_ROLES, routeAllowed, roleHome } from "./use-role";
 import type { Role, User, GovernorEventState, PlantState } from "@/lib/types";
 import { capitalize, cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
@@ -23,8 +23,6 @@ import { getSearchShortcut } from "@/lib/search-shortcut";
 const STAFF: Role[] = ["engineer", "reliability", "admin"];
 /** Staff plus the read-only compliance auditor — mirrors STAFF_AND_COMPLIANCE in use-role.ts. */
 const STAFF_AND_COMPLIANCE: Role[] = [...STAFF, "compliance"];
-/** The read-only demo sees the views it may open (see DEMO_ROUTES in use-role.ts). */
-const WITH_DEMO = (roles: Role[]): Role[] => [...roles, "demo"];
 
 // Nav keys → the shared Phosphor set (components/icon.tsx). Conventional metaphors
 // over clever ones: a sidebar is scanned, not read.
@@ -45,6 +43,9 @@ function Icon({ name, className, active = false }: { name: IconName; className?:
 }
 
 type NavItem = { href: string; label: string; icon: IconName; roles?: Role[] };
+
+/** The demo account sees every nav item an admin sees. */
+const navAllowed = (it: NavItem, role: Role) => !it.roles || role === "demo" || it.roles.includes(role);
 
 // group: "" renders ungrouped at the top (no header, no collapse).
 const NAV: { group: string; items: NavItem[] }[] = [
@@ -67,7 +68,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     group: "Analyze",
     items: [
       { href: "/rca", label: "RCA", icon: "rca", roles: STAFF },
-      { href: "/graph", label: "Graph", icon: "graph", roles: WITH_DEMO(STAFF) },
+      { href: "/graph", label: "Graph", icon: "graph", roles: STAFF },
       { href: "/management/coverage", label: "Coverage", icon: "coverage", roles: STAFF },
     ],
   },
@@ -76,7 +77,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       // The compliance auditor sees exactly these two and nothing else in the sidebar —
       // matching `read_compliance` / `read_audit` in kairos.rego and ROUTE_ACCESS.
-      { href: "/compliance", label: "Compliance", icon: "compliance", roles: WITH_DEMO(STAFF_AND_COMPLIANCE) },
+      { href: "/compliance", label: "Compliance", icon: "compliance", roles: STAFF_AND_COMPLIANCE },
       { href: "/governance", label: "Governance", icon: "governance", roles: STAFF },
       { href: "/audit", label: "Audit Trail", icon: "audit", roles: STAFF_AND_COMPLIANCE },
     ],
@@ -84,7 +85,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "Knowledge",
     items: [
-      { href: "/documents", label: "Documents", icon: "documents", roles: WITH_DEMO(STAFF) },
+      { href: "/documents", label: "Documents", icon: "documents", roles: STAFF },
       { href: "/projects", label: "Projects", icon: "projects", roles: STAFF },
       { href: "/offboarding", label: "Off-Boarding", icon: "offboarding", roles: STAFF },
     ],
@@ -162,7 +163,7 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
   const homeHref = role === "field_worker" || role === "demo" ? roleHome(role) : "/management";
   const shortcut = getSearchShortcut(typeof navigator === "undefined" ? undefined : navigator.platform);
   const sections = NAV
-    .map((s) => ({ ...s, items: s.items.filter((it) => !it.roles || it.roles.includes(role)) }))
+    .map((s) => ({ ...s, items: s.items.filter((it) => navAllowed(it, role)) }))
     .filter((s) => s.items.length > 0);
 
   return (
@@ -295,7 +296,7 @@ function AccountMenu({ open, onClose, name, role, onSignOut }: { open: boolean; 
       <div className="sidebar-scope absolute right-4 top-16 w-64 border border-line p-2 shadow-xl animate-[overlay-in_150ms_ease-out] lg:bottom-3 lg:left-[calc(var(--rail-w)+0.5rem)] lg:right-auto lg:top-auto">
         <div className="flex items-start justify-between gap-3 px-3 py-2"><div className="min-w-0"><p className="truncate text-sm font-semibold">{name}</p><p className="text-caption text-muted">{role.replace(/_/g, " ")}</p></div><ThemeToggle className="-mr-1 -mt-1 shrink-0" /></div>
         <Link href="/settings" onClick={onClose} className="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-surface-2"><SharedIcon name="gear-six" className="size-4 text-muted" />System Settings</Link>
-        {ADMIN_ROLES.includes(role as Role) && (
+        {ADMIN_VIEW_ROLES.includes(role as Role) && (
           <Link href="/system-health" onClick={onClose} className="flex items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-surface-2"><SharedIcon name="heartbeat" className="size-4 text-muted" />System Health</Link>
         )}
         <button type="button" onClick={onSignOut} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-surface-2"><SharedIcon name="sign-out" className="size-4" />Sign out</button>
@@ -431,7 +432,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const nav = NAV.flatMap((g) =>
       g.items
-        .filter((i) => !i.roles || i.roles.includes(role))
+        .filter((i) => navAllowed(i, role))
         .map((i) => ({ group: g.group || "Go to", label: i.label, href: i.href })),
     );
     return [
@@ -583,8 +584,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {readOnly && (
           <div role="status" data-testid="read-only-demo" className="flex items-center gap-2 border-b border-line bg-accent-soft px-5 py-2 text-caption font-semibold text-ink">
             <SharedIcon name="lock-simple" className="size-4 shrink-0 text-accent" />
-            Read-only demo
-            <span className="font-normal text-muted">You can browse the data and ask the Copilot. Nothing here can be changed.</span>
+            Demo account: destructive actions are disabled
+            <span className="font-normal text-muted">You can see everything and ask the Copilot. Changes to shared data are blocked.</span>
           </div>
         )}
 

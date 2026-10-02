@@ -29,6 +29,7 @@ describe("EventDetailPage", () => {
 
   it("uses a responsive event-detail hierarchy with readable payload fields", async () => {
     mocks.getEvent.mockResolvedValue({ data: event, source: "demo" });
+    mocks.getMe.mockResolvedValue({ user_id: "operator-7", role: "engineer" });
 
     await act(async () => render(<EventDetailPage params={Promise.resolve({ id: event.event_id })} />));
 
@@ -55,5 +56,26 @@ describe("EventDetailPage", () => {
       role: "engineer",
     }));
     expect(await screen.findByText(/Acknowledged by/)).toHaveTextContent("operator-7");
+  });
+
+  it("disables acknowledging for the demo account", async () => {
+    mocks.getEvent.mockResolvedValue({ data: event, source: "live" });
+    mocks.getMe.mockResolvedValue({ user_id: "demo-1", role: "demo" });
+
+    await act(async () => render(<EventDetailPage params={Promise.resolve({ id: event.event_id })} />));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Acknowledge event" })).toBeDisabled());
+    expect(mocks.ackEvent).not.toHaveBeenCalled();
+  });
+
+  it("shows an error with retry when the fetch fails, instead of loading forever", async () => {
+    mocks.getEvent.mockRejectedValueOnce(new Error("HTTP 500")).mockResolvedValueOnce({ data: event, source: "live" });
+    mocks.getMe.mockResolvedValue({ user_id: "operator-7", role: "engineer" });
+
+    await act(async () => render(<EventDetailPage params={Promise.resolve({ id: event.event_id })} />));
+
+    expect(await screen.findByText("HTTP 500")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("heading", { name: "Alarm" })).toBeInTheDocument();
   });
 });

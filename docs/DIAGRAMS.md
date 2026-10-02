@@ -159,7 +159,7 @@ flowchart TB
 
     DEP --> R
 
-    subgraph R["12 routers · 86 routes"]
+    subgraph R["12 routers · 98 routes"]
         R1["assets · documents · search"]
         R2["events · briefs · governance"]
         R3["compliance · elicitation · annotations · audit"]

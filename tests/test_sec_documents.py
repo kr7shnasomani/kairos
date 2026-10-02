@@ -1,4 +1,4 @@
-"""Service-free: security-review fixes for documents, ingestion and storage (H5, H6, M11-M13, L9, L10, L12, L6).
+"""Service-free: security-review fixes (docs/implementation/status.md) for documents, ingestion and storage (H5, H6, M11-M13, L9, L10, L12, L6).
 
 No stack, secrets or network: Supabase, Neo4j and Temporal are replaced by in-memory fakes.
 """

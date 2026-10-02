@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   postAlarm: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => mocks);
+vi.mock("@/lib/api", () => ({ ...mocks, getToken: () => null }));
 
 const accepted = { status: "accepted", event_id: "ev-1" };
 

@@ -24,7 +24,7 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 
 `docker-compose.override.yml` is for **local development only**. It is never copied to or used on the server.
 
-## Current deployment (15 September 2026)
+## Current deployment (updated 2 October 2026)
 
 | | |
 |---|---|
@@ -32,15 +32,18 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 | API | **https://kairos-deterium.duckdns.org** (`/health`, `/docs`, `/health/detailed` needs a sign-in) |
 | Server | EC2 `i-012800d81f549557b` · `c7i-flex.large` (resized down from `m7i-flex.large` on 28 September 2026, see §2) · Ubuntu 24.04 · 30 GB gp3 · Mumbai `ap-south-1` |
 | Address | Elastic IP `3.7.186.159` ← DuckDNS `kairos-deterium` |
-| Security group | 22 (your IP), 80, 443 |
+| Security group | 22 (one IP: the deployer's current address), 80, 443 |
 | Certificate | Let's Encrypt, renewed automatically by Caddy |
-| Running | the 11 services started by `make prod`; memory about 2.6 GiB of 3.7 GiB. **Pending:** the server's Elasticsearch is still on the old 1 GB heap (`docker-compose.yml` there wasn't updated with the local repo's change to 512 MB, see §2 and `status.md` Known Pitfalls) — apply that before treating this box as fully right-sized |
+| Code | the working tree as of 2 October 2026 (security update, role migration applied, `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` set). `make sync-check` compares it with local, GitHub and Vercel (section 14b) |
+| Running | the 11 services started by `make prod`; memory about 2.1 GiB of 3.7 GiB. Elasticsearch runs the 512 MB heap (`-Xms512m -Xmx512m`) |
 | Account | AWS Free plan, $200 credit ($100 sign-up + $100 in activity credits), about $2.28 a day while running (down from $2.63/day on the old instance type) |
 | Runway | **$167.64** left as of 28 September 2026 ÷ $2.28/day = about 74 days. Credit runs out around **10 December 2026** |
 
-**Accepted risk:** the login page's "Explore the live demo" button (it signs in as admin), and the seeded passwords in the
-repository, let anyone act as admin on the live data. Replace them with a read-only demo account before
-wider sharing.
+**The demo button.** The login page's "Explore the live demo" button signs in as `demo@kairos.local`
+(role `demo`: sees everything, every destructive action refused by policy). Its credentials are public by
+design (`NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD`, baked into the frontend at build time).
+**Still open:** the other seeded accounts' old passwords are in git history, so rotate them (see
+`docs/implementation/status.md`).
 
 ---
 
@@ -60,6 +63,7 @@ wider sharing.
 12. [Connect the Vercel frontend](#12-connect-the-vercel-frontend)
 13. [Never run on the server](#13-never-run-on-the-server)
 14. [Operate: update, logs, stop, tear down](#14-operate-update-logs-stop-tear-down)
+    - [14b. Staying in sync (local, GitHub, EC2, Vercel)](#14b-staying-in-sync-local-github-ec2-vercel)
 15. [Troubleshooting](#15-troubleshooting)
 16. [Continuous deploy (GitHub Actions)](#16-continuous-deploy-github-actions)
 
@@ -576,6 +580,32 @@ instance from that snapshot, attaching a new Elastic IP, and updating DuckDNS wi
 4. Check **https://console.aws.amazon.com/ec2globalview/home** for leftovers in other regions.
 
 ---
+
+## 14b. Staying in sync (local, GitHub, EC2, Vercel)
+
+The same working tree should be what runs everywhere. Four commands keep it that way:
+
+| Command | What it does |
+|---|---|
+| `make sync-check` | Read-only. Reports drift between this tree, GitHub, the EC2 backend, the Vercel frontend and your local containers. `tools/sync_check.sh --deep` also logs in as the demo user on the live API. Exit status 1 if anything differs. |
+| `make deploy-backend` | Backs up the server tree and tags the running images, rsyncs (never touches the server's `.env`), runs `make prod`, restarts OPA and Caddy, verifies `/health`. `tools/deploy_backend.sh --files` copies files only (docs, tools, compose) with no rebuild or restart. |
+| `make deploy-frontend` | `vercel deploy --prod` from the repo root with a remote build, no GitHub push, then records the deployed source hash in `.vercel/deployed-frontend.sha`. |
+| `make local-refresh` | Rebuilds the local images from the working tree, recreates the containers and restarts OPA. |
+
+What `sync-check` compares: uncommitted files and unpushed commits; a checksum dry run of the deploy rsync; the frontend source hash against the last deploy; thirteen behaviour flags resolved with their code defaults on both sides; that OPA and Caddy started after their files last changed (both only read them at startup, and a single-file mount goes stale after an rsync); and that each local image is newer than its source.
+
+**Differences that are intentional, and so not reported as drift:**
+
+| | Local | Hosted |
+|---|---|---|
+| API address the browser calls | `http://localhost:8000` | `https://kairos-deterium.duckdns.org` |
+| `APP_ENV` | `development` (dev bypasses on) | `production` (they are off) |
+| `CORS_ORIGINS` | the local origins | the Vercel origin |
+| Frontend process | `next dev` (dev stage, runtime env) | production build (values baked at build time) |
+| Secrets | your local values | the server's own (`MOC_WEBHOOK_SECRET`, `CONNECTOR_SHARED_SECRET`, cloud keys) |
+| Backend source | mounted with `--reload` (`docker-compose.override.yml`) | rsynced and rebuilt |
+
+Everything else, including `NEXT_PUBLIC_AUTH_STRICT` and the demo login, should match. Vercel's variable values are encrypted and cannot be read back, so `sync-check` only verifies that the names exist: change a `NEXT_PUBLIC_*` value there and run `make deploy-frontend`.
 
 ## 15. Troubleshooting
 

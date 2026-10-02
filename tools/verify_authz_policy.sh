@@ -56,29 +56,31 @@ CASES=(
   "reliability:countersign_brief:true"
   "engineer:countersign_brief:false"      # the acknowledger's role cannot also countersign
   "admin:promote_quarantine:true"
-  # --- demo: the public one-click identity. Explicit allow list, deny by default ---
+  # --- demo: sees everything an admin sees, writes only what appends to the audit log --------
   "demo:read_search:true"
   "demo:read_briefs:true"
   "demo:read_assets:true"
   "demo:read_documents:true"
+  "demo:read_events:true"
   "demo:read_compliance:true"
   "demo:read_nonconformance:true"
+  "demo:read_audit:true"
+  "demo:read_governance:true"
+  "demo:read_other:true"                  # offboarding, annotations and any GET not named for it
   "demo:synthesize:true"                  # the Copilot, without being granted write_api
-  "demo:write_api:false"                  # feedback, annotations, rca-pack, brief ack, deviation flags
+  "demo:rca_pack:true"                    # audit-log append only
+  "demo:answer_feedback:true"             # audit-log append only
+  "demo:write_api:false"                  # brief ack/feedback, annotations, deviation flags, elicitation
   "demo:write_assets:false"
   "demo:ingest_document:false"
   "demo:ingest_event:false"
   "demo:promote_quarantine:false"
   "demo:countersign_brief:false"
-  "demo:resolve_admin_conflict:false"     # supersede/approve/resolve
-  "demo:read_audit:false"
-  "demo:read_governance:false"            # model gate, MoC, circuit breaker
-  "demo:read_events:false"
-  "demo:read_other:false"                 # offboarding/personnel and any GET not named for it
+  "demo:resolve_admin_conflict:false"     # supersede, MoC approve, conflict resolve
   "demo:some_future_action:false"         # deny by default, not an exclusion list
-  "field_worker:synthesize:true"          # the new action reaches every other role unchanged
-  "compliance:synthesize:true"
-  "engineer:synthesize:true"
+  "field_worker:synthesize:true"          # the Copilot actions reach every staff role unchanged
+  "compliance:rca_pack:true"
+  "engineer:answer_feedback:true"
   # --- the Postgres role on a raw Supabase token is not an app role -----------
   "authenticated:read_compliance:false"
   "authenticated:write_api:false"

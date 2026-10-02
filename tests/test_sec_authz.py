@@ -821,30 +821,33 @@ def test_ratelimit_exemption_cannot_be_forged_through_the_host_header(monkeypatc
 
 
 # =============================================================================
-# C1: the read-only demo identity, through the real OPAMiddleware
+# C1: the demo identity, through the real OPAMiddleware
 # =============================================================================
 
 _DEMO_USER = {"user_id": "demo-1", "role": "demo", "site_id": "SITE_001", "email": "demo@kairos.local"}
+# (method, path, may the demo token reach it)
 _DEMO_ROUTES = [
-    ("GET", "/search/"), ("POST", "/search/synthesize"), ("POST", "/search/synthesize/stream"),
-    ("GET", "/briefs/"), ("GET", "/assets/"), ("GET", "/documents/"), ("GET", "/compliance/dashboard"),
-    # the routes it must NOT reach
-    ("POST", "/documents/ingest"), ("POST", "/documents/D-1/supersede"), ("POST", "/assets/"),
-    ("POST", "/events/work-order"), ("POST", "/events/plant-state"), ("POST", "/events/abc/ack"),
-    ("POST", "/briefs/B-1/ack"), ("POST", "/governance/quarantine/Q-1/promote"),
-    ("POST", "/governance/moc/M-1/approve"), ("POST", "/governance/model-gate/run"),
-    ("POST", "/search/feedback"), ("POST", "/search/rca-pack"), ("POST", "/annotations/"),
-    ("GET", "/audit-log/"), ("GET", "/governance/model-gate/history"), ("GET", "/events/"),
-    ("GET", "/elicitation/offboarding"), ("GET", "/annotations/"),
+    ("GET", "/search/", True), ("POST", "/search/synthesize", True), ("POST", "/search/synthesize/stream", True),
+    ("POST", "/search/rca-pack", True), ("POST", "/search/feedback", True),
+    ("GET", "/briefs/", True), ("GET", "/assets/", True), ("GET", "/documents/", True),
+    ("GET", "/compliance/dashboard", True), ("GET", "/audit-log/", True), ("GET", "/events/", True),
+    ("GET", "/governance/model-gate/history", True), ("GET", "/elicitation/offboarding", True),
+    # everything that writes, ingests, approves or closes
+    ("POST", "/documents/ingest", False), ("POST", "/documents/D-1/supersede", False),
+    ("POST", "/documents/D-1/ocr-review/reject", False), ("POST", "/assets/", False),
+    ("POST", "/assets/bulk", False), ("POST", "/assets/EQ-1/aliases/x/confirm", False),
+    ("POST", "/events/work-order", False), ("POST", "/events/plant-state", False),
+    ("POST", "/events/deviation-flag", False), ("POST", "/events/abc/ack", False),
+    ("POST", "/briefs/B-1/ack", False), ("POST", "/briefs/B-1/countersign", False),
+    ("POST", "/briefs/B-1/feedback", False), ("POST", "/governance/quarantine/Q-1/promote", False),
+    ("POST", "/governance/conflicts/C-1/resolve", False), ("POST", "/governance/moc/M-1/approve", False),
+    ("POST", "/governance/model-gate/run", False), ("POST", "/annotations/", False),
+    ("POST", "/elicitation/offboarding", False), ("POST", "/elicitation/W-1/responses", False),
 ]
-_DEMO_MAY = {
-    ("GET", "/search/"), ("POST", "/search/synthesize"), ("POST", "/search/synthesize/stream"),
-    ("GET", "/briefs/"), ("GET", "/assets/"), ("GET", "/documents/"), ("GET", "/compliance/dashboard"),
-}
 
 
 @pytest.mark.skipif(not REGO.exists(), reason="infra/ is not mounted in this container")
-def test_a_demo_token_reaches_only_the_read_and_copilot_routes(monkeypatch):
+def test_a_demo_token_reads_everything_and_writes_only_the_safe_list(monkeypatch):
     from api.middleware.opa import OPAMiddleware
 
     text = REGO.read_text()
@@ -862,22 +865,21 @@ def test_a_demo_token_reaches_only_the_read_and_copilot_routes(monkeypatch):
     monkeypatch.setattr(OPAMiddleware, "_ask_opa", fake_opa)
 
     app = FastAPI()
-    for method, path in _DEMO_ROUTES:
+    for method, path, _ in _DEMO_ROUTES:
         app.add_api_route(path, lambda: {"reached": True}, methods=[method])
     app.add_middleware(OPAMiddleware, opa_url="http://opa.invalid", settings=None, debug=False)
     client = TestClient(app)
 
-    for method, path in _DEMO_ROUTES:
+    for method, path, may in _DEMO_ROUTES:
         status = client.request(method, path).status_code
-        want = 200 if (method, path) in _DEMO_MAY else 403
-        assert status == want, (method, path, status)
+        assert status == (200 if may else 403), (method, path, status)
 
-    # a route added next year and never mentioned anywhere is still refused (deny by default)
+    # a write route added next year and never mentioned anywhere is still refused (deny by default)
     app2 = FastAPI()
-    app2.add_api_route("/brand/new", lambda: {"reached": True}, methods=["GET", "POST", "PUT", "DELETE"])
+    app2.add_api_route("/brand/new", lambda: {"reached": True}, methods=["POST", "PUT", "DELETE"])
     app2.add_middleware(OPAMiddleware, opa_url="http://opa.invalid", settings=None, debug=False)
     c2 = TestClient(app2)
-    assert [c2.request(m, "/brand/new").status_code for m in ("GET", "POST", "PUT", "DELETE")] == [403] * 4
+    assert [c2.request(m, "/brand/new").status_code for m in ("POST", "PUT", "DELETE")] == [403] * 3
 
 
 def test_the_demo_user_resolves_from_app_metadata_with_the_demo_role(monkeypatch):

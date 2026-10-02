@@ -32,9 +32,12 @@ _ACTION_MAP = (
     ("/governance/conflicts", "resolve_admin_conflict"),
     ("/documents", "ingest_document"),
     ("/assets", "write_assets"),
-    # The Copilot's POSTs get their own action so the read-only `demo` role can use them without
-    # being granted the `write_api` catch-all. Every other role gets it from the catch-all as before.
+    # The Copilot's POSTs get their own actions so the `demo` role can use them without being
+    # granted the `write_api` catch-all. Each only appends to the audit log. Every other role gets
+    # them from the catch-all as before.
     ("/search/synthesize", "synthesize"),
+    ("/search/rca-pack", "rca_pack"),
+    ("/search/feedback", "answer_feedback"),
     # The operational-event feed. Listed by route, not by the `/events` prefix, so field-worker
     # flows (deviation-flag, ack) and the engineer-only plant-state stay on the `write_api` catch-all.
     ("/events/work-order", "ingest_event"),
@@ -84,10 +87,11 @@ _READ_ACTION_MAP = (
     ("/events", "read_events"),
 )
 
-# The read-only `demo` role is deny-by-default, so the reads other roles leave unenforced must be
-# named for it. Anything under neither this map nor `_READ_ACTION_MAP` resolves to `_DEMO_FALLBACK`,
-# which no rule grants (offboarding/personnel, annotations, elicitation, ...). Only the demo role
-# pays the extra OPA call; for every other role these GETs stay unenforced, as the UI expects.
+# The `demo` role sees everything an admin sees but is deny-by-default for writes, so the reads other
+# roles leave unenforced are named for it: the three below, and anything else resolves to
+# `_DEMO_FALLBACK` (offboarding, annotations, elicitation, ...). Both are granted to it in
+# kairos.rego, which is where a read can be taken away. Only the demo role pays the extra OPA call;
+# for every other role these GETs stay unenforced, as the UI expects.
 _DEMO_READ_ACTION_MAP = (
     ("/search", "read_search"),
     ("/briefs", "read_briefs"),

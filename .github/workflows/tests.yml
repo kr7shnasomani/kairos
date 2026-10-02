@@ -133,7 +133,8 @@ jobs:
               tests/test_sec_authz.py \
               tests/test_sec_documents.py \
               tests/test_sec_infra.py \
-              tests/test_sec_llm.py
+              tests/test_sec_llm.py \
+              tests/test_cr_fixes.py
 
       # The benchmark grader is deterministic logic (negation handling, Wilson intervals, the
       # run-validity verdict) and needs no stack, no secrets and no network — so it belongs in

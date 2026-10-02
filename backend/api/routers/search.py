@@ -117,7 +117,10 @@ async def search(
     Results are authority-ranked: regulatory requirements (level 1) outrank field observations (level 5).
     Phase 1: retrieval only. synthesis=None until Phase 2.
     """
-    as_of_dt = datetime.fromisoformat(as_of) if as_of else None
+    try:
+        as_of_dt = datetime.fromisoformat(as_of) if as_of else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="as_of must be an ISO8601 timestamp") from exc
 
     svc = SearchService(
         graph=GraphService(driver, settings.NEO4J_DATABASE),

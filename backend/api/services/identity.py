@@ -43,5 +43,8 @@ async def display_name(supabase, user_id: str | None) -> str | None:
         user = await asyncio.to_thread(lambda: supabase.auth.admin.get_user_by_id(user_id).user)
     except Exception:  # noqa: BLE001 — display nicety only
         return None
-    meta = user.app_metadata or {}
+    from api.config import get_settings
+    from api.dependencies import auth_metadata
+
+    meta = auth_metadata(user, get_settings())
     return meta.get("name") or (user.email or "").split("@")[0] or None

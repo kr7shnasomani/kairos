@@ -1,6 +1,11 @@
-"""Assets — Tasks 1-3: MDM backbone, asset CRUD, aliases, hierarchy, knowledge graph."""
+"""Assets — Tasks 1-3: MDM backbone, asset CRUD, aliases, hierarchy, knowledge graph.
 
-from tests.conftest import uid
+Security pass (2026-09-30 review, M8): single asset create is insert-only (a second post of an id is
+a 409), and every asset route is site-scoped. A non-admin registers only on their own site and gets
+the same 404 for another site's asset as for an unknown one.
+"""
+
+from tests.conftest import OTHER_SITE, uid
 
 
 async def test_create_asset(admin_client):
@@ -22,12 +27,13 @@ async def test_create_asset(admin_client):
     assert body["status"] == "created"
 
 
-async def test_create_asset_is_idempotent(admin_client):
+async def test_create_asset_is_insert_only(admin_client):
+    """Registering an id twice is a 409, and the first record is left exactly as it was."""
     asset_id = f"ASSET-{uid()}"
     payload = {
         "asset_id": asset_id,
         "tag_number": f"TAG-{uid()}",
-        "name": "Idempotent Pump",
+        "name": "Insert-Only Pump",
         "equipment_class": "COMPRESSOR",
         "criticality": "non_critical",
         "site_id": "SITE_001",
@@ -36,10 +42,29 @@ async def test_create_asset_is_idempotent(admin_client):
         "confirmed_by_user_id": "test-runner",
     }
     r1 = await admin_client.post("/assets/", json=payload)
-    r2 = await admin_client.post("/assets/", json=payload)
+    r2 = await admin_client.post("/assets/", json={**payload, "name": "Overwrite attempt"})
     assert r1.status_code == 201
-    # Second call should not raise — MERGE in Neo4j is idempotent
-    assert r2.status_code in (200, 201)
+    assert r2.status_code == 409
+
+    stored = await admin_client.get(f"/assets/{asset_id}")
+    assert stored.status_code == 200
+    assert stored.json()["name"] == "Insert-Only Pump"
+
+
+async def test_create_asset_on_another_site_is_refused_for_an_existing_id(admin_client, shared_asset_id):
+    """An id already registered on one site cannot be re-posted from another."""
+    r = await admin_client.post("/assets/", json={
+        "asset_id": shared_asset_id,
+        "tag_number": f"TAG-{uid()}",
+        "name": "Cross-site clobber",
+        "equipment_class": "PUMP",
+        "criticality": "critical",
+        "site_id": OTHER_SITE,
+        "facility_id": "FAC_001",
+        "eam_source": "test",
+        "confirmed_by_user_id": "test-runner",
+    })
+    assert r.status_code == 409
 
 
 async def test_create_asset_auto_id(admin_client):
@@ -158,3 +183,38 @@ async def test_field_worker_cannot_create_asset(field_client):
     })
     # field_worker lacks admin/engineer role → 403
     assert r.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Site scope
+# ---------------------------------------------------------------------------
+
+async def test_engineer_cannot_register_an_asset_on_another_site(engineer_client):
+    r = await engineer_client.post("/assets/", json={
+        "tag_number": f"TAG-{uid()}",
+        "name": "Wrong site",
+        "equipment_class": "PUMP",
+        "criticality": "non_critical",
+        "site_id": OTHER_SITE,
+        "facility_id": "FAC_001",
+        "eam_source": "test",
+        "confirmed_by_user_id": "engineer",
+    })
+    assert r.status_code == 403
+
+
+async def test_non_admin_cannot_list_another_site(engineer_client):
+    r = await engineer_client.get("/assets/", params={"site_id": OTHER_SITE})
+    assert r.status_code == 403
+
+
+async def test_other_sites_asset_is_404_on_every_asset_route(engineer_client, other_site_asset_id):
+    for suffix in ("", "/aliases", "/hierarchy", "/knowledge", "/ot-coverage"):
+        r = await engineer_client.get(f"/assets/{other_site_asset_id}{suffix}")
+        assert r.status_code == 404, suffix
+
+
+async def test_admin_still_sees_other_sites(admin_client, other_site_asset_id):
+    r = await admin_client.get(f"/assets/{other_site_asset_id}")
+    assert r.status_code == 200
+    assert r.json()["site_id"] == OTHER_SITE

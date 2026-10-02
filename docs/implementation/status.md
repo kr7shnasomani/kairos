@@ -30,7 +30,7 @@
 [`v2.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v2.0.0) (`c654615`); the earlier
 [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0) (`b81ed1f`) is the first tagged release. **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
 **https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
-837 service-free backend tests (834 pass and 3 skip in the container, 2026-10-01), 326/326 frontend tests across 79 files (2026-10-01), `tsc`
+839 service-free backend tests (836 pass and 3 skip in the container, 2026-10-01), 344/344 frontend tests across 81 files (2026-10-01), `tsc`
 clean, `eslint` 0 errors, end-to-end flows 46/46 (2026-09-14). What is still open is listed under
 [Pending — as of 2026-09-28](#pending--as-of-2026-09-28).
 
@@ -211,8 +211,8 @@ scale-out beyond the single-site MVP:
 | Item | Where | To go live (if a plant is ever connected) |
 |------|-------|-------------------------------------------|
 | OT historian (PI Web API) | `connectors/internal/ot/client.go` | set `PI_WEBAPI_BASE_URL` + creds (`PIWebAPIClient` already built) |
-| OT historian (OPC-UA) | `connectors/internal/ot/client.go` | implement `gopcua` read (stub) |
-| EAM asset sync (SAP/Maximo) | `connectors/internal/eam/client.go` | set `EAM_ODS_ENDPOINT` + implement SAP ODS query (stub) |
+| OT historian (OPC-UA) | `connectors/cmd/connector/main.go` (registry entry only) | write a `gopcua` client in `internal/ot/` |
+| EAM asset sync (SAP/Maximo) | `connectors/cmd/connector/main.go` (`/eam/sync`, reads `fixtures/sample_assets.json`) | set `EAM_ODS_ENDPOINT` and implement the SAP ODS query (the handler returns 501 today) |
 | Cross-site pattern advisories | `frontend .../management/cross-site` | multi-site control-plane feed |
 
 ---
@@ -397,28 +397,35 @@ with its reasoning in this file; check before re-filing any of them as a gap.
 
 ---
 
-## Security pass, 2026-10-01: apply in this order
+## Security pass (2026-09-30 review): what is still pending
 
-The fixes from the 2026-09-30 security review (including C1, the read-only demo role) are in the working tree and tested (service-free tier, plus Go and frontend suites). They are **not deployed**. Several need a cloud write or a server setting, in this order. Every finding of that review, with where it was fixed or why it was accepted, is listed below under [Accepted risks and deploy checklist](#accepted-risks-and-deploy-checklist-from-the-2026-09-30-security-review).
+**Deployed 2 October 2026.** Applied: the role migration (all six accounts carry role and site in `app_metadata`; the old `user_metadata` fields were left in place), `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` on the server, the demo user, the rebuilt backend on EC2 (backup `~/kairos.bak-pre-security-*`, images tagged `rollback-pre-security`), the frontend on Vercel (`vercel deploy --prod`, no GitHub push), and a restart of OPA and Caddy. Verified with real logins for all six roles: the demo user reads everything and is refused every destructive route, a `field_worker` is refused `POST /events/work-order`, and the Copilot answers and streams. `make sync-check` (docs/DEPLOY.md 14b) reports drift between local, GitHub, EC2 and Vercel.
 
-1. `python scripts/migrate_roles_to_app_metadata.py` (dry run), then `--apply`. Additive. Must run **before** the new backend is deployed, or every existing user resolves as `field_worker`. Cloud write: needs an explicit decision.
-2. Apply `db/migrations/017_enable_rls_remaining_tables.sql` (RLS on 14 tables). Cloud write. The backend uses the service-role key, which bypasses RLS.
-3. Server `.env`: set `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` (the API refuses to boot without the first and the connector without the second; the MoC sender must now sign `"{timestamp}." + raw body` and send `X-Webhook-Timestamp` and `X-Webhook-Signature`). Keep `APP_ENV=production`: only the exact value `development` enables dev bypasses, and any other value is treated as hostile. Optionally add the `AWS_EC2_KNOWN_HOSTS` repo secret (`ssh-keyscan -H <host>`) so the deploy workflow pins the server's host key (`DEPLOY.md` §16).
-4. Create the read-only demo user (`demo@kairos.local`, role `demo` in `app_metadata`, password from `KAIROS_SEED_PASSWORD_DEMO`; `seed_users.py` does this and needs the variable set), and set `NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD` in Vercel. The login page no longer contains the admin password, so after that the admin password can be rotated along with the other four seeded passwords (the old values are in git history). Cloud writes.
-5. Supabase dashboard: disable open email signup.
-6. Deploy the backend, then the frontend. Stack tests (`tests/test_events.py`, `test_governance.py`) need updating for the new rules before they are run again; they write to cloud stores, so that is a separate decision.
+**Redeployed 2 October (afternoon):** the backend with the cheap code-review fixes and the dead-code deletions (backup `~/kairos.bak-20261002-132108`, images tagged `rollback-20261002-132108`); verified with real logins for all six roles, the demo refusals, `/search?as_of=garbage` now 422, and a Copilot answer. **The frontend fixes (empty states, time labels, Copilot ordering and the rest) are in the working tree but not redeployed to Vercel**: run `make deploy-frontend`.
 
-Not fixed, by design: see the accepted risks below.
+**Verified live on 2 October (read-only checks):**
+
+- **RLS is on.** Asking for rows as an anonymous visitor (the public anon key) returns nothing from all 15 tables that hold data, while the service role sees them. Four tables are empty (`brief_feedback`, `ner_annotations`, `extraction_overrides`, `plant_operating_states`), so data cannot show their state; check them under Dashboard, Advisors, Security. Migration `017` stays in the repo as an idempotent safety net and does not need applying.
+- **M12 is closed.** The storage client collapses `../` in a path (a name like `../../../other-bucket/x.pdf` would have left the document's folder and bucket), and `safe_filename` and `_safe_segment` reduce every variant, including `%2e%2e` and backslashes, to a bare file name. The only two `upload()` call sites use them, `document_id` is generated by the server and `document_type` is allow-listed.
+
+**Still pending:**
+
+1. **Disable open email signup** (checked: `disable_signup` is `false`, so anyone with an email address can create an account in the Supabase project). In the Supabase dashboard open Authentication, then Sign In / Providers (older layout: Providers, Email) and turn off "Allow new users to sign up". Existing accounts and the demo login are unaffected. A stranger who signs up gets no role and the default of `field_worker` with no site, so the exposure is small, but there is no reason to leave it open.
+2. **Rotate the six seeded passwords** (planned for last). The old values are in git history. Rotate engineer, field worker, reliability and compliance first, then admin. The demo password is public by design and only needs changing if you want a new one: that also needs `NEXT_PUBLIC_DEMO_PASSWORD` changed in Vercel, the local `.env`, and `make deploy-frontend`. Cloud write.
+3. **Run the stack tests once, deliberately.** They were updated on 2 October for the new rules (insert-only events, `ingest_event` roles, authority caps, the 202 supersede flow, signed MoC webhook, server-side synthesis evidence, demo role, site scope, new `conftest.py` fixtures for reliability, compliance and demo). All of them compile and collect, but **none has been run**, because the stack tests write to the cloud stores. Running them is your call; expect a few first-run fixes, and the throwaway `test_` records they create are filtered on read, not deleted. Not covered by any test: a true identical-retry-after-partial-failure (not reachable over HTTP) and the annotation de-duplication and 60 per hour limit.
+4. **Re-run the benchmark** (planned for last) before quoting answer-quality numbers: the Copilot now retrieves its own evidence and ignores the `context` the harness sends (see `BENCHMARKS.md`).
+
+**Decisions rather than tasks** (accepted for now, each with its reason in the register below): the explicit test-artifact flag needs a schema column (M13); one admin identity shared by the connector and workers (L4); the acknowledgement race needs a unique index; the MoC system, if one is ever connected, must sign `"{timestamp}." + raw body`; `LEGACY_ROLE_FALLBACK` is off and unused now that the migration is applied, so the flag can be deleted from `config.py`, `.env.example` and `dependencies.py`.
 
 ### Accepted risks and deploy checklist (from the 2026-09-30 security review)
 
-The review (static, branch `main` at `a1d7ed4`, 1 Critical, 7 High, 14 Medium, 16 Low) is summarised here, one line per finding, so nothing is lost when the review document is retired. **Fixed** means fixed in the working tree and pinned by a test (`tests/test_sec_*.py`, the three frontend `*.test.ts` files and the Go tests, see `TESTS.md`); **nothing is deployed yet**, so the steps above still apply.
+The review (static, branch `main` at `a1d7ed4`, 1 Critical, 7 High, 14 Medium, 16 Low) is summarised here, one line per finding, this register replaces the retired review document. **Fixed** means fixed in the working tree and pinned by a test (`tests/test_sec_*.py`, the three frontend `*.test.ts` files and the Go tests, see `TESTS.md`); deployed on 2 October (see the pending list above for what is left).
 
-**Deferred**
+**Critical**
 
 | # | Finding | Status |
 |---|---|---|
-| C1 | One-click demo login and public seeded passwords | **Fixed in code, needs the live steps in checklist step 4.** The demo button signs in as `demo@kairos.local` (role `demo`) with `NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD` and is hidden when they are unset; the role has an explicit allow-list in `infra/policies/kairos.rego` (`read_search`, `read_briefs`, `read_assets`, `read_documents`, `read_compliance`, `read_nonconformance`, `synthesize`) and the UI shows a "Read-only demo" strip with write controls hidden. The password half is done: seeded passwords now come from gitignored `.env` (`KAIROS_SEED_PASSWORD_*`, `seed_users.py`, `tests/conftest.py`, `tools/e2e_flows.sh`), and rotating the live accounts is checklist step 4 |
+| C1 | One-click demo login and public seeded passwords | **Fixed and live (2 October).** The demo button signs in as `demo@kairos.local` (role `demo`) with `NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD` and is hidden when they are unset. The role sees everything an admin sees and may use the Copilot; every other write is denied by default in `infra/policies/kairos.rego`, and the UI wraps mutating controls in `DemoGate`. The password half is done: seeded passwords now come from gitignored `.env` (`KAIROS_SEED_PASSWORD_*`, `seed_users.py`, `tests/conftest.py`, `tools/e2e_flows.sh`), and rotating the live accounts is checklist step 4 |
 
 **High**
 
@@ -436,7 +443,7 @@ The review (static, branch `main` at `a1d7ed4`, 1 Critical, 7 High, 14 Medium, 1
 
 | # | Finding | Status |
 |---|---|---|
-| M1 | RLS off on 14 of 19 tables | Fixed in the repo (`db/schema.sql`, `db/migrations/017_enable_rls_remaining_tables.sql`); **not applied live** (step 2); live state is a live check below |
+| M1 | RLS off on 14 of 19 tables | Fixed in the repo (`db/schema.sql`, `db/migrations/017_enable_rls_remaining_tables.sql`). Live: RLS is already on for every table that holds data (verified 2 October); `017` is an idempotent safety net and is not required |
 | M2 | Filter injection through `site_id` in `GET /briefs/` | Fixed: `.in_()` over `_brief_recipients` |
 | M3 | Streaming synthesis wrote no audit row and no pending-MoC warning | Fixed: `_record_synthesis` shared by both routes |
 | M4 | LLM output trusted for safety decisions | Fixed: system-message rules, escaped `<document>` blocks, missing `CONFIDENCE` or a phantom citation refuses, lowest confidence wins, NER default 0.5, RCA citations checked. Residual (accepted): escaping reduces prompt injection, it cannot eliminate it, so no gate relies on what the model says about authority |
@@ -447,7 +454,7 @@ The review (static, branch `main` at `a1d7ed4`, 1 Critical, 7 High, 14 Medium, 1
 | M9 | Off-boarding data readable by every role | Fixed: staff and the person concerned only |
 | M10 | Shared devices kept one user's data after sign-out | Fixed: service worker is network-first with a per-user cache key, `LOGOUT` clears caches, the offline queue is tagged with the user and never replayed for another, sign-out clears the queue and Copilot history |
 | M11 | Size and cost exhaustion | Fixed: voice upload capped, PDF page, DPI and pixel caps, spreadsheet row and unzip caps, `BadFile` is not retried, request `max_length`s, Caddy `request_body` 30 MB |
-| M12 | Client names in service-role storage paths | Fixed in code (`safe_filename`, `_safe_segment`, `document_type` allow-list). **Unconfirmed:** whether the storage library resolves `../` was never tested, because that needs a write; verify on a throwaway Supabase project |
+| M12 | Client names in service-role storage paths | Fixed and verified (2 October): the storage client does collapse `../`, and `safe_filename`, `_safe_segment` and the `document_type` allow-list neutralise every variant |
 | M13 | Pipeline used unconfirmed aliases; test-pattern names hide documents | Aliases fixed (confirmed only). **Accepted:** the explicit test-artifact flag needs a schema column and a backfill (a cloud write), so test-pattern names are still filtered on read by `services/corpus.py` |
 | M14 | Go connector unauthenticated, forwards as admin | Fixed: `X-Connector-Secret` on every route but `/health`, boot refuses missing or default secrets, dev port on `127.0.0.1`, escaped PI queries, body and response caps |
 
@@ -480,11 +487,11 @@ The review (static, branch `main` at `a1d7ed4`, 1 Critical, 7 High, 14 Medium, 1
 
 **Live checks that cannot be made from the repo** (do them in the Supabase dashboard and on the server, then record the result here)
 
-1. **Open email signup** (H1): Authentication, Providers, Email. Disable it if it is on.
-2. **RLS state** (M1): Advisors, Security, or `select tablename, rowsecurity from pg_tables where schemaname='public'`. Expect 19 `true` once `017` is applied.
-3. **`MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` on the server** (H7, M14): `grep -c` the server `.env`; the API and connector will not start without them.
-4. **M12 storage-path traversal** on a throwaway Supabase project (see M12 above).
-5. After deploying, probe the live API with a restricted persona and confirm a 403 (`field_worker` on `POST /events/work-order`), as `AGENTS.md` asks.
+1. **Open email signup** (H1): checked 2 October, it is **on**; see the pending list.
+2. **RLS state** (M1): checked 2 October, on for every table with data; four empty tables are not testable from data (Advisors, Security).
+3. **`MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` on the server** (H7, M14): checked on 2 October, both present; the API and connector will not start without them.
+4. **M12 storage-path traversal**: verified 2 October (see M12 above).
+5. Probe the live API with a restricted persona and confirm a 403 (`field_worker` on `POST /events/work-order`), as `AGENTS.md` asks: done on 2 October, it returns 403.
 
 ## Improvement backlog
 
@@ -691,7 +698,7 @@ results as graph stubs, and the document actually containing the answer
 engineer) never appeared even at limit 20.
 
 **Fix.** `search_service.py` / `search.py` — `SearchService` now takes an optional `supabase` client
-and excludes test-artifact candidates via `corpus.test_artifact_ids()` **before** `_fuse()`
+and excludes test-artifact candidates via `corpus.partition_test_artifacts()` **before** `_fuse()`
 truncates to `limit`, not after — filtering post-truncation would still lose real evidence to junk
 that had already outranked it. Reuses the existing predicate; no new filtering logic, no cloud
 writes, no schema change.
@@ -1094,15 +1101,15 @@ recorded above.
   names, form labels, alt text, heading order, duplicate ids, page language, skip link, visible focus
   ring, reduced motion. Contrast must be measured on a **fresh page load** per theme: switching theme
   in place and measuring immediately reads stale colours and reports false failures.
-- **Backend test suite:** **576 collected** across 50 files (2026-08-23). The last full green run was
-  **412 passed · 0 failed** (2026-08-22); 164 tests have landed since, so **no current pass count
+- **Backend test suite:** **1,080 collected** across 67 files (2026-10-02; 839 are service-free). The last full green run was
+  **412 passed · 0 failed** (2026-08-22); about 670 tests have landed since (the full suite is now 1,080 collected), so **no current full-suite pass count
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **837 tests** across **51 files** (834 passed, 3 skipped in the container, 2026-10-01; the 3 are `test_sec_infra.py` checks that read `infra/` and `.github/`, which the image does not mount) — no stack / secrets / network.
+- **Service-free tier:** **839 tests** across **52 files** (836 passed, 3 skipped in the container, 2026-10-01; the 3 are `test_sec_infra.py` checks that read `infra/` and `.github/`, which the image does not mount) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md`, `docs/INFRA.md` and
   `.github/workflows/tests.yml` and **all four must be updated together** (they have drifted twice).
-- **Frontend:** **326 passed across 79 files, fully green** (measured 2026-10-01; `landing-figures.test.ts` needs `benchmark/` mounted at `/benchmark` when run in a container), `tsc` clean, `eslint`
+- **Frontend:** **344 passed across 81 files, fully green** (measured 2026-10-01; `landing-figures.test.ts` needs `benchmark/` mounted at `/benchmark` when run in a container), `tsc` clean, `eslint`
   0 errors / 7 unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
   container, so the file could not collect. `docker compose up -d --force-recreate --no-deps
@@ -1146,6 +1153,8 @@ recorded above.
 | Area | Fix |
 |---|---|
 | `quarantine_items` FK failure | `asset_id = None`, never `""` |
+| Caddyfile or OPA policy changed on the server but not applied | `infra/caddy/Caddyfile` is bind-mounted as a single file and rsync replaces it with a new inode, so the running Caddy keeps the old copy and `caddy reload` says "config is unchanged". Run `docker restart kairos-caddy` (certificates live in a volume). `make prod` also does not recreate `kairos-opa`, so `docker restart kairos-opa` after a policy change |
+| Frontend production deploy from this Mac | `vercel pull` returns empty values for encrypted variables, so a local `vercel build` would bake a blank `NEXT_PUBLIC_API_URL`. Deploy with a remote build: `vercel deploy --prod` from the repo root (project linked there; root directory `frontend` is set in the project). `NEXT_PUBLIC_*` values are baked at build time, so changing one needs a redeploy |
 | **A UUID path param must be validated before the query** | Any route whose `{id}` lands on a UUID column returns **500, not 404**, if the segment is unparseable: PostgREST raises `22P02` and the global handler turns it into a server error. Two guards exist and any new such route needs one — `dependencies.valid_quarantine_item_id` and `valid_offboarding_session_id`. Second half of the same bug: **`.single()` raises `PGRST116` on zero rows**, so a *well-formed but absent* id also 500s and the handler's own `if not result.data → 404` becomes unreachable dead code. Use `.maybe_single()`. Found on `/elicitation/offboarding/*` 2026-08-23 (the reported symptom was `GET /elicitation/offboarding/sessions` — there is no `/sessions` route, so the literal was swallowed by `/{session_id}`). Covered by `test_quarantine_item_id.py` + `test_offboarding_session_id.py`. |
 | Supabase login / refresh error | Fresh anon client — never the service-role client |
 | NIM env not picked up | `--force-recreate`, not `--restart` |
@@ -1208,7 +1217,7 @@ recorded above.
 | "signal timed out" / "Plant state: Unavailable" right after `make dev` | Cold start: OPA decisions take >2 s while Turbopack/ES/Aura warm up, so reads blow the 4 s client budget. Not a bug; see `INFRA.md` § Before a demo. |
 | Turbopack dev 404s-everything | A tight reload loop can corrupt the dev route manifest → all `(app)/*` 404 while `/` 307s. `docker restart kairos-frontend` clears it; not a code bug. |
 | Turbopack dev serves a stale graph after a file vanishes | Deleting a route file (e.g. `(app)/template.tsx`) makes every `(app)/*` route 500 with *"Could not parse module … file not found"*; a `git stash`/`pop` round-trip leaves the old `globals.css` compiled. `docker restart kairos-frontend` clears both (seen 2026-09-22). If the served CSS is *still* old after a restart (Turbopack's on-disk cache survives it), `docker exec kairos-frontend rm -rf /app/.next` then restart. |
-| `next build` fails on `/_global-error` (`useContext` null) | Next 16.2.10's **default** global-error page fails to prerender. Fixed by a custom `src/app/global-error.tsx` (client, own `<html>/<body>`, **inline styles only** — no providers/tokens exist at that level). Keep it self-contained; don't import app components or `next/image` there. |
+| `next build` fails on `/_global-error` (`useContext` null) | Next 16's **default** global-error page (seen on 16.2.x) fails to prerender. Fixed by a custom `src/app/global-error.tsx` (client, own `<html>/<body>`, **inline styles only** — no providers/tokens exist at that level). Keep it self-contained; don't import app components or `next/image` there. |
 | `next build` exits 137 in the dev container | OOM — `kairos-frontend` is capped at **2 GB**, and a Turbopack production build needs more. Not a code error (compile + prerender succeed). CI (ubuntu-latest ~7 GB) and the Docker image build on the runner, not this container. To build locally, raise the container `mem_limit` or run on the host. |
 | `not-found.tsx` uses plain `<img>`, not `next/image` | The root not-found renders inside the `_global-error` boundary at build time, where `<Image>`'s config context is null → prerender crash. Use a plain `<img>` (eslint-disable `no-img-element`), same as `brand-link.tsx`. |
 | API boot race on ES | `kairos-backend-api` runs `ensure_indices()` at startup and **exits** if ES isn't ready. If the API is down after `make dev`, `docker restart kairos-backend-api` once ES is healthy. |

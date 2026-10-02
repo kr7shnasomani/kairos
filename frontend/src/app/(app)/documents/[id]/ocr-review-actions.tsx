@@ -2,10 +2,11 @@
 
 // Reviewer decision for a document the OCR gate held. Human-only (reliability/admin, like quarantine
 // promotion): the reviewer opens the original scan, then releases it for extraction or rejects it.
+import { DemoGate } from "@/components/demo-gate";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Modal } from "@/components/ui";
-import { PROMOTE_ROLES, useRole } from "@/components/use-role";
+import { PROMOTE_ROLES, useRole, visibleTo } from "@/components/use-role";
 import { rejectHeldDocument, releaseHeldDocument } from "@/lib/api";
 
 type Decision = "release" | "reject";
@@ -34,7 +35,7 @@ export function OcrReviewActions({ documentId }: { documentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  if (!PROMOTE_ROLES.includes(role)) {
+  if (!visibleTo(PROMOTE_ROLES, role)) {
     return <p className="mt-2 text-caption text-muted">A reliability engineer or admin decides whether to release or reject it.</p>;
   }
   if (done) return <p role="status" className="mt-3 text-caption font-semibold text-ink">{done}</p>;
@@ -56,10 +57,12 @@ export function OcrReviewActions({ documentId }: { documentId: string }) {
 
   return (
     <>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="primary" onClick={() => { setOpen("release"); setError(null); }}>Release for extraction</Button>
-        <Button onClick={() => { setOpen("reject"); setError(null); }}>Reject scan</Button>
-      </div>
+      <DemoGate>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => { setOpen("release"); setError(null); }}>Release for extraction</Button>
+          <Button onClick={() => { setOpen("reject"); setError(null); }}>Reject scan</Button>
+        </div>
+      </DemoGate>
       {open && (
         <Modal title={COPY[open].title} onClose={() => !busy && setOpen(null)}>
           <p className="text-body text-muted">{COPY[open].body}</p>

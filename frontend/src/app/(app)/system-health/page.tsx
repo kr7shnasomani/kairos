@@ -1,10 +1,11 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getHealthDetailed, getOtConnectors, probeEndpoint, probeModel, type OtConnectorRegistry, type ProbeResult, type ModelProbe } from "@/lib/api";
 import { getMe } from "@/lib/auth";
-import { ADMIN_ROLES } from "@/components/use-role";
+import { ADMIN_VIEW_ROLES } from "@/components/use-role";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { SystemTabs } from "@/components/system-tabs";
 import { Skeleton } from "@/components/skeleton";
@@ -108,7 +109,7 @@ export default function SystemHealthPage() {
     let alive = true;
     getMe().then((u) => {
       if (!alive) return;
-      const ok = !!u && ADMIN_ROLES.includes(u.role);
+      const ok = !!u && ADMIN_VIEW_ROLES.includes(u.role);
       setAuthorized(ok);
       if (!ok) router.replace(u?.role === "field_worker" ? "/briefs" : "/management");
     });
@@ -395,7 +396,7 @@ export default function SystemHealthPage() {
                         : <span className="text-caption text-muted">—</span>
                   )}
                   {!on && <span className="text-caption text-muted">Monitoring off</span>}
-                  <Toggle on={on} onClick={() => toggleModel(m.key)} label={`Monitor ${name}`} />
+                  <DemoGate><Toggle on={on} onClick={() => toggleModel(m.key)} label={`Monitor ${name}`} /></DemoGate>
                 </div>
               </div>
             );

@@ -17,12 +17,15 @@ default allow := false
 # reliability    — can promote quarantine items, resolve admin conflicts
 # admin          — full access (the Go connector's internal key resolves to admin)
 # compliance     — read-only access to compliance cockpit, non-conformance and audit trail
-# demo           — the public one-click demo identity. Read-only, DENY BY DEFAULT: it is granted an
-#                  explicit list below and is NOT in the catch-all at the bottom, so any action
-#                  that is not named here (every write, ingest, ack, supersede, approve, plant
-#                  state, audit, governance, model gate) is refused. Add to its list, never to an
-#                  exclusion list. `synthesize` is the Copilot's POST; it is named separately from
-#                  `write_api` so granting it does not grant every other POST.
+# demo           — the public one-click demo identity: sees everything an admin sees (every read_*
+#                  action, including audit, governance and events) and may use the Copilot, but
+#                  every write is DENIED BY DEFAULT. The cloud stores have no backup, so it gets an
+#                  explicit allow list of the three writes that only append to the audit log and
+#                  touch nothing shared: `synthesize`, `rca_pack`, `answer_feedback`. It is NOT in
+#                  the catch-all at the bottom, so a write route added later is refused until it
+#                  is named here on purpose. Never ack a brief (it closes the shared brief), rate a
+#                  brief ("incorrect" queues a confidence recheck on the source documents), ingest,
+#                  supersede, resolve, promote, approve or edit.
 #
 # The read_* grants mirror the frontend route table (`components/use-role.ts`) — each role holds
 # exactly the actions its permitted routes actually call. Keep the two in step: a route that a
@@ -43,7 +46,7 @@ roles := {
     "engineer":      {"read_search", "read_briefs", "ack_brief", "ingest_document", "ingest_event", "read_governance", "read_nonconformance", "read_compliance", "read_audit", "read_documents", "read_events", "resolve_admin_conflict", "read_assets", "write_assets"},
     "reliability":   {"read_search", "read_briefs", "ingest_document", "ingest_event", "read_governance", "read_nonconformance", "read_compliance", "read_audit", "read_documents", "read_events", "promote_quarantine", "countersign_brief", "resolve_admin_conflict", "read_assets"},
     "compliance":    {"read_search", "read_compliance", "read_audit", "read_nonconformance", "read_events"},
-    "demo":          {"read_search", "read_briefs", "read_assets", "read_documents", "read_compliance", "read_nonconformance", "synthesize"},
+    "demo":          {"read_search", "read_briefs", "read_assets", "read_documents", "read_events", "read_compliance", "read_nonconformance", "read_audit", "read_governance", "read_other", "synthesize", "rca_pack", "answer_feedback"},
     "admin":         {"*"},
 }
 
@@ -130,12 +133,18 @@ can_countersign_brief if {
 # Every `read_*` action and `ingest_event` MUST stay in this set. They are granted per-role in the table
 # above, and the catch-all would otherwise hand every one of them to every authenticated role —
 # which is the same hole as not enforcing reads at all.
+#
+# `synthesize`, `rca_pack` and `answer_feedback` stay OUT of the set on purpose: the five staff roles
+# keep them through this catch-all, and demo gets them only by name in the table.
 # =============================================================================
 
 _sensitive_actions := {
     "promote_quarantine", "countersign_brief", "resolve_admin_conflict", "write_assets",
     "ingest_document", "ingest_event", "read_audit", "read_compliance", "read_governance",
     "read_nonconformance", "read_documents", "read_events",
+    # Asked only for the demo role (see middleware/opa.py `_DEMO_READ_ACTION_MAP`), granted to it
+    # by name. In the set so a future enforcement for every role cannot hand them out by default.
+    "read_search", "read_briefs", "read_assets", "read_other",
 }
 
 allow if {

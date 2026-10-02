@@ -40,9 +40,26 @@ export const ADMIN_ROLES: Role[] = ["admin"];
 /** Field worker personas — mobile-first, read-only on staff surfaces. */
 export const FIELD_ROLES: Role[] = ["field_worker"];
 
-/** Read-only roles: the public demo identity. Every write control is gated by an allow list that
- *  omits these roles, so they see none; this list only drives the "read-only demo" indicator. */
+/** The public demo identity: sees everything an admin sees, but destructive or mutating controls are
+ *  disabled (`DemoGate`) and the API policy refuses the write regardless of what the UI shows. */
 export const READ_ONLY_ROLES: Role[] = ["demo"];
+
+/** Tooltip and message on every control the demo account cannot use. */
+export const DEMO_DISABLED_MESSAGE = "Disabled in the demo account";
+
+/** Surfaces an admin sees (system health, model gate): admin plus the demo identity. */
+export const ADMIN_VIEW_ROLES: Role[] = ["admin", "demo"];
+
+/** Does `role` get to SEE a control that `roles` may use? The demo account sees every control an
+ *  admin sees; `DemoGate` then disables it. Use this for visibility, never for permission. */
+export function visibleTo(roles: Role[], role: Role): boolean {
+  return role === "demo" || roles.includes(role);
+}
+
+/** True when the signed-in role is the demo identity. */
+export function useIsDemo(): boolean {
+  return READ_ONLY_ROLES.includes(useRole());
+}
 
 /** Staff surfaces (engineers, reliability, admin) — field workers are excluded. */
 const STAFF_ONLY: Role[] = ["engineer", "reliability", "admin"];
@@ -69,20 +86,11 @@ const ROUTE_ACCESS: ReadonlyArray<{ prefix: string; roles: Role[] }> = [
   { prefix: "/offboarding", roles: STAFF_ONLY },
 ];
 
-// The `demo` role is deny-by-default here too: it may open only these roots (the Copilot and
-// read-only views of the data the policy grants it), minus the pages that exist to write.
-// Mirrors the `demo` allow list in infra/policies/kairos.rego.
-const DEMO_ROUTES = ["/copilot", "/briefs", "/assets", "/documents", "/compliance", "/graph", "/settings"];
-const DEMO_BLOCKED = ["/assets/register", "/assets/bootstrap", "/documents/ingest"];
-
-const under = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + "/");
-
-/** Is `role` allowed to view `path`? Unlisted paths are open to all authenticated roles, except
- *  for `demo`, which gets only DEMO_ROUTES. */
+/** Is `role` allowed to view `path`? Unlisted paths are open to all authenticated roles. The
+ *  `demo` role sees every page an admin sees; what it cannot do is enforced per control (`DemoGate`)
+ *  and by the API policy. */
 export function routeAllowed(path: string, role: Role): boolean {
-  if (role === "demo") {
-    return DEMO_ROUTES.some((p) => under(path, p)) && !DEMO_BLOCKED.some((p) => under(path, p));
-  }
+  if (role === "demo") return true;
   const rule = ROUTE_ACCESS.find((r) => path === r.prefix || path.startsWith(r.prefix + "/"));
   return !rule || rule.roles.includes(role);
 }

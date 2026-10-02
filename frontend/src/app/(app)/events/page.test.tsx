@@ -15,6 +15,8 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/lib/auth", () => ({ getMe: mocks.getMe }));
 vi.mock("@/components/use-role", () => ({
+  useIsDemo: () => false,
+  visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role),
   useRole: () => "engineer",
   RESOLVE_ROLES: ["engineer"],
 }));

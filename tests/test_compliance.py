@@ -86,3 +86,14 @@ async def test_compliance_audit_pack_shape(admin_client):
     assert "human_review_required" in body
     assert body["status"] == "draft"
     assert "Human sign-off required" in body["note"]
+
+
+async def test_compliance_auditor_reads_site_scoped_audit_pack(compliance_client):
+    """Non-admin reads are pinned to the caller's own site (security review M8)."""
+    r = await compliance_client.get("/compliance/audit-pack", params={"framework": "OISD_117"})
+    assert r.status_code == 200
+
+
+async def test_compliance_non_admin_cannot_read_another_site(engineer_client):
+    r = await engineer_client.get("/compliance/gaps", params={"site_id": "SITE_OTHER"})
+    assert r.status_code == 403

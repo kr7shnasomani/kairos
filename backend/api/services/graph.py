@@ -832,21 +832,17 @@ class GraphService:
         """
         Most recent inspection date for an asset, from the `INSPECTION_RECORD` edge.
 
-        This used to `MATCH (e:Event)`. **No `Event` node is ever written** — events live in
-        Supabase `operational_events`, and only Asset / Document / Concept are materialised in
-        the graph (the L4 divergence in `implementation/status.md`). So the query matched
-        nothing and the asset-detail `last_inspection_date` was **always null**: it degraded
-        cleanly, which is exactly why it went unnoticed.
+        The record is written by `POST /events/inspection-complete` (`routers/events.py`) as a
+        `:KNOWLEDGE_EDGE {relationship_type: 'INSPECTION_RECORD'}`, never as a relationship type
+        of its own (`create_knowledge_edge`), and its `valid_from` is the inspection time. An
+        earlier query matched `[:INSPECTION_RECORD]`, which no edge has, so the asset-detail
+        `last_inspection_date` was always null. (An `Event` node is also written, by
+        `merge_event_node`, but it carries no inspection date, so the edge is the source here.)
 
-        The real record is the `INSPECTION_RECORD` relationship written by
-        `POST /events/inspection-complete` (`routers/events.py`), whose `valid_from` is the
-        inspection time. Reading the edge that is actually written makes the field work without
-        materialising Event nodes.
-
-        Superseded edges are excluded — a retracted inspection must not read as the latest one.
+        Superseded edges are excluded: a retracted inspection must not read as the latest one.
         """
         cypher = """
-        MATCH (a:Asset {asset_id: $asset_id})-[r:INSPECTION_RECORD]->(:Document)
+        MATCH (a:Asset {asset_id: $asset_id})-[r:KNOWLEDGE_EDGE {relationship_type: 'INSPECTION_RECORD'}]->(:Document)
         WHERE r.verification_status <> 'superseded'
         RETURN r.valid_from AS inspection_date
         ORDER BY r.valid_from DESC LIMIT 1

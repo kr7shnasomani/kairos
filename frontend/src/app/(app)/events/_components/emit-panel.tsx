@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import { useState } from "react";
 import { postAlarm, postInspectionComplete, postPtw, postShiftHandover, postTagOut, postWorkOrder } from "@/lib/api";
 import { Button } from "@/components/ui";
@@ -102,9 +103,11 @@ export function EmitPanel({ siteId, userId, onEmitted }: { siteId: string; userI
           <span className="font-semibold text-ink">{kind === "ptw" ? "Work area" : "Note"}</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="optional" className={FIELD} />
         </label>
-        <Button className="h-11 sm:col-span-2 lg:col-span-1 lg:h-9" variant="primary" onClick={emit} disabled={busy || (needsAsset && !assetId.trim())}>
-          {busy ? "Emitting…" : "Emit"}
-        </Button>
+        <DemoGate>
+          <Button className="h-11 sm:col-span-2 lg:col-span-1 lg:h-9" variant="primary" onClick={emit} disabled={busy || (needsAsset && !assetId.trim())}>
+            {busy ? "Emitting…" : "Emit"}
+          </Button>
+        </DemoGate>
       </div>
       {msg && <p role="status" className="mt-3 text-caption text-muted">{msg}</p>}
     </section>

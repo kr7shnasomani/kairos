@@ -5,6 +5,8 @@ import { SupersedeAction } from "./supersede-action";
 
 vi.mock("@/lib/api", () => ({ ingestDocument: vi.fn(), supersedeDocument: vi.fn() }));
 vi.mock("@/components/use-role", () => ({
+  useIsDemo: () => false,
+  visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role),
   useRole: () => "engineer",
   RESOLVE_ROLES: ["engineer", "reliability", "admin"],
   AUTHORITY_ASSERT_ROLES: ["reliability", "admin"],

@@ -523,7 +523,7 @@ The table below is the **schema-evolution changelog** — what each of the 16 fo
 | `014_validation_corpus.sql` | `validation_corpus` table |
 | `015_sla_tracking.sql` | `escalated_at` + `escalated_to` on `knowledge_conflicts`; `sla_due_at` + `escalated_at` on `quarantine_items` |
 | `016_vault_audio_mime.sql` | Allow `audio/*` MIME types on the `kairos-vault` bucket (voice-note uploads) |
-| `017_enable_rls_remaining_tables.sql` | RLS (no policies) on the 14 tables that lacked it. Lives in `db/migrations/`, not yet applied live |
+| `017_enable_rls_remaining_tables.sql` | RLS (no policies) on the 14 tables that lacked it. Lives in `db/migrations/`. Not needed live: an anonymous read of every table that holds data returned nothing on 2 October 2026, so RLS was already on. Kept as an idempotent safety net |
 
 ### Maintenance & data hygiene
 

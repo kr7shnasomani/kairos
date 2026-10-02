@@ -1,6 +1,7 @@
 "use client";
 
 // Step-through elicitation questionnaire for a work order — answers feed the knowledge quarantine.
+import { DemoGate } from "@/components/demo-gate";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getElicitationQuestions, submitElicitationResponses } from "@/lib/api";
@@ -84,7 +85,7 @@ export default function ElicitationPage() {
     getElicitationQuestions(workOrderId).then((r) => {
       if (!alive) return;
       // Live-only: no fixture questions. If none are ready, say so honestly.
-      if (!r.data) { setFailed(true); return; }
+      if (!r.data?.questions?.length) { setFailed(true); return; }
       setFailed(false);
       setSession(r.data);
     }).catch(() => { if (alive) setFailed(true); });
@@ -240,6 +241,7 @@ export default function ElicitationPage() {
             Back
           </Button>
         )}
+        <DemoGate when={isLast}>
         <Button
           variant="primary"
           onClick={advance}
@@ -252,6 +254,7 @@ export default function ElicitationPage() {
               : "Submit responses"
             : "Next →"}
         </Button>
+        </DemoGate>
       </div>
         </main>
 

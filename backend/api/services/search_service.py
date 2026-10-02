@@ -65,7 +65,7 @@ class SearchService:
         self.engine = engine
         self.llm = llm
         # Optional: without it, test-artifact filtering below is skipped (fails open, same as
-        # corpus.test_artifact_ids itself) rather than breaking callers that predate this param.
+        # corpus.document_rows itself) rather than breaking callers that predate this param.
         self.supabase = supabase
 
     async def hybrid_search(

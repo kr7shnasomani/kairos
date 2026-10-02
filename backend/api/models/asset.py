@@ -3,7 +3,6 @@ Pydantic models — Asset (Layer 1: MDM Backbone)
 """
 
 from datetime import UTC, datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -66,20 +65,3 @@ class AssetBulkImport(BaseModel):
     """
 
     assets: list[AssetImportRow] = Field(..., min_length=1, max_length=5000)
-
-
-class TagAliasMap(BaseModel):
-    canonical_asset_id: str
-    alias: str
-    alias_source: str = Field(..., description="Source document or system where this alias was found")
-    confirmed: bool = False
-    confidence: float = Field(..., ge=0.0, le=1.0)
-
-
-class AssetHierarchy(BaseModel):
-    asset_id: str
-    tag_number: str
-    name: str
-    level: int
-    parent: Optional["AssetHierarchy"] = None
-    children: list["AssetHierarchy"] = Field(default_factory=list)

@@ -2,7 +2,7 @@
 Copy `role`, `site_id` and the display `name` from `user_metadata` to `app_metadata` for existing Supabase Auth users.
 
 Why: `dependencies.resolve_token` now reads authorization data from `app_metadata` only, because
-`user_metadata` is writable by the user themselves (security-review H1). A user that has the role
+`user_metadata` is writable by the user themselves (2026-09-30 security review, H1). A user that has the role
 only in `user_metadata` resolves as `field_worker` with no site until this has run.
 
 Additive and safe to run BEFORE deploying that code: `user_metadata` is left untouched, and a key

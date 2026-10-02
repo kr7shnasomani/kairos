@@ -187,3 +187,52 @@ describe("events: empty and offline are honest", () => {
     expect(result.data.items).toHaveLength(0);
   });
 });
+
+describe("empty lists and the stream error frame", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env.NEXT_PUBLIC_AUTH_STRICT;
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+
+  it("resolves an empty asset registry and an empty vault instead of throwing", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => json({ items: [], total: 0, limit: 100, offset: 0 })));
+
+    const { getAssets, getDocuments } = await import("./api");
+    await expect(getAssets()).resolves.toMatchObject({ data: { items: [] }, source: "live" });
+    await expect(getDocuments()).resolves.toMatchObject({ data: { items: [] }, source: "live" });
+  });
+
+  it("still throws when the list envelope has no items at all", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => json({})));
+
+    const { getAssets } = await import("./api");
+    await expect(getAssets()).rejects.toThrow("no items");
+  });
+
+  it("rejects the answer when the stream carries an error frame", async () => {
+    const sse = 'event: delta\ndata: {"text":"The pump"}\n\nevent: error\ndata: {"message":"Synthesis stream failed."}\n\n';
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(json({ results: [{ document_id: "D-1", snippet: "s", title: "T" }] }))
+      .mockResolvedValueOnce(new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } })));
+
+    const { synthesize } = await import("./api");
+    await expect(synthesize("why", undefined, undefined, () => {})).rejects.toThrow("Synthesis stream failed.");
+  });
+
+  it("skips a frame it cannot parse and still finishes on done", async () => {
+    const sse = 'event: delta\ndata: {not json\n\nevent: done\ndata: {"answer":"ok","sources":[],"confidence":0.9,"refused":false,"safety_critical":false}\n\n';
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(json({ results: [{ document_id: "D-1", snippet: "s", title: "T" }] }))
+      .mockResolvedValueOnce(new Response(sse, { status: 200 })));
+
+    const { synthesize } = await import("./api");
+    await expect(synthesize("why", undefined, undefined, () => {})).resolves.toMatchObject({ answer: "ok" });
+  });
+});

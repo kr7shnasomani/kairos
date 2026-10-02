@@ -1,10 +1,11 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ingestDocument, supersedeDocument } from "@/lib/api";
-import { useRole, RESOLVE_ROLES, AUTHORITY_ASSERT_ROLES } from "@/components/use-role";
+import { useRole, RESOLVE_ROLES, AUTHORITY_ASSERT_ROLES, visibleTo } from "@/components/use-role";
 import { Button, Modal } from "@/components/ui";
 import type { AuthorityLevel } from "@/lib/types";
 
@@ -26,7 +27,7 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
   const [docType, setDocType] = useState<string>("procedure");
   const [authority, setAuthority] = useState<AuthorityLevel>(3);
 
-  if (!RESOLVE_ROLES.includes(role)) return null;
+  if (!visibleTo(RESOLVE_ROLES, role)) return null;
   // Levels 1 to 3 need reliability or admin; the backend caps anyone else to 4 at ingest.
   const levels = AUTHORITY_ASSERT_ROLES.includes(role) ? [1, 2, 3, 4, 5] : [4, 5];
   const level = levels.includes(authority) ? authority : 4;
@@ -75,13 +76,15 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
 
   return (
     <>
-      <Button
-        variant="ghost"
-        onClick={() => { setOpen(true); setDone(null); setPendingMoc(null); setError(null); }}
-        className="text-caption"
-      >
-        Supersede document
-      </Button>
+      <DemoGate>
+        <Button
+          variant="ghost"
+          onClick={() => { setOpen(true); setDone(null); setPendingMoc(null); setError(null); }}
+          className="text-caption"
+        >
+          Supersede document
+        </Button>
+      </DemoGate>
 
       {open && (
         <Modal title="Supersede document" onClose={() => setOpen(false)}>

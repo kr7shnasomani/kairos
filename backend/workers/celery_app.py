@@ -16,7 +16,6 @@ celery_app = Celery(
     broker=broker_url,
     backend=result_backend,
     include=[
-        "workers.ingestion",
         "workers.extraction",
         "workers.attribution",
         "workers.voice_transcription",
@@ -33,7 +32,6 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_routes={
-        "workers.ingestion.*": {"queue": "ingestion"},
         "workers.extraction.*": {"queue": "extraction"},
         "workers.attribution.*": {"queue": "attribution"},
         "workers.voice_transcription.*": {"queue": "transcription"},

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ getConflictDetail: vi.fn(), resolveConflict: v
 vi.mock("@/lib/api", () => ({ getConflictDetail: mocks.getConflictDetail, resolveConflict: mocks.resolveConflict }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ id: "c-1" }) }));
 vi.mock("@/components/lazy", () => ({ BlastRadiusPanel: ({ documentId }: { documentId: string }) => <div>Blast radius {documentId}</div> }));
-vi.mock("@/components/use-role", () => ({ useRole: () => mocks.role, RESOLVE_ROLES: ["engineer", "reliability", "admin"] }));
+vi.mock("@/components/use-role", () => ({ useIsDemo: () => false, visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role), useRole: () => mocks.role, RESOLVE_ROLES: ["engineer", "reliability", "admin"] }));
 
 window.matchMedia = ((query: string) => ({
   matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {},

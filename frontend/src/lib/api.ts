@@ -330,12 +330,17 @@ async function postSse(
           else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
         }
         if (!dataLines.length) continue;
+        let data: Record<string, unknown>;
         try {
-          onEvent(name, JSON.parse(dataLines.join("\n")));
+          data = JSON.parse(dataLines.join("\n"));
         } catch {
           // A frame we cannot parse is skipped rather than killing the stream — the terminal
           // `done` event is what the caller actually depends on.
+          continue;
         }
+        // Outside the parse guard on purpose: `onEvent` throws for a server `error` frame, and
+        // that must reject the whole stream, not be swallowed as an unparseable frame.
+        onEvent(name, data);
       }
     }
   } finally {
@@ -354,7 +359,14 @@ async function postMultipart<T>(path: string, body: FormData): Promise<T> {
 }
 
 export function ackBrief(briefId: string, body: { signature?: string; notes?: string }) {
-  return postJson<{ ack_status: string }>(`/briefs/${encodeURIComponent(briefId)}/ack`, { user_id: "dev-user", ...body });
+  // Mirrors routers/briefs.py `ack_brief`. A second ack of the same brief is a 409, which postJson
+  // surfaces as a thrown "HTTP 409".
+  return postJson<{
+    status: "acknowledged" | "pending_countersignature";
+    brief_id: string;
+    acknowledged_by: string;
+    signature: string;
+  }>(`/briefs/${encodeURIComponent(briefId)}/ack`, { user_id: "dev-user", ...body });
 }
 
 /**
@@ -373,7 +385,8 @@ export function countersignBrief(briefId: string) {
 }
 
 export function sendBriefFeedback(briefId: string, rating: string, notes?: string) {
-  return postJson<{ feedback_recorded: boolean }>(`/briefs/${encodeURIComponent(briefId)}/feedback`, { rating, notes });
+  // Mirrors routers/briefs.py `submit_feedback`.
+  return postJson<{ status: "received"; brief_id: string; rating: string }>(`/briefs/${encodeURIComponent(briefId)}/feedback`, { rating, notes });
 }
 
 /**
@@ -471,28 +484,16 @@ export async function probeModel(provider: string): Promise<ModelProbe> {
 }
 
 export async function getBriefs(): Promise<Fetched<BriefsResponse>> {
-  try {
-    const data = await getJson<BriefsResponse>("/briefs/?unacknowledged_only=false&limit=20");
-    // An empty briefs list from a successful call is a VALID live state — no briefs
-    // pending, or the governor has suppressed them. BriefInbox renders an honest
-    // empty / "governor suppressed" panel for it, so this is never a fixture fallback.
-    return { data: { ...data, briefs: data.briefs ?? [] }, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<BriefsResponse>("/briefs/?unacknowledged_only=false&limit=20");
+  // An empty briefs list from a successful call is a VALID live state — no briefs
+  // pending, or the governor has suppressed them. BriefInbox renders an honest
+  // empty / "governor suppressed" panel for it, so this is never a fixture fallback.
+  return { data: { ...data, briefs: data.briefs ?? [] }, source: "live" };
 }
 
 export async function getBrief(briefId: string): Promise<Fetched<Brief | null>> {
-  try {
-    const data = await getJson<Brief>(`/briefs/${encodeURIComponent(briefId)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<Brief>(`/briefs/${encodeURIComponent(briefId)}`);
+  return { data, source: "live" };
 }
 
 // --- Compliance ---
@@ -511,42 +512,25 @@ export async function getComplianceGaps(framework?: string): Promise<Fetched<Com
 // Fixture assets carry a richer shape; project them onto the live list envelope.
 
 export async function getAssets(): Promise<Fetched<AssetsResponse>> {
-  try {
-    const data = await getJson<AssetsResponse>("/assets/?limit=100");
-    if (!data.items || data.items.length === 0) throw new Error("empty");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<AssetsResponse>("/assets/?limit=100");
+  // An empty list is a valid live state: the page renders its own empty state.
+  if (!data.items) throw new Error("no items");
+  return { data, source: "live" };
 }
 
 // --- Governance: conflicts + quarantine ---
 export async function getConflicts(): Promise<Fetched<ConflictsResponse>> {
-  try {
-    const data = await getJson<ConflictsResponse>("/governance/conflicts?limit=50");
-    if (!data.items) throw new Error("no items");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<ConflictsResponse>("/governance/conflicts?limit=50");
+  if (!data.items) throw new Error("no items");
+  return { data, source: "live" };
 }
 
 export async function getQuarantine(): Promise<Fetched<QuarantineResponse>> {
-  try {
-    // `review_status=all`: the page derives Pending/Promoted/Disputed counts and a Resolved tab from
-    // this one list. Fetching only the default (pending) left those permanently at 0.
-    const data = await getJson<QuarantineResponse>("/governance/quarantine?review_status=all&limit=200");
-    if (!data.items) throw new Error("no items");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  // `review_status=all`: the page derives Pending/Promoted/Disputed counts and a Resolved tab from
+  // this one list. Fetching only the default (pending) left those permanently at 0.
+  const data = await getJson<QuarantineResponse>("/governance/quarantine?review_status=all&limit=200");
+  if (!data.items) throw new Error("no items");
+  return { data, source: "live" };
 }
 
 export function resolveConflict(conflictId: string, resolution: { note?: string; decision?: string }) {
@@ -814,26 +798,15 @@ export async function getRcaPack(
 
 // --- Documents (GET /documents/, /documents/{id}) ---
 export async function getDocuments(): Promise<Fetched<DocumentsResponse>> {
-  try {
-    const data = await getJson<DocumentsResponse>("/documents/?limit=50");
-    if (!data.items || data.items.length === 0) throw new Error("empty");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<DocumentsResponse>("/documents/?limit=50");
+  // An empty list is a valid live state: the page renders its own empty state.
+  if (!data.items) throw new Error("no items");
+  return { data, source: "live" };
 }
 
 export async function getDocument(documentId: string): Promise<Fetched<VaultDocument | null>> {
-  try {
-    const data = await getJson<VaultDocument>(`/documents/${encodeURIComponent(documentId)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<VaultDocument>(`/documents/${encodeURIComponent(documentId)}`);
+  return { data, source: "live" };
 }
 
 /** Short-lived signed URL to open a vault artifact in the browser (the stored
@@ -850,61 +823,31 @@ export async function getArtifactUrl(documentId: string): Promise<string | null>
 
 // --- Compliance dashboard ---
 export async function getComplianceDashboard(): Promise<Fetched<ComplianceDashboard | null>> {
-  try {
-    const data = await getJson<ComplianceDashboard>("/compliance/dashboard");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<ComplianceDashboard>("/compliance/dashboard");
+  return { data, source: "live" };
 }
 
 // --- Audit pack ---
 export async function getAuditPack(framework: string): Promise<Fetched<AuditPack | null>> {
-  try {
-    const data = await getJson<AuditPack>(`/compliance/audit-pack?framework=${encodeURIComponent(framework)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<AuditPack>(`/compliance/audit-pack?framework=${encodeURIComponent(framework)}`);
+  return { data, source: "live" };
 }
 
 // --- Governance: SLA report ---
 export async function getSlaReport(): Promise<Fetched<SlaReport | null>> {
-  try {
-    const data = await getJson<SlaReport>("/governance/sla-report");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<SlaReport>("/governance/sla-report");
+  return { data, source: "live" };
 }
 
 // --- Governance: MoC ---
 export async function getMocList(): Promise<Fetched<MocResponse>> {
-  try {
-    const data = await getJson<MocResponse>("/governance/moc?limit=50");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<MocResponse>("/governance/moc?limit=50");
+  return { data, source: "live" };
 }
 
 export async function getMoc(mocId: string): Promise<Fetched<MocItem | null>> {
-  try {
-    const data = await getJson<MocItem>(`/governance/moc/${encodeURIComponent(mocId)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<MocItem>(`/governance/moc/${encodeURIComponent(mocId)}`);
+  return { data, source: "live" };
 }
 
 export async function approveMoc(mocId: string, note?: string): Promise<void> {
@@ -913,14 +856,8 @@ export async function approveMoc(mocId: string, note?: string): Promise<void> {
 
 // --- Governance: circuit breaker ---
 export async function getCircuitBreaker(): Promise<Fetched<CircuitBreakerState | null>> {
-  try {
-    const data = await getJson<CircuitBreakerState>("/governance/circuit-breaker");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<CircuitBreakerState>("/governance/circuit-breaker");
+  return { data, source: "live" };
 }
 
 // --- Governance: model gate ---
@@ -949,34 +886,28 @@ interface RawGateRow {
 }
 
 export async function getModelGateHistory(): Promise<Fetched<ModelGateHistory>> {
-  try {
-    // The backend returns raw audit rows {id, entity_id, details, timestamp}; flatten each to
-    // the UI ModelGateResult shape here (adapter layer). Rows without metrics are skipped.
-    const raw = await getJson<{ items: RawGateRow[] }>("/governance/model-gate/history");
-    const history: ModelGateResult[] = (raw.items ?? [])
-      .filter((r) => r.details && typeof r.details.f1 === "number")
-      .map((r) => ({
-        run_id: String(r.id),
-        task_id: null,
-        precision: r.details!.precision ?? 0,
-        recall: r.details!.recall ?? 0,
-        f1: r.details!.f1 ?? 0,
-        passed: !!r.details!.passed,
-        corpus_size: r.details!.corpus_size ?? 0,
-        run_at: r.timestamp ?? "",
-        // entity_id is the model the gate was asked about; details.model_name agrees with it.
-        model_name: r.details!.model_name ?? r.entity_id ?? undefined,
-        by_entity_type: r.details!.by_entity_type ?? undefined,
-        validity: r.details!.validity ?? undefined,
-        extraction_paths: r.details!.extraction_paths ?? undefined,
-        fallback_extractions: r.details!.fallback_extractions ?? undefined,
-      }));
-    return { data: { history }, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  // The backend returns raw audit rows {id, entity_id, details, timestamp}; flatten each to
+  // the UI ModelGateResult shape here (adapter layer). Rows without metrics are skipped.
+  const raw = await getJson<{ items: RawGateRow[] }>("/governance/model-gate/history");
+  const history: ModelGateResult[] = (raw.items ?? [])
+    .filter((r) => r.details && typeof r.details.f1 === "number")
+    .map((r) => ({
+      run_id: String(r.id),
+      task_id: null,
+      precision: r.details!.precision ?? 0,
+      recall: r.details!.recall ?? 0,
+      f1: r.details!.f1 ?? 0,
+      passed: !!r.details!.passed,
+      corpus_size: r.details!.corpus_size ?? 0,
+      run_at: r.timestamp ?? "",
+      // entity_id is the model the gate was asked about; details.model_name agrees with it.
+      model_name: r.details!.model_name ?? r.entity_id ?? undefined,
+      by_entity_type: r.details!.by_entity_type ?? undefined,
+      validity: r.details!.validity ?? undefined,
+      extraction_paths: r.details!.extraction_paths ?? undefined,
+      fallback_extractions: r.details!.fallback_extractions ?? undefined,
+    }));
+  return { data: { history }, source: "live" };
 }
 
 export function runModelGate(): Promise<ModelGateRunResponse> {
@@ -984,61 +915,49 @@ export function runModelGate(): Promise<ModelGateRunResponse> {
 }
 
 export async function getValidationCorpusStats(): Promise<Fetched<ValidationCorpusStats | null>> {
-  try {
-    const data = await getJson<ValidationCorpusStats>("/governance/validation-corpus/stats");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<ValidationCorpusStats>("/governance/validation-corpus/stats");
+  return { data, source: "live" };
 }
 
 // --- Governance: blast radius ---
 export async function getBlastRadius(documentId: string): Promise<Fetched<BlastRadiusReport | null>> {
-  try {
-    // Backend returns { document_id, affected_count, affected: [{edge, target}] }.
-    // Normalise the edge/target pairs into the flat BlastRadiusItem shape the UI expects.
-    const raw = await getJson<{
-      document_id: string;
-      affected_count: number;
-      affected?: Array<{ edge?: Record<string, unknown>; source?: Record<string, unknown>; target?: Record<string, unknown> }>;
-    }>(`/governance/blast-radius/${encodeURIComponent(documentId)}`);
-    const items: BlastRadiusItem[] = (raw.affected ?? []).map((a, i) => {
-      const edge = a.edge ?? {};
-      // The affected entity is whichever endpoint is not this document: the SOURCE for
-      // Asset→Document edges (DOCUMENTED_BY), the TARGET for Document→Person/Organisation
-      // mentions. Always taking the source labelled every mention "Linked entity".
-      const source = a.source ?? {};
-      const node = Object.keys(source).length && source.document_id !== documentId ? source : (a.target ?? {});
-      const assetId = (node.asset_id as string) ?? (node.tag_number as string) ?? undefined;
-      return {
-        item_id: (edge.edge_id as string) ?? `br-${i}`,
-        item_type: assetId ? "asset" : ((node.element_type as string) ?? (edge.relationship_type as string) ?? "fact"),
-        description:
-          (node.name as string) ??
-          (node.tag_number as string) ??
-          assetId ??
-          (node.label as string) ??
-          (node.fact_text as string) ??
-          (node.concept_id as string) ??
-          "Linked entity",
-        asset_id: assetId,
-        flagged_for_review: edge.verification_status !== "verified",
-      };
-    });
-    const data: BlastRadiusReport = {
-      document_id: raw.document_id,
-      affected_count: raw.affected_count ?? items.length,
-      items,
-      generated_at: new Date().toISOString(),
+  // Backend returns { document_id, affected_count, affected: [{edge, target}] }.
+  // Normalise the edge/target pairs into the flat BlastRadiusItem shape the UI expects.
+  const raw = await getJson<{
+    document_id: string;
+    affected_count: number;
+    affected?: Array<{ edge?: Record<string, unknown>; source?: Record<string, unknown>; target?: Record<string, unknown> }>;
+  }>(`/governance/blast-radius/${encodeURIComponent(documentId)}`);
+  const items: BlastRadiusItem[] = (raw.affected ?? []).map((a, i) => {
+    const edge = a.edge ?? {};
+    // The affected entity is whichever endpoint is not this document: the SOURCE for
+    // Asset→Document edges (DOCUMENTED_BY), the TARGET for Document→Person/Organisation
+    // mentions. Always taking the source labelled every mention "Linked entity".
+    const source = a.source ?? {};
+    const node = Object.keys(source).length && source.document_id !== documentId ? source : (a.target ?? {});
+    const assetId = (node.asset_id as string) ?? (node.tag_number as string) ?? undefined;
+    return {
+      item_id: (edge.edge_id as string) ?? `br-${i}`,
+      item_type: assetId ? "asset" : ((node.element_type as string) ?? (edge.relationship_type as string) ?? "fact"),
+      description:
+        (node.name as string) ??
+        (node.tag_number as string) ??
+        assetId ??
+        (node.label as string) ??
+        (node.fact_text as string) ??
+        (node.concept_id as string) ??
+        "Linked entity",
+      asset_id: assetId,
+      flagged_for_review: edge.verification_status !== "verified",
     };
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  });
+  const data: BlastRadiusReport = {
+    document_id: raw.document_id,
+    affected_count: raw.affected_count ?? items.length,
+    items,
+    generated_at: new Date().toISOString(),
+  };
+  return { data, source: "live" };
 }
 
 // --- Annotations ---
@@ -1055,25 +974,13 @@ export function createAnnotation(body: {
 }
 
 export async function getAnnotations(documentId: string): Promise<Fetched<Annotation[]>> {
-  try {
-    const data = await getJson<Annotation[]>(`/annotations/?document_id=${encodeURIComponent(documentId)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<Annotation[]>(`/annotations/?document_id=${encodeURIComponent(documentId)}`);
+  return { data, source: "live" };
 }
 
 export async function getAnnotationStats(): Promise<Fetched<AnnotationStats | null>> {
-  try {
-    const data = await getJson<AnnotationStats>("/annotations/stats");
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<AnnotationStats>("/annotations/stats");
+  return { data, source: "live" };
 }
 
 // --- Elicitation ---
@@ -1085,27 +992,21 @@ export function triggerElicitation(workOrderId: string, assetId?: string) {
 }
 
 export async function getElicitationQuestions(workOrderId: string): Promise<Fetched<ElicitationSession | null>> {
-  try {
-    const raw = await getJson<Omit<ElicitationSession, "questions"> & { questions: Array<string | ElicitationQuestion> }>(
-      `/elicitation/${encodeURIComponent(workOrderId)}/questions`,
-    );
-    // The backend stores and returns questions as plain strings. The page reads `question_text` and
-    // keys answers by `question_id`, so un-normalised every question rendered blank and every answer
-    // was stored under the same `undefined` key.
-    const data: ElicitationSession = {
-      ...raw,
-      questions: (raw.questions ?? []).map((q, i) =>
-        typeof q === "string"
-          ? { question_id: `q${i}`, question_text: q, context: "", options: null, question_type: "free_text" as const }
-          : q,
-      ),
-    };
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const raw = await getJson<Omit<ElicitationSession, "questions"> & { questions: Array<string | ElicitationQuestion> }>(
+    `/elicitation/${encodeURIComponent(workOrderId)}/questions`,
+  );
+  // The backend stores and returns questions as plain strings. The page reads `question_text` and
+  // keys answers by `question_id`, so un-normalised every question rendered blank and every answer
+  // was stored under the same `undefined` key.
+  const data: ElicitationSession = {
+    ...raw,
+    questions: (raw.questions ?? []).map((q, i) =>
+      typeof q === "string"
+        ? { question_id: `q${i}`, question_text: q, context: "", options: null, question_type: "free_text" as const }
+        : q,
+    ),
+  };
+  return { data, source: "live" };
 }
 
 export function submitElicitationResponses(
@@ -1142,46 +1043,28 @@ export function createOffboarding(body: {
 }
 
 export async function getOffboardingList(): Promise<Fetched<OffboardingProgramme[]>> {
-  try {
-    // Backend returns { items, total }; tolerate a bare array too.
-    const res = await getJson<{ items?: OffboardingProgramme[] } | OffboardingProgramme[]>("/elicitation/offboarding", 6000);
-    const data = Array.isArray(res) ? res : (res.items ?? []);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  // Backend returns { items, total }; tolerate a bare array too.
+  const res = await getJson<{ items?: OffboardingProgramme[] } | OffboardingProgramme[]>("/elicitation/offboarding", 6000);
+  const data = Array.isArray(res) ? res : (res.items ?? []);
+  return { data, source: "live" };
 }
 
 export async function getOffboarding(programmeId: string): Promise<Fetched<OffboardingProgramme | null>> {
-  try {
-    const data = await getJson<OffboardingProgramme>(`/elicitation/offboarding/${encodeURIComponent(programmeId)}`, 6000);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<OffboardingProgramme>(`/elicitation/offboarding/${encodeURIComponent(programmeId)}`, 6000);
+  return { data, source: "live" };
 }
 
 // Backend returns { items: [{ id, questions, ... }] }, where `questions` is a plain
 // string[] of question texts (not structured ElicitationQuestion objects). Normalize
 // into a map keyed by session-item id.
 export async function getOffboardingQuestions(programmeId: string): Promise<Fetched<Record<string, string[]>>> {
-  try {
-    const raw = await getJson<{ items?: Array<{ id: string; questions?: string[] }> }>(
-      `/elicitation/offboarding/${encodeURIComponent(programmeId)}/questions`,
-      6000,
-    );
-    const map: Record<string, string[]> = {};
-    for (const it of raw.items ?? []) map[it.id] = it.questions ?? [];
-    return { data: map, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const raw = await getJson<{ items?: Array<{ id: string; questions?: string[] }> }>(
+    `/elicitation/offboarding/${encodeURIComponent(programmeId)}/questions`,
+    6000,
+  );
+  const map: Record<string, string[]> = {};
+  for (const it of raw.items ?? []) map[it.id] = it.questions ?? [];
+  return { data: map, source: "live" };
 }
 
 // POST /offboarding/{programme_id}/responses — item_id in body; responses are
@@ -1268,25 +1151,13 @@ export function setPlantState(body: {
 }
 
 export async function getPlantState(siteId: string): Promise<Fetched<PlantState | null>> {
-  try {
-    const data = await getJson<PlantState>(`/events/plant-state/${encodeURIComponent(siteId)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<PlantState>(`/events/plant-state/${encodeURIComponent(siteId)}`);
+  return { data, source: "live" };
 }
 
 export async function getEvent(eventId: string): Promise<Fetched<OperationalEvent | null>> {
-  try {
-    const data = await getJson<OperationalEvent>(`/events/${encodeURIComponent(eventId)}`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<OperationalEvent>(`/events/${encodeURIComponent(eventId)}`);
+  return { data, source: "live" };
 }
 
 export function ackEvent(eventId: string, body: { user_id: string; role: string; signature?: string; notes?: string }) {
@@ -1294,14 +1165,8 @@ export function ackEvent(eventId: string, body: { user_id: string; role: string;
 }
 
 export async function getGovernorState(userId: string): Promise<Fetched<GovernorEventState | null>> {
-  try {
-    const data = await getJson<GovernorEventState>(`/briefs/governor/status`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<GovernorEventState>(`/briefs/governor/status`);
+  return { data, source: "live" };
 }
 
 // --- Documents: additional endpoints ---
@@ -1476,94 +1341,88 @@ export async function searchAsset(assetId: string, q: string): Promise<AssetSear
 }
 
 export async function getDocumentTopology(documentId: string): Promise<Fetched<TopologyGraph | null>> {
-  try {
-    const raw = await getJson<{
-      document_id: string;
-      verification_status?: string;
-      extracted_at?: string;
-      topology_source?: string;
-      elements?: Record<string, { verification_status?: string; element_group?: string }>;
-      elements_total?: number;
-      elements_verified?: number;
-      elements_disputed?: number;
-      safety_critical_total?: number;
-      safety_critical_verified?: number;
-      canonical_ready?: boolean;
-      topology?: {
-        equipment_nodes?: Array<Record<string, unknown>>;
-        isolation_valves?: Array<Record<string, unknown>>;
-        isolation_boundaries?: Array<Record<string, unknown>>;
-        instrumentation_loops?: Array<Record<string, unknown>>;
-      };
-    }>(`/documents/${encodeURIComponent(documentId)}/topology`);
-
-    // Per-element verification, keyed by element id. Every node used to be stamped with one
-    // document-level string, so the per-node colour coding was decorative — a reviewer could
-    // confirm an element and nothing on screen changed.
-    const elements = raw.elements ?? {};
-    const statusOf = (id: string): TopologyNode["verification_status"] => {
-      const s = elements[id]?.verification_status;
-      return s === "verified" || s === "disputed" ? s : "unverified";
+  const raw = await getJson<{
+    document_id: string;
+    verification_status?: string;
+    extracted_at?: string;
+    topology_source?: string;
+    elements?: Record<string, { verification_status?: string; element_group?: string }>;
+    elements_total?: number;
+    elements_verified?: number;
+    elements_disputed?: number;
+    safety_critical_total?: number;
+    safety_critical_verified?: number;
+    canonical_ready?: boolean;
+    topology?: {
+      equipment_nodes?: Array<Record<string, unknown>>;
+      isolation_valves?: Array<Record<string, unknown>>;
+      isolation_boundaries?: Array<Record<string, unknown>>;
+      instrumentation_loops?: Array<Record<string, unknown>>;
     };
-    const t = raw.topology ?? {};
-    const nodes: TopologyNode[] = [];
-    const tagToId = new Map<string, string>(); // tag / boundary_id / loop_id → node_id
+  }>(`/documents/${encodeURIComponent(documentId)}/topology`);
 
-    for (const e of t.equipment_nodes ?? []) {
-      const id = String(e.id);
-      const tag = String(e.tag ?? id);
-      tagToId.set(tag, id);
-      nodes.push({ node_id: id, node_type: EQUIP_TYPE_MAP[String(e.equipment_class)] ?? "Equipment", label: tag, verification_status: statusOf(id), properties: e });
-    }
-    for (const v of t.isolation_valves ?? []) {
-      const id = String(v.id);
-      const tag = String(v.tag ?? id);
-      tagToId.set(tag, id);
-      nodes.push({ node_id: id, node_type: "Valve", label: tag, verification_status: statusOf(id), properties: v });
-    }
-    for (const l of t.instrumentation_loops ?? []) {
-      const id = String(l.id);
-      const label = String(l.loop_id ?? id);
-      tagToId.set(label, id);
-      nodes.push({ node_id: id, node_type: "Instrument", label, verification_status: statusOf(id), properties: l });
-    }
-    const edges: TopologyEdge[] = [];
-    for (const b of t.isolation_boundaries ?? []) {
-      const id = String(b.id);
-      nodes.push({ node_id: id, node_type: "Boundary", label: String(b.boundary_id ?? id), verification_status: statusOf(id), properties: b });
-      const refs = [...((b.primary_isolations as string[]) ?? []), ...((b.bleed_vents as string[]) ?? [])];
-      for (const tag of refs) {
-        const targetId = tagToId.get(tag);
-        if (targetId) edges.push({ edge_id: `${id}-${targetId}`, source_id: id, target_id: targetId, edge_type: "isolation", label: "isolates" });
-      }
-    }
+  // Per-element verification, keyed by element id. Every node used to be stamped with one
+  // document-level string, so the per-node colour coding was decorative — a reviewer could
+  // confirm an element and nothing on screen changed.
+  const elements = raw.elements ?? {};
+  const statusOf = (id: string): TopologyNode["verification_status"] => {
+    const s = elements[id]?.verification_status;
+    return s === "verified" || s === "disputed" ? s : "unverified";
+  };
+  const t = raw.topology ?? {};
+  const nodes: TopologyNode[] = [];
+  const tagToId = new Map<string, string>(); // tag / boundary_id / loop_id → node_id
 
-    const data: TopologyGraph = {
-      document_id: raw.document_id,
-      nodes,
-      edges,
-      generated_at: raw.extracted_at ?? new Date().toISOString(),
-      // Carried through so the page can say so when the vision model was unreachable and
-      // the pipeline fell back to the demo fixture. The backend already records this;
-      // nothing consumed it, so fixture topology rendered as if it were extracted.
-      topology_source: raw.topology_source === "vision_model" ? "vision_model" : "demo_fixture",
-      verification_status:
-        raw.verification_status === "verified" || raw.verification_status === "partially_verified"
-          ? raw.verification_status
-          : "unverified",
-      elements_total: raw.elements_total ?? 0,
-      elements_verified: raw.elements_verified ?? 0,
-      elements_disputed: raw.elements_disputed ?? 0,
-      safety_critical_total: raw.safety_critical_total ?? 0,
-      safety_critical_verified: raw.safety_critical_verified ?? 0,
-      canonical_ready: raw.canonical_ready ?? false,
-    };
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
+  for (const e of t.equipment_nodes ?? []) {
+    const id = String(e.id);
+    const tag = String(e.tag ?? id);
+    tagToId.set(tag, id);
+    nodes.push({ node_id: id, node_type: EQUIP_TYPE_MAP[String(e.equipment_class)] ?? "Equipment", label: tag, verification_status: statusOf(id), properties: e });
   }
+  for (const v of t.isolation_valves ?? []) {
+    const id = String(v.id);
+    const tag = String(v.tag ?? id);
+    tagToId.set(tag, id);
+    nodes.push({ node_id: id, node_type: "Valve", label: tag, verification_status: statusOf(id), properties: v });
+  }
+  for (const l of t.instrumentation_loops ?? []) {
+    const id = String(l.id);
+    const label = String(l.loop_id ?? id);
+    tagToId.set(label, id);
+    nodes.push({ node_id: id, node_type: "Instrument", label, verification_status: statusOf(id), properties: l });
+  }
+  const edges: TopologyEdge[] = [];
+  for (const b of t.isolation_boundaries ?? []) {
+    const id = String(b.id);
+    nodes.push({ node_id: id, node_type: "Boundary", label: String(b.boundary_id ?? id), verification_status: statusOf(id), properties: b });
+    const refs = [...((b.primary_isolations as string[]) ?? []), ...((b.bleed_vents as string[]) ?? [])];
+    for (const tag of refs) {
+      const targetId = tagToId.get(tag);
+      if (targetId) edges.push({ edge_id: `${id}-${targetId}`, source_id: id, target_id: targetId, edge_type: "isolation", label: "isolates" });
+    }
+  }
+
+  const data: TopologyGraph = {
+    document_id: raw.document_id,
+    nodes,
+    edges,
+    generated_at: raw.extracted_at ?? new Date().toISOString(),
+    // Carried through so the page can say so when the vision model was unreachable and
+    // the pipeline fell back to the demo fixture. The backend already records this;
+    // nothing consumed it, so fixture topology rendered as if it were extracted.
+    topology_source: raw.topology_source === "vision_model" ? "vision_model" : "demo_fixture",
+    verification_status:
+      raw.verification_status === "verified" || raw.verification_status === "partially_verified"
+        ? raw.verification_status
+        : "unverified",
+    elements_total: raw.elements_total ?? 0,
+    elements_verified: raw.elements_verified ?? 0,
+    elements_disputed: raw.elements_disputed ?? 0,
+    safety_critical_total: raw.safety_critical_total ?? 0,
+    safety_critical_verified: raw.safety_critical_verified ?? 0,
+    canonical_ready: raw.canonical_ready ?? false,
+  };
+  return { data, source: "live" };
 }
 
 /**
@@ -1629,21 +1488,15 @@ const PIPELINE_STAGE_ALIASES: Record<string, DocumentPipelineStage> = {
 };
 
 export async function getDocumentStatus(documentId: string): Promise<Fetched<DocumentStatus | null>> {
-  try {
-    const raw = await getJson<RawDocumentStatus>(`/documents/${encodeURIComponent(documentId)}/status`);
-    const stage = raw.pipeline_stage ?? "queued";
-    const data: DocumentStatus = {
-      document_id: raw.document_id,
-      stage: PIPELINE_STAGE_ALIASES[stage] ?? (stage as DocumentPipelineStage),
-      updated_at: raw.updated_at,
-      details: raw.error ?? null,
-    };
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const raw = await getJson<RawDocumentStatus>(`/documents/${encodeURIComponent(documentId)}/status`);
+  const stage = raw.pipeline_stage ?? "queued";
+  const data: DocumentStatus = {
+    document_id: raw.document_id,
+    stage: PIPELINE_STAGE_ALIASES[stage] ?? (stage as DocumentPipelineStage),
+    updated_at: raw.updated_at,
+    details: raw.error ?? null,
+  };
+  return { data, source: "live" };
 }
 
 // --- Audit log ---
@@ -1652,27 +1505,21 @@ export async function getAuditLog(params: {
   entity_id?: string;
   limit?: number;
 }): Promise<Fetched<AuditLogResponse>> {
-  try {
-    const qs = new URLSearchParams();
-    if (params.entity_type) qs.set("entity_type", params.entity_type);
-    if (params.entity_id) qs.set("entity_id", params.entity_id);
-    if (params.limit) qs.set("limit", String(params.limit));
-    // Live payload uses numeric `id` + `details`; the UI shape is `log_id` +
-    // `metadata`. Adapt here (same pattern as blast-radius/topology) so every
-    // consumer keeps a stable, unique key.
-    type RawAuditEntry = AuditLogEntry & { id?: number; details?: Record<string, unknown> | null };
-    const raw = await getJson<{ items: RawAuditEntry[]; total: number }>(`/audit-log/?${qs}`);
-    const items = raw.items.map((it, i) => ({
-      ...it,
-      log_id: it.log_id ?? String(it.id ?? i),
-      metadata: it.metadata ?? it.details ?? null,
-    }));
-    return { data: { items, total: raw.total }, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const qs = new URLSearchParams();
+  if (params.entity_type) qs.set("entity_type", params.entity_type);
+  if (params.entity_id) qs.set("entity_id", params.entity_id);
+  if (params.limit) qs.set("limit", String(params.limit));
+  // Live payload uses numeric `id` + `details`; the UI shape is `log_id` +
+  // `metadata`. Adapt here (same pattern as blast-radius/topology) so every
+  // consumer keeps a stable, unique key.
+  type RawAuditEntry = AuditLogEntry & { id?: number; details?: Record<string, unknown> | null };
+  const raw = await getJson<{ items: RawAuditEntry[]; total: number }>(`/audit-log/?${qs}`);
+  const items = raw.items.map((it, i) => ({
+    ...it,
+    log_id: it.log_id ?? String(it.id ?? i),
+    metadata: it.metadata ?? it.details ?? null,
+  }));
+  return { data: { items, total: raw.total }, source: "live" };
 }
 
 // --- Health ---
@@ -1687,36 +1534,30 @@ const _SERVICE_LABELS: Record<string, string> = {
 };
 
 export async function getHealthDetailed(): Promise<Fetched<HealthDetailed | null>> {
-  try {
-    const raw = await getJson<{
-      status: string;
-      checks: Record<string, string>;
-      phase?: number;
-      phase_enforced?: { synthesis: boolean; proactive_delivery: boolean };
-    }>("/health/detailed");
-    const services: ServiceHealth[] = Object.entries(raw.checks ?? {}).map(([name, state]) => ({
-      name: _SERVICE_LABELS[name] ?? name,
-      status: state === "ok" ? "healthy" : "down",
-      details: state === "ok" ? null : state,
-    }));
-    // The API itself answered, so it's up — surface it as the first service.
-    services.unshift({ name: "FastAPI", status: "healthy", details: null });
-    const anyDown = services.some((s) => s.status !== "healthy");
-    return {
-      data: {
-        overall: anyDown ? "degraded" : "healthy",
-        services,
-        checked_at: new Date().toISOString(),
-        phase: raw.phase,
-        phase_enforced: raw.phase_enforced,
-      },
-      source: "live",
-    };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const raw = await getJson<{
+    status: string;
+    checks: Record<string, string>;
+    phase?: number;
+    phase_enforced?: { synthesis: boolean; proactive_delivery: boolean };
+  }>("/health/detailed");
+  const services: ServiceHealth[] = Object.entries(raw.checks ?? {}).map(([name, state]) => ({
+    name: _SERVICE_LABELS[name] ?? name,
+    status: state === "ok" ? "healthy" : "down",
+    details: state === "ok" ? null : state,
+  }));
+  // The API itself answered, so it's up — surface it as the first service.
+  services.unshift({ name: "FastAPI", status: "healthy", details: null });
+  const anyDown = services.some((s) => s.status !== "healthy");
+  return {
+    data: {
+      overall: anyDown ? "degraded" : "healthy",
+      services,
+      checked_at: new Date().toISOString(),
+      phase: raw.phase,
+      phase_enforced: raw.phase_enforced,
+    },
+    source: "live",
+  };
 }
 
 /**
@@ -1727,14 +1568,8 @@ export async function getHealthDetailed(): Promise<Fetched<HealthDetailed | null
  * handler it pointed at returned hardcoded `VIBE`/`TEMP` tags for every asset anyway.
  */
 export async function getOtCoverage(assetId: string): Promise<Fetched<OtCoverage | null>> {
-  try {
-    const data = await getJson<OtCoverage>(`/assets/${encodeURIComponent(assetId)}/ot-coverage`);
-    return { data, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<OtCoverage>(`/assets/${encodeURIComponent(assetId)}/ot-coverage`);
+  return { data, source: "live" };
 }
 
 // --- MDM: confirm a provisional asset identity (Task 20c) ---
@@ -1773,21 +1608,13 @@ export interface AliasCandidate {
 }
 
 export async function getProvisionalAssets(): Promise<Fetched<ProvisionalAsset[]>> {
-  try {
-    const data = await getJson<{ items: ProvisionalAsset[] }>("/assets/provisional");
-    return { data: data.items ?? [], source: "live" };
-  } catch (e) {
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<{ items: ProvisionalAsset[] }>("/assets/provisional");
+  return { data: data.items ?? [], source: "live" };
 }
 
 export async function getAliasCandidates(): Promise<Fetched<AliasCandidate[]>> {
-  try {
-    const data = await getJson<{ items: AliasCandidate[] }>("/assets/aliases/pending");
-    return { data: data.items ?? [], source: "live" };
-  } catch (e) {
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const data = await getJson<{ items: AliasCandidate[] }>("/assets/aliases/pending");
+  return { data: data.items ?? [], source: "live" };
 }
 
 export function confirmAlias(assetId: string, alias: string) {
@@ -1857,19 +1684,15 @@ export interface DocumentIngestResponse {
 // --- Events: list ---
 
 export async function getEvents(params?: { event_type?: string; limit?: number }): Promise<Fetched<EventsResponse>> {
-  try {
-    const qs = new URLSearchParams();
-    if (params?.event_type) qs.set("event_type", params.event_type);
-    if (params?.limit) qs.set("limit", String(params.limit));
-    const data = await getJson<EventsResponse>(`/events/?${qs}`);
-    // An empty list from a successful call is a VALID live state — no events match the
-    // filter. This used to swap in fixtures on empty, which is worse than the catch-branch
-    // fallbacks: it fabricated data on a *successful* request. Same defect the briefs
-    // fetcher had. The page renders its own empty state.
-    return { data, source: "live" };
-  } catch (e) {
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const qs = new URLSearchParams();
+  if (params?.event_type) qs.set("event_type", params.event_type);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  const data = await getJson<EventsResponse>(`/events/?${qs}`);
+  // An empty list from a successful call is a VALID live state — no events match the
+  // filter. This used to swap in fixtures on empty, which is worse than the catch-branch
+  // fallbacks: it fabricated data on a *successful* request. Same defect the briefs
+  // fetcher had. The page renders its own empty state.
+  return { data, source: "live" };
 }
 
 // --- Asset detail (composes /assets/{id} + /aliases + /knowledge) ---
@@ -1906,37 +1729,31 @@ function factClaim(target: Record<string, unknown>, edge: Record<string, unknown
 }
 
 export async function getAssetDetail(id: string): Promise<Fetched<AssetDetailView | null>> {
-  try {
-    const [detail, aliases, knowledge] = await Promise.all([
-      getJson<AssetDetail>(`/assets/${encodeURIComponent(id)}`),
-      getJson<AssetAlias[]>(`/assets/${encodeURIComponent(id)}/aliases`).catch(() => [] as AssetAlias[]),
-      getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(id)}/knowledge`).catch(() => null),
-    ]);
-    const crit = criticalityMeta(detail.criticality);
-    const view: AssetDetailView = {
-      asset_id: detail.asset_id,
-      name: detail.name,
-      equipment_class: detail.equipment_class,
-      criticalityLabel: crit.label,
-      criticalityColor: crit.color,
-      parent: detail.parent_asset_id ?? null,
-      open_work_orders: detail.open_work_orders_count ?? null,
-      compliance_gaps: detail.compliance_gap_count ?? null,
-      last_inspection: detail.last_inspection_date ?? null,
-      aliases: (aliases ?? []).map((a) => a.alias),
-      knowledge: (knowledge?.facts ?? []).map((f) => ({
-        claim: factClaim(f.target, f.edge),
-        authority_level: ((f.edge.authority_level as AuthorityLevel) ?? 5),
-        verification: normVerification(f.edge.verification_status),
-        source_doc: (f.edge.document_id as string) ?? "—",
-      })),
-    };
-    return { data: view, source: "live" };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  const [detail, aliases, knowledge] = await Promise.all([
+    getJson<AssetDetail>(`/assets/${encodeURIComponent(id)}`),
+    getJson<AssetAlias[]>(`/assets/${encodeURIComponent(id)}/aliases`).catch(() => [] as AssetAlias[]),
+    getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(id)}/knowledge`).catch(() => null),
+  ]);
+  const crit = criticalityMeta(detail.criticality);
+  const view: AssetDetailView = {
+    asset_id: detail.asset_id,
+    name: detail.name,
+    equipment_class: detail.equipment_class,
+    criticalityLabel: crit.label,
+    criticalityColor: crit.color,
+    parent: detail.parent_asset_id ?? null,
+    open_work_orders: detail.open_work_orders_count ?? null,
+    compliance_gaps: detail.compliance_gap_count ?? null,
+    last_inspection: detail.last_inspection_date ?? null,
+    aliases: (aliases ?? []).map((a) => a.alias),
+    knowledge: (knowledge?.facts ?? []).map((f) => ({
+      claim: factClaim(f.target, f.edge),
+      authority_level: ((f.edge.authority_level as AuthorityLevel) ?? 5),
+      verification: normVerification(f.edge.verification_status),
+      source_doc: (f.edge.document_id as string) ?? "—",
+    })),
+  };
+  return { data: view, source: "live" };
 }
 
 // --- Knowledge graph (Tasks 15-16, GET /assets/{id}/knowledge?as_of=) -------
@@ -1980,59 +1797,53 @@ export async function getKnowledgeGraph(
   assetId: string,
   asOf?: string
 ): Promise<Fetched<KnowledgeGraphData>> {
-  try {
-    const qs = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
-    const raw = await getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(assetId)}/knowledge${qs}`);
-    const nodesMap = new Map<string, GraphNodeData>();
-    nodesMap.set(assetId, { id: assetId, label: assetId, kind: "Asset", properties: {} });
-    // Dedupe edges — re-ingested datasets leave many identical KNOWLEDGE_EDGEs
-    // (same target + relationship + document + validity). Left raw they stack as
-    // overlapping lines and repeat endlessly in the validity-window list.
-    const edges: GraphEdgeData[] = [];
-    const seenEdge = new Set<string>();
-    raw.facts.forEach((f, i) => {
-      const tId = graphNodeId(f.target, i);
-      const e = f.edge as Record<string, unknown>;
-      const label = String(e.parameter ?? e.relationship_type ?? "related_to");
-      const sig = `${tId}|${label}|${String(e.document_id ?? "")}|${String(e.valid_from ?? "")}`;
-      if (seenEdge.has(sig)) return;
-      seenEdge.add(sig);
-      if (!nodesMap.has(tId)) {
-        nodesMap.set(tId, {
-          id: tId,
-          label: graphNodeLabel(f.target),
-          kind: graphNodeKind(f.target),
-          properties: f.target,
-        });
-      }
-      edges.push({
-        id: `e-${i}`,
-        source: assetId,
-        target: tId,
-        label,
-        authority_level: Number(e.authority_level ?? 5),
-        verification_status: normVerifStatus(e.verification_status),
-        valid_from: String(e.valid_from ?? "2020-01-01T00:00:00"),
-        valid_to: String(e.valid_to ?? "9999-12-31T23:59:59"),
-        document_id: String(e.document_id ?? ""),
-        confidence: Number(e.confidence ?? 0),
+  const qs = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+  const raw = await getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(assetId)}/knowledge${qs}`);
+  const nodesMap = new Map<string, GraphNodeData>();
+  nodesMap.set(assetId, { id: assetId, label: assetId, kind: "Asset", properties: {} });
+  // Dedupe edges — re-ingested datasets leave many identical KNOWLEDGE_EDGEs
+  // (same target + relationship + document + validity). Left raw they stack as
+  // overlapping lines and repeat endlessly in the validity-window list.
+  const edges: GraphEdgeData[] = [];
+  const seenEdge = new Set<string>();
+  raw.facts.forEach((f, i) => {
+    const tId = graphNodeId(f.target, i);
+    const e = f.edge as Record<string, unknown>;
+    const label = String(e.parameter ?? e.relationship_type ?? "related_to");
+    const sig = `${tId}|${label}|${String(e.document_id ?? "")}|${String(e.valid_from ?? "")}`;
+    if (seenEdge.has(sig)) return;
+    seenEdge.add(sig);
+    if (!nodesMap.has(tId)) {
+      nodesMap.set(tId, {
+        id: tId,
+        label: graphNodeLabel(f.target),
+        kind: graphNodeKind(f.target),
+        properties: f.target,
       });
+    }
+    edges.push({
+      id: `e-${i}`,
+      source: assetId,
+      target: tId,
+      label,
+      authority_level: Number(e.authority_level ?? 5),
+      verification_status: normVerifStatus(e.verification_status),
+      valid_from: String(e.valid_from ?? "2020-01-01T00:00:00"),
+      valid_to: String(e.valid_to ?? "9999-12-31T23:59:59"),
+      document_id: String(e.document_id ?? ""),
+      confidence: Number(e.confidence ?? 0),
     });
-    return {
-      data: {
-        asset_id: assetId,
-        as_of: raw.as_of,
-        nodes: Array.from(nodesMap.values()),
-        edges,
-        excluded_test_documents: raw.excluded_test_documents ?? 0,
-      },
-      source: "live",
-    };
-  } catch (e) {
-    // Live-only: never substitute fixture data for a failed fetch. The caller
-    // (useFetch / a server component) turns this into an error+retry state.
-    throw e instanceof Error ? e : new Error(String(e));
-  }
+  });
+  return {
+    data: {
+      asset_id: assetId,
+      as_of: raw.as_of,
+      nodes: Array.from(nodesMap.values()),
+      edges,
+      excluded_test_documents: raw.excluded_test_documents ?? 0,
+    },
+    source: "live",
+  };
 }
 
 

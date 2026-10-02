@@ -14,3 +14,9 @@ FAILURE_FAMILIES: dict[str, str] = {
     # Process
     "LOW-FLOW": "process", "HIGH-TEMP": "process", "PRESSURE-LOSS": "process",
 }
+
+
+def failure_family(code: str | None) -> str:
+    """Family of a failure code, case-folded. An unknown code is its own family; blank is ``""``."""
+    code = (code or "").strip().upper()
+    return FAILURE_FAMILIES.get(code, code)

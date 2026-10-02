@@ -5,7 +5,7 @@ import { SUGGESTIONS, metaAnswer, type CopilotAnswer } from "@/lib/copilot";
 import { synthesize } from "@/lib/api";
 import { Answer, AnswerError, Thinking, SYNTHESIS_ENABLED } from "./_components/answer-card";
 import { Composer } from "./_components/composer";
-import { cn } from "@/lib/utils";
+import { cn, parseLocalDate } from "@/lib/utils";
 
 import { Icon } from "@/components/icon";
 interface Turn {
@@ -118,8 +118,10 @@ export default function CopilotPage() {
   }, [turns, hydrated]);
 
   function newChat() {
+    // nextId is deliberately NOT reset: requests from the old conversation are still running, and
+    // reusing id 0 would let a late answer land under (and be saved against) the new first question.
+    // With ids never reused, their callbacks match no turn and are dropped.
     setTurns([]);
-    nextId.current = 0;
   }
 
   useEffect(() => {
@@ -262,7 +264,7 @@ export default function CopilotPage() {
                       </div>
                       {t.asOf && (
                         <p className="text-right text-label text-muted">
-                          as of {new Date(t.asOf).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          as of {parseLocalDate(t.asOf).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                         </p>
                       )}
                     </div>

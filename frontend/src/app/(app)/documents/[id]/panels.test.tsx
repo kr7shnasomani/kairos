@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 const ctx = vi.hoisted(() => ({ role: "reliability", refresh: vi.fn() }));
 
 vi.mock("@/lib/api", () => mocks);
-vi.mock("@/components/use-role", () => ({ useRole: () => ctx.role, PROMOTE_ROLES: ["reliability", "admin"] }));
+vi.mock("@/components/use-role", () => ({ useIsDemo: () => false, visibleTo: (roles: string[], role: string) => role === "demo" || roles.includes(role), useRole: () => ctx.role, PROMOTE_ROLES: ["reliability", "admin"] }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: ctx.refresh }) }));
 
 window.matchMedia = ((query: string) => ({

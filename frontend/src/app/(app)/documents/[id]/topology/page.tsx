@@ -1,6 +1,7 @@
 "use client";
 
 // Interactive P&ID topology canvas for a vault document (React Flow).
+import { DemoGate } from "@/components/demo-gate";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -19,7 +20,7 @@ import { getDocumentTopology, verifyTopologyElements } from "@/lib/api";
 import type { TopologyNode } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
 import { useCanvasTokens } from "@/lib/graph-theme";
-import { RESOLVE_ROLES, useRole } from "@/components/use-role";
+import { RESOLVE_ROLES, useRole, visibleTo } from "@/components/use-role";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { nodeTypes, edgeTypes, nodeVar } from "./_components/topo-node";
 import { NodeDetail, TopoLegend } from "./_components/topo-panels";
@@ -41,7 +42,7 @@ function TopologyPageInner() {
   // Bumped after a verification decision to re-read derived status rather than guess it locally.
   const [refreshKey, setRefreshKey] = useState(0);
   const role = useRole();
-  const canVerify = RESOLVE_ROLES.includes(role);
+  const canVerify = visibleTo(RESOLVE_ROLES, role);
 
   // Live-only via the shared hook: loading → live → error+retry. There used to be a
   // `data ?? FIXTURE` here, which would have rendered fabricated elements — some labelled
@@ -213,7 +214,7 @@ function TopologyPageInner() {
                   <span className="text-label text-muted">{n.node_type}</span>
                   <span className="ml-auto text-label capitalize" style={{ color }}>{n.verification_status}</span>
                   {canVerify && n.verification_status === "unverified" && (
-                    <span className="flex gap-1.5">
+                    <DemoGate><span className="flex gap-1.5">
                       <Button
                         variant="ghost"
                         onClick={() => decide(n.node_id, "confirmed")}
@@ -230,7 +231,7 @@ function TopologyPageInner() {
                       >
                         Reject
                       </Button>
-                    </span>
+                    </span></DemoGate>
                   )}
                 </div>
               );

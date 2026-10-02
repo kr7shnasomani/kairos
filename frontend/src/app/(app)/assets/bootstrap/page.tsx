@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -159,9 +160,11 @@ export default function BootstrapPage() {
                     <p className="truncate font-medium text-ink">{p.equipment_class.replaceAll("_", " ")}</p>
                     <p className="mt-0.5 truncate">Source: {(p.eam_source || "manual").replaceAll("_", " ")}</p>
                   </div>
-                  <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id || !me} onClick={() => confirm(p)}>
-                    {busy === p.asset_id ? "Confirming…" : "Confirm identity"}
-                  </Button>
+                  <DemoGate>
+                    <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id || !me} onClick={() => confirm(p)}>
+                      {busy === p.asset_id ? "Confirming…" : "Confirm identity"}
+                    </Button>
+                  </DemoGate>
                 </div>
               ))}
             </div>
@@ -204,10 +207,12 @@ export default function BootstrapPage() {
                       </div>
                       <StatusBadge tone="info" dot={false}>{Math.round(a.confidence * 100)}% match</StatusBadge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 md:flex">
-                      <Button variant="ghost" className="h-11 md:h-9" disabled={busy === key} aria-label={`Confirm alias ${a.alias}`} onClick={() => decideAlias(a, true)}>Confirm</Button>
-                      <Button variant="ghost" className="h-11 text-danger md:h-9" disabled={busy === key} aria-label={`Reject alias ${a.alias}`} onClick={() => decideAlias(a, false)}>Reject</Button>
-                    </div>
+                    <DemoGate>
+                      <div className="grid grid-cols-2 gap-2 md:flex">
+                        <Button variant="ghost" className="h-11 md:h-9" disabled={busy === key} aria-label={`Confirm alias ${a.alias}`} onClick={() => decideAlias(a, true)}>Confirm</Button>
+                        <Button variant="ghost" className="h-11 text-danger md:h-9" disabled={busy === key} aria-label={`Reject alias ${a.alias}`} onClick={() => decideAlias(a, false)}>Reject</Button>
+                      </div>
+                    </DemoGate>
                   </div>
                 );
               })}

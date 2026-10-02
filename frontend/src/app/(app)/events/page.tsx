@@ -8,7 +8,8 @@ import type { OperationalEvent } from "@/lib/types";
 import { getEvents } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { getMe } from "@/lib/auth";
-import { useRole, RESOLVE_ROLES } from "@/components/use-role";
+import { useRole, RESOLVE_ROLES, visibleTo } from "@/components/use-role";
+import { DemoGate } from "@/components/demo-gate";
 import { Button, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, statusTone, type TableColumn } from "@/components/ui";
 import { AXIS, ChartContainer, GRID, TONE_VAR, TOOLTIP } from "@/components/charts";
 import { useReducedMotion } from "@/lib/motion";
@@ -78,7 +79,7 @@ const COLUMNS: TableColumn<EventRow>[] = [
 export default function EventsPage() {
   const router = useRouter();
   const role = useRole();
-  const canEmit = RESOLVE_ROLES.includes(role);
+  const canEmit = visibleTo(RESOLVE_ROLES, role);
   const reduced = useReducedMotion();
 
   const [reload, setReload] = useState(0);
@@ -143,7 +144,7 @@ export default function EventsPage() {
         eyebrow="Operate"
         title="Operational events"
         lede="Monitor the event sources that trigger proactive briefs and compound operational context."
-        actions={canEmit && <Button variant="primary" className="h-11 sm:h-9" onClick={() => setShowEmitter((open) => !open)}>{showEmitter ? "Close emitter" : "Emit event"}</Button>}
+        actions={canEmit && <DemoGate><Button variant="primary" className="h-11 sm:h-9" onClick={() => setShowEmitter((open) => !open)}>{showEmitter ? "Close emitter" : "Emit event"}</Button></DemoGate>}
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-caption text-muted">

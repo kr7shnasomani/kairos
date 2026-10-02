@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -166,9 +167,11 @@ function Interview({
         ))}
       </div>
 
+      <DemoGate>
       <Button variant="primary" onClick={submit} disabled={!allAnswered || submitting} className="mt-2 h-[48px] w-full">
         {submitting ? "Submitting…" : "Submit session responses"}
       </Button>
+      </DemoGate>
       {error && <p role="alert" className="text-body text-danger">{error}</p>}
     </div>
   );

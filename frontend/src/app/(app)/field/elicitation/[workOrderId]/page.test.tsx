@@ -1,9 +1,11 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getElicitationQuestions } from "@/lib/api";
 import ElicitationPage from "./page";
 
 vi.mock("next/navigation", () => ({ useParams: () => ({ workOrderId: "WO-118" }) }));
 vi.mock("@/lib/api", () => ({
+  getToken: () => null,
   getElicitationQuestions: vi.fn().mockResolvedValue({
     data: {
       session_id: "S-1", work_order_id: "WO-118", status: "in_progress", created_at: "2026-07-15T08:00:00Z",
@@ -31,5 +33,15 @@ describe("ElicitationPage", () => {
     expect(screen.getByTestId("elicitation-context")).toHaveTextContent("WO-118");
     expect(screen.getByRole("progressbar")).toHaveClass("rounded-xl");
     expect(screen.getByRole("button", { name: /Next/ })).toHaveClass("min-h-[52px]");
+  });
+
+  it("shows the no-questions state instead of crashing when the session has none", async () => {
+    vi.mocked(getElicitationQuestions).mockResolvedValueOnce({
+      data: { session_id: "S-2", work_order_id: "WO-118", status: "pending", created_at: "2026-07-15T08:00:00Z", questions: [] },
+      source: "live",
+    });
+    render(<ElicitationPage />);
+    expect(await screen.findByText("No questions available")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 });

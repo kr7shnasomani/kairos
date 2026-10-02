@@ -5,8 +5,11 @@ All settings are read from environment variables (via .env file in development).
 
 from functools import lru_cache
 
+import structlog
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+log = structlog.get_logger(__name__)
 
 
 class Settings(BaseSettings):
@@ -298,6 +301,12 @@ class Settings(BaseSettings):
     # missing header is rejected, not waved through.
     MOC_WEBHOOK_SECRET: str | None = None
 
+    # TEMPORARY bridge for accounts the role migration has not reached: when True, a user whose
+    # `app_metadata` has no `role` falls back to `user_metadata` for role/site_id/name (and a warning
+    # is logged). `user_metadata` is user-editable, so leave it False; set True only until
+    # scripts/migrate_roles_to_app_metadata.py has been applied, then remove this field.
+    LEGACY_ROLE_FALLBACK: bool = False
+
     # -------------------------------------------------------------------------
     # Groq — Voice Transcription (Whisper-large-v3 via API)
     # -------------------------------------------------------------------------
@@ -326,6 +335,9 @@ class Settings(BaseSettings):
         """Fail-closed: refuse to boot outside development while any secret that protects the live
         system is still its dev default. Development is untouched. Set these in the environment.
         INTERNAL_API_KEY is the critical one — its default is an admin auth-bypass (dependencies.py)."""
+        if self.LEGACY_ROLE_FALLBACK:
+            # Not a blocker (the owner may need it for the first deploy), but never silent.
+            log.warning("config.legacy_role_fallback_enabled", app_env=self.APP_ENV)
         if self.is_development:
             return self
         bad: list[str] = []

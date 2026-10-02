@@ -1,8 +1,8 @@
 """
 Extraction workers.
 
-`link_entities` remains a dead stub — entity linking runs as the `link_to_graph` Temporal
-activity inside `DocumentIngestionWorkflow`.
+Entity linking is not a Celery task: it runs as the `link_to_graph` Temporal activity inside
+`DocumentIngestionWorkflow`.
 
 `run_form_extraction` is live as of 2026-08-23. Its previous stub claimed "form extraction is
 handled by Temporal activities", which was **not true** — nothing in `document_pipeline.py`
@@ -19,14 +19,6 @@ import structlog
 from workers.celery_app import celery_app
 
 log = structlog.get_logger(__name__)
-
-
-@celery_app.task(queue="extraction", name="workers.extraction.link_entities")
-def link_entities(*args, **kwargs):
-    raise RuntimeError(
-        "workers.extraction.link_entities is a dead stub. "
-        "Entity linking runs via the link_to_graph Temporal activity."
-    )
 
 
 @celery_app.task(

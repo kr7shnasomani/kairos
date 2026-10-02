@@ -6,7 +6,7 @@ import type { QuarantineItem } from "@/lib/types";
 import { getQuarantine } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { Button, DataTable, EmptyState, FilterTabs, PageHeader } from "@/components/ui";
-import { useRole, PROMOTE_ROLES } from "@/components/use-role";
+import { useRole, PROMOTE_ROLES, visibleTo } from "@/components/use-role";
 import { QueuePills } from "@/components/stat-pills";
 import { ItemPanel } from "./_components/item-panel";
 import { ActionModals, type ActionMode } from "./_components/actions";
@@ -15,8 +15,8 @@ import { buildColumns, type QuarantineRow } from "./_components/columns";
 import { Icon } from "@/components/icon";
 export default function QuarantinePage() {
   const role = useRole();
-  const canPromote = PROMOTE_ROLES.includes(role);
-  const canResolveDeviation = role === "engineer" || role === "admin";
+  const canPromote = visibleTo(PROMOTE_ROLES, role);
+  const canResolveDeviation = role === "engineer" || role === "admin" || role === "demo";
 
   const [reload, setReload] = useState(0);
   const state = useFetch(() => getQuarantine(), [reload]);

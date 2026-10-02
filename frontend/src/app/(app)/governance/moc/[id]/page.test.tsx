@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ getMoc: vi.fn(), approveMoc: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useParams: () => ({ id: "MOC-2024-001" }) }));
 vi.mock("next/dynamic", () => ({ default: () => () => <div data-testid="blast-radius" /> }));
-vi.mock("@/lib/api", () => ({ getMoc: mocks.getMoc, approveMoc: mocks.approveMoc }));
+vi.mock("@/lib/api", () => ({ getToken: () => null, getMoc: mocks.getMoc, approveMoc: mocks.approveMoc }));
 
 const moc = {
   moc_id: "MOC-2024-001",

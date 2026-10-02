@@ -1,9 +1,52 @@
-"""Governance — Tasks 21-25, 34: conflicts, quarantine, MoC, SLA, circuit breaker, model gate."""
+"""Governance — Tasks 21-25, 34: conflicts, quarantine, MoC, SLA, circuit breaker, model gate.
+
+Security pass (2026-09-30 review, H7): the MoC webhook is authenticated by an HMAC, not a user token.
+The sender puts unix seconds in `X-Webhook-Timestamp` and a hex HMAC-SHA256 of `"{ts}." + raw body`
+(key `MOC_WEBHOOK_SECRET`) in `X-Webhook-Signature`; a request more than 5 minutes off is stale and an
+approved MoC cannot be re-opened. These tests sign with the same `MOC_WEBHOOK_SECRET` the API
+container holds. Where it is unset (APP_ENV=development) the API accepts an unsigned request and the
+signing-failure tests skip.
+"""
+
+import hashlib
+import hmac
+import json
+import os
+import time
 
 import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 from tests.conftest import uid
+
+_MOC_SECRET = os.getenv("MOC_WEBHOOK_SECRET") or None
+
+
+def _signed_webhook(payload, *, timestamp=None, secret=None):
+    """`content` and `headers` for a MoC webhook call: the exact bytes that are signed are the bytes sent."""
+    body = json.dumps(payload).encode()
+    headers = {"Content-Type": "application/json"}
+    secret = secret or _MOC_SECRET
+    if secret:
+        ts = str(int(time.time()) if timestamp is None else timestamp)
+        headers["X-Webhook-Timestamp"] = ts
+        headers["X-Webhook-Signature"] = hmac.new(secret.encode(), ts.encode() + b"." + body, hashlib.sha256).hexdigest()
+    return {"content": body, "headers": headers}
+
+
+async def _moc_id_from_deviation(admin_client, asset_id, note):
+    """Create a MoC the way the UI does: a deviation flag resolved with moc_warranted."""
+    r1 = await admin_client.post("/events/deviation-flag", json={"asset_id": asset_id, "description": note})
+    assert r1.status_code == 202
+    r2 = await admin_client.post(f"/events/deviation-flag/{r1.json()['item_id']}/resolve", json={
+        "resolution": "promoted",
+        "moc_warranted": True,
+        "notes": "MoC warranted by inspection evidence",
+    })
+    assert r2.status_code == 200
+    moc_id = r2.json().get("moc_id")
+    assert moc_id is not None, "moc_warranted=True should return a moc_id"
+    return moc_id
 
 
 # ---------------------------------------------------------------------------
@@ -262,39 +305,63 @@ async def test_get_conflict_detail(admin_client):
 
 
 async def test_moc_webhook_bad_payload(admin_client):
-    r = await admin_client.post("/governance/moc/webhook", json={"moc_id": "FAKE"})
+    r = await admin_client.post("/governance/moc/webhook", **_signed_webhook({"moc_id": "FAKE"}))
     assert r.status_code == 400
 
 
 async def test_moc_webhook_valid_payload(admin_client, shared_asset_id):
-    """Valid MoC webhook payload → 200 with moc_id and resolution in response."""
-    # Create a moc item via deviation flag resolve with moc_warranted=True
-    r1 = await admin_client.post("/events/deviation-flag", json={
-        "asset_id": shared_asset_id,
-        "description": "Webhook test — topology change confirmed",
-    })
-    assert r1.status_code == 202
-    item_id = r1.json()["item_id"]
-
-    r2 = await admin_client.post(f"/events/deviation-flag/{item_id}/resolve", json={
-        "resolution": "promoted",
-        "moc_warranted": True,
-        "notes": "MoC warranted by inspection evidence",
-    })
-    assert r2.status_code == 200
-    moc_id = r2.json().get("moc_id")
-    assert moc_id is not None, "moc_warranted=True should return a moc_id"
+    """Valid, signed MoC webhook payload → 200 with moc_id and resolution in response."""
+    moc_id = await _moc_id_from_deviation(admin_client, shared_asset_id, "Webhook test — topology change confirmed")
 
     # Test that the webhook accepts the moc_id with a valid status
-    r3 = await admin_client.post("/governance/moc/webhook", json={
+    r3 = await admin_client.post("/governance/moc/webhook", **_signed_webhook({
         "moc_id": moc_id,
         "status": "rejected",
         "approved_by": "test-runner",
-    })
+    }))
     assert r3.status_code == 200
     body = r3.json()
     assert body["moc_id"] == moc_id
     assert body["resolution"] == "rejected"
+
+
+async def test_moc_webhook_without_a_signature_is_refused(admin_client):
+    if not _MOC_SECRET:
+        pytest.skip("MOC_WEBHOOK_SECRET is not set: the API accepts unsigned webhooks in development")
+    r = await admin_client.post("/governance/moc/webhook", json={"moc_id": "FAKE", "status": "approved"})
+    assert r.status_code == 401
+
+
+async def test_moc_webhook_with_a_wrong_signature_is_refused(admin_client):
+    if not _MOC_SECRET:
+        pytest.skip("MOC_WEBHOOK_SECRET is not set: the API accepts unsigned webhooks in development")
+    r = await admin_client.post(
+        "/governance/moc/webhook", **_signed_webhook({"moc_id": "FAKE", "status": "approved"}, secret="not-the-secret")
+    )
+    assert r.status_code == 401
+
+
+async def test_moc_webhook_stale_timestamp_is_refused(admin_client):
+    """A correctly signed body older than 5 minutes is a replay, not a fresh call."""
+    if not _MOC_SECRET:
+        pytest.skip("MOC_WEBHOOK_SECRET is not set: the API accepts unsigned webhooks in development")
+    stale = int(time.time()) - 6 * 60
+    r = await admin_client.post(
+        "/governance/moc/webhook", **_signed_webhook({"moc_id": "FAKE", "status": "approved"}, timestamp=stale)
+    )
+    assert r.status_code == 401
+
+
+async def test_moc_webhook_cannot_reopen_an_approved_moc(admin_client, shared_asset_id):
+    moc_id = await _moc_id_from_deviation(admin_client, shared_asset_id, "Webhook replay test")
+    approve = {"moc_id": moc_id, "status": "approved", "approved_by": "test-runner"}
+
+    first = await admin_client.post("/governance/moc/webhook", **_signed_webhook(approve))
+    assert first.status_code == 200
+    # An in-window replay of a captured body, or a "rejected" follow-up, is refused.
+    assert (await admin_client.post("/governance/moc/webhook", **_signed_webhook(approve))).status_code == 409
+    reject = await admin_client.post("/governance/moc/webhook", **_signed_webhook({**approve, "status": "rejected"}))
+    assert reject.status_code == 409
 
 
 # ---------------------------------------------------------------------------

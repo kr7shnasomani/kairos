@@ -147,6 +147,14 @@ frontend/
 > `/settings`) are unlisted. (`/system-information` and `/system-benchmarks` were removed 2026-09-22.) Field routes render at mobile width; **there is no
 > mobile bottom tab bar** — mobile navigates via the hamburger sidebar (see §4).
 
+> **Demo account.** `useRole()` exposes `isDemo`. A demo user may open every page, a "Demo account:
+> destructive actions are disabled" strip shows under the header, and every control that changes
+> shared data is wrapped in `DemoGate` (`components/demo-gate.tsx`), which disables it with the tooltip
+> "Disabled in the demo account" (ingest, supersede, resolve, promote, approve, plant state, asset edits,
+> model-gate runs, offboarding and voice forms, brief ack and rating). The backend refuses the same
+> calls, so the gate is a courtesy and not the control. The button on the login page appears only when
+> `NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD` are set (baked at build time).
+
 > Client-only components that must not SSR (React Flow graph, blast-radius, supersede action) are
 > loaded via `dynamic(..., { ssr: false })` from the `"use client"` module `components/lazy.tsx` —
 > Next 16 disallows `ssr: false` directly inside a Server Component page.
@@ -629,7 +637,7 @@ volumes:
 **Env vars:**
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8000   # browser → host port-mapping; embedded at next build
-NEXT_PUBLIC_AUTH_STRICT=false               # build arg (Dockerfile + compose); baked in like the API URL. true turns a 401 into a forced re-login
+NEXT_PUBLIC_AUTH_STRICT=true                # build arg (Dockerfile + compose) and, for the local dev container, a runtime variable; baked in like the API URL. true turns a 401 into a forced re-login. Vercel and the local .env both use true; false is only the code default
 API_INTERNAL_URL=http://kairos-backend-api:8000  # SSR → Docker internal network
 NODE_ENV=development
 ```
@@ -679,7 +687,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **326 tests / 79 files**, all passing (2026-10-01; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
+| Test suite | **344 tests / 81 files**, all passing (2026-10-01; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---

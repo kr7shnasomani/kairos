@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { getArtifactUrl, submitAnswerFeedback } from "@/lib/api";
-import { READ_ONLY_ROLES, useRole } from "@/components/use-role";
 import { META_MODEL, type CopilotAnswer } from "@/lib/copilot";
 import { AuthorityBadge, SourceChip, StatusBadge, ConfidenceMeter } from "@/components/ui";
 import { cn, providerName } from "@/lib/utils";
@@ -97,8 +96,6 @@ export function Answer({ data, query = "", streaming }: {
    *  no sources or confidence yet and the safety gate may still refuse the whole answer. */
   streaming?: string;
 }) {
-  // The demo role cannot write; ratings and entity corrections would only be refused.
-  const readOnly = READ_ONLY_ROLES.includes(useRole());
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackFailed, setFeedbackFailed] = useState(false);
   // Collapsed by default — a multi-source answer used to dump every source card open,
@@ -301,7 +298,7 @@ export function Answer({ data, query = "", streaming }: {
 
       {/* Entity annotation chips */}
       {!data.is_synthesizing && data.entities && data.entities.length > 0 && (
-        <EntityAnnotations entities={data.entities} readOnly={readOnly} />
+        <EntityAnnotations entities={data.entities} />
       )}
 
       {/* Footer: confidence meter + model + feedback */}
@@ -318,7 +315,7 @@ export function Answer({ data, query = "", streaming }: {
                   Rating not saved
                 </span>
               )}
-              {!readOnly && (["accurate", "missing_context", "incorrect"] as const).map((r) => (
+              {(["accurate", "missing_context", "incorrect"] as const).map((r) => (
                 <button
                   key={r}
                   onClick={() => void rate(r)}

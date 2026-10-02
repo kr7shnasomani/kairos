@@ -44,7 +44,6 @@ kairos/                          # repo root
 │   │   ├── config.py                # All settings (pydantic-settings, env vars)
 │   │   ├── dependencies.py          # DI: Neo4j, Qdrant, ES, Redis, Supabase, Auth
 │   │   ├── middleware/
-│   │   │   ├── auth.py              # AuditLoggingMiddleware (http.request log line)
 │   │   │   ├── opa.py               # OPA policy enforcement middleware
 │   │   │   ├── ratelimit.py         # Per-IP Redis rate limit
 │   │   │   └── telemetry.py         # OTEL tracing + metrics setup
@@ -71,8 +70,6 @@ kairos/                          # repo root
 │   │   ├── cmd/connector/auth_test.go  # Go tests: secret check, config refusal, body cap, no upstream echo
 │   │   ├── internal/ot/client.go    # PIWebAPIClient + MockHistorianClient
 │   │   ├── internal/ot/client_test.go  # Go test: tag escaping, URL scrubbed from errors
-│   │   ├── internal/eam/client.go   # EAM connector interface + SAP stub
-│   │   ├── internal/events/relay.go # Redis Stream relay
 │   │   └── fixtures/sample_assets.json  # 5 demo assets for EAM sync
 │   ├── scripts/
 │   │   ├── seed_users.py            # Creates 6 Supabase auth users (admin, engineer, field_worker, reliability, compliance, demo). Passwords come from KAIROS_SEED_PASSWORD_* in .env.
@@ -112,7 +109,7 @@ kairos/                          # repo root
 ├── db/                          # Database schemas (mounted into Python containers)
 │   ├── schema.sql               # Consolidated Supabase schema — single source of truth (001–016 folded in, plus the 017 RLS block)
 │   ├── migrations/              # Hand-applied SQL not yet run on the live project
-│   │   └── 017_enable_rls_remaining_tables.sql  # RLS on the 14 tables that lacked it (NOT APPLIED; see DATABASE.md)
+│   │   └── 017_enable_rls_remaining_tables.sql  # RLS on the 14 tables that lacked it (live RLS was already on, verified 2 Oct; idempotent safety net, see DATABASE.md)
 │   ├── maintenance/             # Cloud-Supabase reset SQL (reset_all_data.sql) + CHANGELOG.md (tracked runs)
 │   └── neo4j/init_schema.cypher # Neo4j constraints + indices
 ├── fixtures/                    # Shared mock data (mounted into Python containers)
@@ -121,9 +118,7 @@ kairos/                          # repo root
 │   ├── policies/kairos.rego     # OPA RBAC rules (active — mounted by kairos-opa)
 │   ├── temporal/dynamicconfig.yaml  # Temporal server config (active)
 │   ├── caddy/Caddyfile          # HTTPS reverse proxy (active under --profile prod): 30 MB body cap + security headers
-│   ├── grafana/provisioning/    # LEGACY — obs is Grafana Cloud now; dashboard JSONs kept (importable)
-│   ├── otel/otel-config.yaml    # DEAD — otel-collector container removed
-│   └── tempo/tempo.yaml         # DEAD — tempo container removed
+│   └── grafana/dashboards-import/  # Grafana Cloud dashboard JSONs (obs is Grafana Cloud; not mounted by any container)
 ├── frontend/                    # Next.js UI (separate Docker build context)
 └── tests/                       # Pytest test suite (mounted into backend-api); the test_sec_*.py files cover the 2026-10-01 security pass
 ```
@@ -143,7 +138,7 @@ kairos/                          # repo root
 `create_app()` registers:
 1. CORS middleware (`CORS_ORIGINS` from settings)
 2. `OPAMiddleware` (enforces RBAC via OPA on writes **and** sensitive reads)
-3. `RateLimitMiddleware` (per-IP; zero, meaning off, only when `Settings.is_development`) and `AuditLoggingMiddleware`
+3. `RateLimitMiddleware` (per-IP; zero, meaning off, only when `Settings.is_development`)
 4. OTEL instrumentation (`setup_telemetry(app)`)
 5. All routers with prefix/tag
 
@@ -186,8 +181,6 @@ All models live in `backend/api/models/`.
 |-------|---------|
 | `AssetCreate` | `POST /assets` request body |
 | `Asset` | Full asset representation |
-| `TagAliasMap` | Alias entry from `asset_alias_map` table |
-| `AssetHierarchy` | Recursive parent/child tree |
 
 **Key constraint:** `confirmed_by_user_id` is mandatory in `AssetCreate` — AI-inferred identities are never accepted.
 
@@ -639,10 +632,10 @@ documents without excluding them reports test hygiene rather than the plant.
   decision **D8**: both name a file after this system or its harness rather than after plant
   equipment. A `_test\.ext` stem rule was rejected — it would also match a plausible real
   `hydro_test.pdf`, and hiding plant evidence is the one failure this predicate must not have.
-- `test_artifact_ids(supabase, document_ids)` — resolves ids to file names in one bulk lookup
-  (chunked at 200). **Read-only.** Fails *open*: on a lookup error it returns an empty set, so a
+- `document_rows(supabase, document_ids)` — resolves ids to `documents` rows (`document_id`, `file_name`)
+  in one bulk lookup (chunked at 200). **Read-only.** Fails *open*: on a lookup error it returns `[]`, so a
   Supabase blip shows extra noise rather than blanking a real graph.
-- `partition_test_artifacts(rows)` — pure, for callers that already hold `documents` rows.
+- `partition_test_artifacts(rows)` — pure; given those rows, returns the test-artifact ids.
 - `TEST_ASSET_PREFIXES` / `REAL_ASSET_CYPHER` — the same idea for **assets**. Prefixes: `QA-TEST-`
   (a manual QA sweep's `QA-TEST-155635`, matched 1 of 11 live assets and 0 of the 10 golden ones)
   plus the integration suite's `ASSET-TEST-`, `ASSET-DEDUP-`, `ASSET-EV-`, `ASSET-ACK-`,
@@ -1146,6 +1139,7 @@ skips them skips the point.
 | `reliability` | Engineer's reads and ingests (`ingest_document`, `ingest_event`) + `promote_quarantine`, **`countersign_brief`**, `resolve_admin_conflict` (no `ack_brief`, no `write_assets`) |
 | `compliance` | `read_search`, `read_compliance`, `read_audit`, `read_nonconformance`, `read_events` |
 | `admin` | `*` (all) |
+| `demo` | The public one-click demo identity. Every `read_*` action an admin has (including audit, governance and events), plus `synthesize`, `rca_pack` and `answer_feedback` (these only append to the audit log). Every other write is **denied by default**: it is not in the catch-all, so a route added later stays refused until it is named. Never acks or rates a brief, ingests, supersedes, resolves, promotes, approves or edits. `tests/test_sec_authz.py` enumerates every non-GET route and asserts the demo role is denied each one outside that list. |
 
 > **Engineers deliberately cannot `promote_quarantine` or `countersign_brief`.** That is what makes
 > the one-way quarantine gate and the PTW dual signature real: the second signature can never come
@@ -1157,6 +1151,13 @@ skips them skips the point.
 > `/compliance/nonconformance` page reads `/governance/conflicts` + `/governance/quarantine`, so it
 > needs those two children without reaching the model gate, MoC approvals or the circuit breaker.
 > These grants mirror the frontend route table in `components/use-role.ts`; keep the two in step.
+
+> **Where a role comes from.** `dependencies.resolve_token` reads `role`, `site_id` and `name` from the
+> token user's `app_metadata`, which only the service role can write. It never trusts `user_metadata`
+> (users can edit that). `LEGACY_ROLE_FALLBACK` (default `false`, in `.env.example`) is a temporary
+> bridge: when `true`, an account with no `app_metadata.role` falls back to `user_metadata`, with a
+> warning log. It is not set on the server, and the role migration (`scripts/migrate_roles_to_app_metadata.py`)
+> has been applied, so it can be deleted.
 
 ### OPA Middleware
 

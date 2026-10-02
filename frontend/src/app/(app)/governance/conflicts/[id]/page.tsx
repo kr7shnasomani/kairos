@@ -7,7 +7,8 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { BlastRadiusPanel } from "@/components/lazy";
 import { AuthorityBadge, Button, ButtonLink, PageHeader, StatusBadge, statusTone } from "@/components/ui";
-import { RESOLVE_ROLES, useRole } from "@/components/use-role";
+import { RESOLVE_ROLES, useRole, visibleTo } from "@/components/use-role";
+import { DemoGate } from "@/components/demo-gate";
 import { getConflictDetail, resolveConflict } from "@/lib/api";
 import type { AuthorityLevel, ConflictSource } from "@/lib/types";
 import { useFetch } from "@/lib/use-fetch";
@@ -131,15 +132,15 @@ export default function ConflictDetailPage() {
               <p className="text-caption text-muted">Engineering-track conflicts close only through Management of Change sign-off.</p>
               <ButtonLink href="/governance/moc" variant="primary">Open MoC queue</ButtonLink>
             </>
-          ) : RESOLVE_ROLES.includes(role) ? (
-            <>
+          ) : visibleTo(RESOLVE_ROLES, role) ? (
+            <DemoGate>
               <label className="flex flex-col gap-1 text-caption">
                 <span className="font-semibold text-ink">Resolution note</span>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="optional" className="rounded-lg border border-line bg-surface px-2.5 py-2 text-body" />
               </label>
               <Button variant="primary" onClick={resolve} disabled={busy}>{busy ? "Resolving…" : "Accept higher authority"}</Button>
               {error && <p role="alert" className="text-caption text-danger">{error}</p>}
-            </>
+            </DemoGate>
           ) : (
             <p className="text-caption text-muted">Resolving conflicts requires the engineer, reliability or admin role.</p>
           )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, localDateString } from "@/lib/utils";
 
 import { Icon } from "@/components/icon";
 // Web Speech API — not available in all browsers; typed as any to avoid lib conflicts.
@@ -30,7 +30,7 @@ export function Composer({
     ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   const today =
-    typeof window !== "undefined" ? new Date().toISOString().split("T")[0] : undefined;
+    typeof window !== "undefined" ? localDateString() : undefined;
 
   function toggleVoice() {
     if (listening) {

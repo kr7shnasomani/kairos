@@ -1,10 +1,11 @@
 "use client";
 
+import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentPipelineStage, DocumentStatus } from "@/lib/types";
 import { ingestDocument, getDocumentStatus, type DocumentIngestResponse } from "@/lib/api";
-import { useRole, RESOLVE_ROLES, AUTHORITY_ASSERT_ROLES } from "@/components/use-role";
+import { useRole, RESOLVE_ROLES, AUTHORITY_ASSERT_ROLES, visibleTo } from "@/components/use-role";
 import { Button, StatusBadge, Timeline, PageHeader } from "@/components/ui";
 
 import { Icon } from "@/components/icon";
@@ -42,7 +43,7 @@ export default function IngestPage() {
   const [result, setResult] = useState<DocumentIngestResponse | null>(null);
   const [status, setStatus] = useState<DocumentStatus | null>(null);
 
-  const canIngest = RESOLVE_ROLES.includes(role);
+  const canIngest = visibleTo(RESOLVE_ROLES, role);
   // Levels 1 to 3 need reliability or admin; the backend caps anyone else to 4, so do not offer them.
   const canAssert = AUTHORITY_ASSERT_ROLES.includes(role);
   const levels = canAssert ? [1, 2, 3, 4, 5] : [4, 5];
@@ -135,6 +136,7 @@ export default function IngestPage() {
       )}
 
       {canIngest && !result && (
+        <DemoGate>
         <form data-testid="ingest-intake" onSubmit={handleSubmit} className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)] lg:items-start">
           <div className="rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
             <div className="mb-4">
@@ -214,6 +216,7 @@ export default function IngestPage() {
             </ol>
           </aside>
         </form>
+        </DemoGate>
       )}
 
       {result && (
