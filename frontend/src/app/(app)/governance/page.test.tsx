@@ -2,23 +2,27 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import GovernancePage from "./page";
 
-vi.mock("@/lib/api", () => ({
-  getConflicts: vi.fn().mockResolvedValue({
-    data: { items: [
+const mocks = vi.hoisted(() => ({
+  conflicts: {
+    data: { total: 2, items: [
       { conflict_id: "C-1", status: "open", track: "engineering", is_overdue: true },
       { conflict_id: "C-2", status: "pending_moc", track: "engineering", is_overdue: false },
-      { conflict_id: "C-3", status: "resolved", track: "administrative", is_overdue: false },
     ] },
     source: "live",
-  }),
-  getQuarantine: vi.fn().mockResolvedValue({
-    data: { items: [
+  },
+  quarantine: {
+    data: { total: 2, items: [
       { item_id: "Q-1", review_status: "pending", is_overdue: true },
       { item_id: "Q-2", review_status: "pending", is_overdue: false },
-      { item_id: "Q-3", review_status: "promoted", is_overdue: false },
     ] },
     source: "live",
-  }),
+  },
+}));
+
+// The page asks the server for the open and pending items only (B33), so the mock returns just those.
+vi.mock("@/lib/api", () => ({
+  getPendingConflicts: vi.fn(async () => mocks.conflicts),
+  getPendingQuarantine: vi.fn(async () => mocks.quarantine),
 }));
 
 describe("GovernancePage", () => {
@@ -68,5 +72,12 @@ describe("GovernancePage", () => {
       expect(surface).not.toHaveAttribute("tabindex", "-1");
       expect(surface.querySelectorAll("a, button")).toHaveLength(0);
     }
+  });
+
+  it("shows the query total, not the page length, when the queue is longer than one page", async () => {
+    mocks.conflicts = { ...mocks.conflicts, data: { ...mocks.conflicts.data, total: 250 } };
+    render(<GovernancePage />);
+    await waitFor(() => expect(screen.getByTestId("governance-surface-conflicts")).toHaveTextContent("250 open"));
+    mocks.conflicts = { ...mocks.conflicts, data: { ...mocks.conflicts.data, total: 2 } };
   });
 });

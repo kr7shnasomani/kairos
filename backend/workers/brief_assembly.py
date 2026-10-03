@@ -29,7 +29,8 @@ def assemble_brief(event_type: str, event_dict: dict) -> str:
     By the time this fires, any correlated events for the same asset are already
     in operational_events, so BriefEngine's context queries pick them up naturally.
     """
-    return asyncio.run(_assemble(event_type, event_dict))
+    from api.services.http import run_with_client
+    return run_with_client(_assemble(event_type, event_dict))
 
 
 async def _assemble(event_type: str, event_dict: dict) -> str:

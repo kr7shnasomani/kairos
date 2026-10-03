@@ -80,17 +80,6 @@ def create_app() -> FastAPI:
     )
 
     # -------------------------------------------------------------------------
-    # CORS
-    # -------------------------------------------------------------------------
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # -------------------------------------------------------------------------
     # OPA policy enforcement (write routes + sensitive reads)
     # -------------------------------------------------------------------------
     app.add_middleware(
@@ -101,7 +90,7 @@ def create_app() -> FastAPI:
     )
 
     # -------------------------------------------------------------------------
-    # Per-IP rate limit (added last = outermost → rejects spam before any work)
+    # Per-IP rate limit
     # -------------------------------------------------------------------------
     app.add_middleware(
         RateLimitMiddleware,
@@ -109,6 +98,17 @@ def create_app() -> FastAPI:
         # Off only in development (0 = pass-through) so dev + the test suite, which burst many
         # requests from one IP, never trip it. Any other APP_ENV is treated as public-facing.
         limit_per_minute=0 if settings.is_development else settings.RATE_LIMIT_PER_MINUTE,
+    )
+
+    # -------------------------------------------------------------------------
+    # CORS (added last = outermost → ensures 429/403/401 have CORS headers)
+    # -------------------------------------------------------------------------
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # -------------------------------------------------------------------------

@@ -30,7 +30,7 @@
 [`v2.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v2.0.0) (`c654615`); the earlier
 [`v1.0.0`](https://github.com/kr7shnasomani/kairos/releases/tag/v1.0.0) (`b81ed1f`) is the first tagged release. **Live:** frontend **https://kairos-deterium.vercel.app** (Vercel), API
 **https://kairos-deterium.duckdns.org** (one AWS EC2 host, [`DEPLOY.md`](../DEPLOY.md)). **Quality gates:**
-839 service-free backend tests (836 pass and 3 skip in the container, 2026-10-01), 344/344 frontend tests across 81 files (2026-10-01), `tsc`
+844 service-free backend tests (841 pass and 3 skip in the container, 2026-10-01), 345/345 frontend tests across 81 files (2026-10-01), `tsc`
 clean, `eslint` 0 errors, end-to-end flows 46/46 (2026-09-14). What is still open is listed under
 [Pending — as of 2026-09-28](#pending--as-of-2026-09-28).
 
@@ -1101,15 +1101,15 @@ recorded above.
   names, form labels, alt text, heading order, duplicate ids, page language, skip link, visible focus
   ring, reduced motion. Contrast must be measured on a **fresh page load** per theme: switching theme
   in place and measuring immediately reads stale colours and reports false failures.
-- **Backend test suite:** **1,080 collected** across 67 files (2026-10-02; 839 are service-free). The last full green run was
-  **412 passed · 0 failed** (2026-08-22); about 670 tests have landed since (the full suite is now 1,080 collected), so **no current full-suite pass count
+- **Backend test suite:** **1,085 collected** across 67 files (2026-10-02; 844 are service-free). The last full green run was
+  **412 passed · 0 failed** (2026-08-22); about 670 tests have landed since (the full suite is now 1,085 collected), so **no current full-suite pass count
   exists** — re-run before quoting one. Write-heavy: run against
   `--profile local-stores`, **never cloud**. The long-standing `test_attribution_worker_queues_recheck`
   flake is gone — it was one of six failures traced to a shared-fixture dedup collision, now fixed.
-- **Service-free tier:** **839 tests** across **52 files** (836 passed, 3 skipped in the container, 2026-10-01; the 3 are `test_sec_infra.py` checks that read `infra/` and `.github/`, which the image does not mount) — no stack / secrets / network.
+- **Service-free tier:** **844 tests** across **52 files** (841 passed, 3 skipped in the container, 2026-10-01; the 3 are `test_sec_infra.py` checks that read `infra/` and `.github/`, which the image does not mount) — no stack / secrets / network.
   This is exactly what CI's `unit` job runs; the list is duplicated in `AGENTS.md`, `docs/TESTS.md`, `docs/INFRA.md` and
   `.github/workflows/tests.yml` and **all four must be updated together** (they have drifted twice).
-- **Frontend:** **344 passed across 81 files, fully green** (measured 2026-10-01; `landing-figures.test.ts` needs `benchmark/` mounted at `/benchmark` when run in a container), `tsc` clean, `eslint`
+- **Frontend:** **345 passed across 81 files, fully green** (measured 2026-10-01; `landing-figures.test.ts` needs `benchmark/` mounted at `/benchmark` when run in a container), `tsc` clean, `eslint`
   0 errors / 7 unused-var warnings. `landing-figures.test.ts` was red until the
   frontend container was recreated: the `./benchmark:/benchmark:ro` mount postdated the running
   container, so the file could not collect. `docker compose up -d --force-recreate --no-deps

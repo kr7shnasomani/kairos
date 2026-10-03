@@ -27,6 +27,9 @@ export async function login(email: string, password: string): Promise<void> {
   if (!res.ok) throw new Error(res.status === 401 ? "Invalid email or password." : `Sign-in failed (${res.status}).`);
   const data = (await res.json()) as LoginResponse;
   storeSession(data.access_token, data.refresh_token);
+  
+  const { flushQueue } = await import("./idb");
+  await flushQueue().catch(() => {});
 }
 
 export async function getMe(): Promise<User | null> {

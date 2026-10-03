@@ -70,3 +70,16 @@ async def close_shared_client() -> None:
     if not client.is_closed:
         await client.aclose()
         log.debug("http.pool_closed", loop_id=id(loop))
+
+
+def run_with_client(coro):
+    """
+    Runs a coroutine via asyncio.run(), ensuring the shared HTTP client is closed
+    before the event loop tears down. Useful for Celery tasks.
+    """
+    async def wrapper():
+        try:
+            return await coro
+        finally:
+            await close_shared_client()
+    return asyncio.run(wrapper())

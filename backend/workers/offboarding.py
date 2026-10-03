@@ -27,7 +27,8 @@ log = structlog.get_logger(__name__)
     soft_time_limit=270,
 )
 def generate_offboarding_questions(item_id: str) -> dict[str, Any]:
-    return asyncio.run(_generate(item_id))
+    from api.services.http import run_with_client
+    return run_with_client(_generate(item_id))
 
 
 async def _generate(item_id: str) -> dict[str, Any]:
@@ -42,12 +43,15 @@ async def _generate(item_id: str) -> dict[str, Any]:
 
     item_result = await asyncio.to_thread(
         lambda: supabase.table("offboarding_session_items")
-        .select("id, session_id, session_number, equipment_family")
+        .select("id, session_id, session_number, equipment_family, status")
         .eq("id", item_id)
         .single()
         .execute()
     )
     item = item_result.data
+    if item.get("status") != "pending":
+        log.info("offboarding.skip_not_pending", item_id=item_id, status=item.get("status"))
+        return {"skipped": True, "reason": "not_pending"}
     equipment_family = item["equipment_family"]
     session_id = item["session_id"]
 
@@ -64,11 +68,11 @@ async def _generate(item_id: str) -> dict[str, Any]:
             result = await neo4j_session.run(
                 """
                 MATCH (a:Asset)-[r]->(n)
-                WHERE a.equipment_class = $equip_family
+                WHERE toLower(a.equipment_class) = toLower($equip_family)
                   AND (r.valid_to IS NULL OR datetime(r.valid_to) > datetime())
                   AND r.authority_level <= 3
                   AND r.valid_from <= $as_of
-                RETURN n.name AS mode,
+                RETURN coalesce(n.name, n.title) AS mode,
                        r.confidence AS confidence,
                        r.verification_status AS vstatus
                 ORDER BY r.confidence DESC

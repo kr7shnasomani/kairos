@@ -35,7 +35,8 @@ def run_form_extraction(document_id: str, asset_id: str | None = None) -> dict:
     checkbox carries no authority a `KNOWLEDGE_EDGE` could honestly record. Human promotion is
     the only route to canonical — see `api/services/forms.py` for the full reasoning.
     """
-    return asyncio.run(_run(document_id, asset_id))
+    from api.services.http import run_with_client
+    return run_with_client(_run(document_id, asset_id))
 
 
 async def _run(document_id: str, asset_id: str | None) -> dict:

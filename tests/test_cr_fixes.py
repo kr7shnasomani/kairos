@@ -261,3 +261,62 @@ def test_graph_service_no_longer_claims_event_nodes_are_never_written():
     src = inspect.getsource(graph)
     assert "No `Event` node is ever written" not in src
     assert "merge_event_node" in src
+
+
+# --- Guards for the kept parts of the 2 October Antigravity batch -----------------------------------
+
+
+def test_every_workflow_activity_is_registered_with_the_temporal_worker():
+    """An activity the workflow calls but the worker does not register fails only when it is reached,
+    which for a failure-handling activity is exactly when something has already gone wrong."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    base = next(c for c in (root / "backend", Path("/app")) if (c / "workflows" / "document_pipeline.py").exists())
+    pipeline = (base / "workflows" / "document_pipeline.py").read_text()
+    worker = (base / "workers" / "temporal_worker.py").read_text()
+    activities = re.findall(r"@activity\.defn\s*\n(?:async )?def (\w+)", pipeline)
+    assert activities, "no activities found"
+    registered = worker.split("activities=[")[1]
+    for name in activities:
+        assert re.search(rf"\b{name}\b", registered), f"{name} is not registered with the worker"
+
+
+def test_cors_is_the_outermost_middleware_so_401_403_429_carry_cors_headers():
+    """Starlette inserts each added middleware at index 0, so the one added last is outermost. When CORS
+    sat innermost, the OPA and rate-limit responses had no CORS headers and the browser only saw
+    "Failed to fetch"."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    from api.main import app
+
+    names = [m.cls.__name__ for m in app.user_middleware]
+    # OpenTelemetry's instrument_app may wrap the stack; CORS must still sit outside everything we add.
+    assert names.index("CORSMiddleware") < min(i for i, n in enumerate(names) if n != "CORSMiddleware" and "OpenTelemetry" not in n)
+
+
+def test_run_with_client_closes_the_shared_client_even_when_the_task_fails():
+    import asyncio
+
+    from api.services import http
+
+    closed = []
+
+    async def fake_close():
+        closed.append(True)
+
+    original = http.close_shared_client
+    http.close_shared_client = fake_close
+    try:
+        async def boom():
+            raise RuntimeError("task failed")
+
+        try:
+            http.run_with_client(boom())
+        except RuntimeError:
+            pass
+        assert closed == [True]
+        assert http.run_with_client(asyncio.sleep(0, result=7)) == 7
+    finally:
+        http.close_shared_client = original

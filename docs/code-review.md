@@ -24,6 +24,12 @@
 > | **S8** dead observability configs | Done | `infra/otel`, `infra/tempo`, `infra/grafana/provisioning` removed; `dashboards-import/` kept |
 > | **S9** dead backend code | Done, except two | Removed `middleware/auth.py`, `models/graph_nodes.py`, the stub `workers/ingestion.py` (and its Celery entries), four unused models and `link_entities`, `corpus.test_artifact_ids`. Left: `GraphService.health_check` (unreferenced) and `run_form_extraction` with `forms.py` |
 > | **S12** smaller dead items | Partly | Removed dead Go code (`internal/eam`, `relay.go`, `OPCUAClient`, plus the unused `go-redis` dependency) and phantom Makefile entries. Left: `requirements-cv.txt` (still referenced by `ruff.toml`, a `requirements.txt` comment and the docs) |
+> | **B33** governance "Pending" counts use an "all" query's total | Fixed, not yet live | `getPendingConflicts` and `getPendingQuarantine` in `lib/api.ts` ask for open and pending rows only, the page prefers the query total over the page length, and `/governance/conflicts` accepts a comma list for `status`. Pinned by a governance page test |
+> | **B31** reads stop working after about an hour | Fixed, not yet live | `lib/api.ts` refreshes and retries on a 401 whenever a token was sent, and the offline queue flushes after login (`lib/auth.ts`) |
+> | **B9** EEMUA governor | Partly, not yet live | The budget is a sorted set with a single atomic trim-and-count (`EventBusService`), and `page_inbox` delivers the highest-ranked briefs up to the remaining budget instead of nothing. The read-time freeze on deviation flags and the streaming endpoint were **not** kept |
+> | **B19** Go historian ignores non-2xx, attribution trusts mock telemetry | Fixed, not yet live | `connectors/internal/ot/client.go` rejects a non-2xx reply; `workers/attribution.py` calls `raise_for_status` and marks `mock: true` telemetry `evidence_role: unavailable` |
+> | **B18** and **B25** off-boarding lookup and status guard | Partly, not yet live | The class match uses `toLower`, falls back to `title` when a node has no `name`, and a non-pending question is skipped (`workers/offboarding.py`). The Celery visibility timeout is **not** changed |
+> | Celery socket leak, CORS on error responses, `/assets` and coverage paging | Fixed, not yet live | `services/http.run_with_client` closes the pooled client after each task; `CORSMiddleware` is the outermost middleware so 401, 403 and 429 carry CORS headers; `routers/assets.py` chunks its `in_` lookups and `services/coverage.py` pages with `range`. Pinned by `tests/test_cr_fixes.py` |
 >
 > **Not a bug:** the 30-minute "late-arrival window" in `workflows/document_pipeline.py` is the document-to-event correlation window for timestamp drift, which borrows the `LATE_ARRIVAL_WINDOW_MINUTES` setting name. The docs give 5 minutes for the brief delay and say nothing about this use, so which value is right is a decision, not a fix.
 >
@@ -31,7 +37,7 @@
 >
 > These fixes are pinned by `tests/test_cr_fixes.py` (backend) and the extended frontend tests.
 >
-> Everything else below (B1, B4, B5, B6, B9, B10, B14, B15, B17 to B29, B31, B33, the remaining Low items, the other S items, the other C items, the performance and test-gap lists) is **still open**.
+> Everything else below (B1, B4, B5, B6, B10, B14, B15, B17 to B29 except the parts listed above, the remaining Low items, the other S items, the other C items, the performance and test-gap lists) is **still open**.
 
 ## How this was produced
 

@@ -32,7 +32,8 @@ log = structlog.get_logger(__name__)
     soft_time_limit=1800,
 )
 def run_model_gate(model_name: str) -> dict[str, Any]:
-    return asyncio.run(_run_gate(model_name))
+    from api.services.http import run_with_client
+    return run_with_client(_run_gate(model_name))
 
 
 async def _run_gate(model_name: str) -> dict[str, Any]:

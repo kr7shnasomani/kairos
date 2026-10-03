@@ -92,10 +92,16 @@ class CoverageService:
             if eq:
                 q = q.eq(*eq)
             counts: dict[str, int] = {}
-            for row in (q.execute().data or []):
-                key = row.get(column)
-                if key:
-                    counts[key] = counts.get(key, 0) + 1
+            offset = 0
+            while True:
+                page = q.range(offset, offset + 999).execute().data or []
+                for row in page:
+                    key = row.get(column)
+                    if key:
+                        counts[key] = counts.get(key, 0) + 1
+                if len(page) < 1000:
+                    break
+                offset += 1000
             return counts
         except Exception as exc:  # noqa: BLE001 - partial coverage beats no coverage
             log.warning("coverage.count_failed", table=table, error=str(exc))

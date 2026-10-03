@@ -164,7 +164,7 @@ async def bulk_import_assets(
     failed: list[dict] = []
     now = datetime.now(UTC).isoformat()
 
-    for idx, row in part["to_create"]:
+    async def _process_creation_row(idx: int, row: Any) -> tuple[bool, int, str, Any]:
         asset_id = row.asset_id or f"ASSET-{shortuuid.uuid()[:8].upper()}"
         try:
             await graph.create_asset_node({
@@ -195,34 +195,48 @@ async def bulk_import_assets(
                     "identity_confirmed_at": now,
                 }).execute()
             )
-            created.append(asset_id)
-            created_pairs.append((asset_id, row))
+            return (True, idx, asset_id, row)
         except Exception as exc:
-            # Row-level, so one bad row is one bad row. The graph write is idempotent, so a
-            # retry of this file re-attempts exactly the rows that did not land.
             log.warning("asset.bulk_row_failed", row=idx, asset_id=asset_id, error=str(exc))
-            # The exception text stays in the log: returned to the caller it exposed store
-            # internals (code scanning py/stack-trace-exposure). The row id is enough to retry.
-            failed.append({"row": idx, "asset_id": asset_id, "error": "write_failed"})
+            return (False, idx, asset_id, str(exc))
+
+    chunk_size = 50
+    for i in range(0, len(part["to_create"]), chunk_size):
+        chunk = part["to_create"][i:i + chunk_size]
+        results = await asyncio.gather(*(_process_creation_row(idx, row) for idx, row in chunk))
+        for success, idx, asset_id, data in results:
+            if success:
+                created.append(asset_id)
+                created_pairs.append((asset_id, data))
+            else:
+                failed.append({"row": idx, "asset_id": asset_id, "error": "write_failed"})
 
     # ES is a search index, not a system of record — a failed index must not fail the import.
     # The asset is already canonical in Neo4j and Supabase; it is only harder to search for.
     # Driven by (id, row) pairs captured at write time — a row whose asset_id was generated has
     # no id on the row itself, so pairing at creation is the only way to index it correctly.
-    for aid, row in created_pairs:
-        try:
-            await es.index(index="kairos_assets", id=aid, document={
-                "asset_id": aid,
-                "tag_number": row.tag_number,
-                "name": row.name,
-                "equipment_class": row.equipment_class,
-                "criticality": row.criticality,
-                "site_id": row.site_id,
-                "facility_id": row.facility_id,
-                "eam_source": row.eam_source,
-            })
-        except Exception as exc:
-            log.warning("asset.bulk_es_index_failed", asset_id=aid, error=str(exc))
+    # Process the ES index in smaller asyncio chunks so it doesn't hang
+    chunk_size = 50
+    for i in range(0, len(created_pairs), chunk_size):
+        chunk = created_pairs[i:i + chunk_size]
+        tasks = []
+        for aid, row in chunk:
+            tasks.append(
+                es.index(index="kairos_assets", id=aid, document={
+                    "asset_id": aid,
+                    "tag_number": row.tag_number,
+                    "name": row.name,
+                    "equipment_class": row.equipment_class,
+                    "criticality": row.criticality,
+                    "site_id": row.site_id,
+                    "facility_id": row.facility_id,
+                    "eam_source": row.eam_source,
+                })
+            )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                log.warning("asset.bulk_es_index_failed", asset_id=chunk[idx][0], error=str(result))
 
     await asyncio.to_thread(
         lambda: supabase.table("audit_log").insert({

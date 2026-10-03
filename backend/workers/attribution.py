@@ -92,7 +92,8 @@ def _check_telemetry_baseline(asset_id: str, event_id: str) -> dict[str, Any]:
     try:
         from api.services.ot_coverage import OtCoverageService
 
-        cov = asyncio.run(OtCoverageService(_supabase()).asset_coverage(asset_id))
+        from api.services.http import run_with_client
+        cov = run_with_client(OtCoverageService(_supabase()).asset_coverage(asset_id))
     except Exception as exc:
         log.warning("attribution.coverage_unavailable", error=str(exc))
         return {"evidence_role": "unavailable", "conclusive": False, "failed": False, "reason": "coverage_unavailable"}
@@ -128,13 +129,18 @@ def _check_telemetry_baseline(asset_id: str, event_id: str) -> dict[str, Any]:
     query_to = (maint_date + timedelta(days=30)).isoformat()
 
     try:
-        ts = httpx.get(f"{_GO_URL}/ot/query",
+        resp = httpx.get(f"{_GO_URL}/ot/query",
                        params={"asset_id": asset_id, "tag": tag, "from": query_from, "to": query_to},
                        headers={"X-Connector-Secret": os.getenv("CONNECTOR_SHARED_SECRET", "")},
-                       timeout=15).json()
+                       timeout=15)
+        resp.raise_for_status()
+        ts = resp.json()
     except Exception as exc:
         log.warning("attribution.historian_unreachable", error=str(exc))
         return {"evidence_role": "unavailable", "conclusive": False, "failed": False, "reason": "historian_unreachable"}
+
+    if ts.get("mock"):
+        return {"evidence_role": "unavailable", "conclusive": False, "failed": False, "reason": "historian_mock"}
 
     data = ts.get("data", [])
     values = [float(p["value"]) for p in data if "value" in p]

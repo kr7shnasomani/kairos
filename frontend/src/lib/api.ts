@@ -433,7 +433,9 @@ async function getJson<T>(path: string, timeoutMs = 4000, requireAuth = false): 
   };
 
   let res = await makeRequest();
-  if (res.status === 401 && isStrictAuth()) {
+  const sentToken = isStrictAuth() || requireAuth;
+  
+  if (res.status === 401 && sentToken) {
     if (!await refreshAccessToken()) {
       expireSession();
       if (typeof window !== "undefined") window.location.assign("/login");
@@ -441,7 +443,7 @@ async function getJson<T>(path: string, timeoutMs = 4000, requireAuth = false): 
     }
     res = await makeRequest();
   }
-  if (res.status === 401 && isStrictAuth()) {
+  if (res.status === 401 && sentToken) {
     expireSession();
     if (typeof window !== "undefined") window.location.assign("/login");
   }
@@ -525,10 +527,22 @@ export async function getConflicts(): Promise<Fetched<ConflictsResponse>> {
   return { data, source: "live" };
 }
 
+export async function getPendingConflicts(): Promise<Fetched<ConflictsResponse>> {
+  const data = await getJson<ConflictsResponse>("/governance/conflicts?status=open,pending_moc&limit=200");
+  if (!data.items) throw new Error("no items");
+  return { data, source: "live" };
+}
+
 export async function getQuarantine(): Promise<Fetched<QuarantineResponse>> {
   // `review_status=all`: the page derives Pending/Promoted/Disputed counts and a Resolved tab from
   // this one list. Fetching only the default (pending) left those permanently at 0.
   const data = await getJson<QuarantineResponse>("/governance/quarantine?review_status=all&limit=200");
+  if (!data.items) throw new Error("no items");
+  return { data, source: "live" };
+}
+
+export async function getPendingQuarantine(): Promise<Fetched<QuarantineResponse>> {
+  const data = await getJson<QuarantineResponse>("/governance/quarantine?review_status=pending&limit=200");
   if (!data.items) throw new Error("no items");
   return { data, source: "live" };
 }

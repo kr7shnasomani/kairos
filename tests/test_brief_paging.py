@@ -13,6 +13,8 @@ Service-free: `page_inbox` is pure, so none of this needs the stack.
 
 from api.routers.briefs import page_inbox
 
+_FULL_BUDGET = 100  # effectively unlimited for tests that don't test suppression
+
 
 def _b(bid: str, *, priority: str = "normal", frozen: bool = False, trigger: str = "work_order_created") -> dict:
     return {
@@ -28,7 +30,9 @@ def _ids(briefs: list[dict]) -> list[str]:
 
 
 def _page(briefs, *, governor=False, plant=False, limit=10):
-    return page_inbox(briefs, governor_suppressed=governor, plant_suppressed=plant, limit=limit)
+    # governor=True → budget=0 (exhausted); governor=False → budget=_FULL_BUDGET
+    budget = 0 if governor else _FULL_BUDGET
+    return page_inbox(briefs, governor_budget=budget, plant_suppressed=plant, limit=limit)
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +122,30 @@ def test_no_suppression_reported_when_nothing_to_suppress():
 
 
 # ---------------------------------------------------------------------------
+# B9b: partial budget delivery
+# ---------------------------------------------------------------------------
+
+def test_governor_partial_budget_delivers_highest_priority_first():
+    """B9b: when 2 slots remain, the two highest-priority normal briefs are delivered
+    and the rest are held -- not all-or-nothing as before."""
+    briefs = [_b("high", priority="high"), _b("n1"), _b("n2"), _b("n3")]
+    page = page_inbox(briefs, governor_budget=2, plant_suppressed=False, limit=10)
+
+    assert _ids(page["delivered"]) == ["high", "n1"]
+    assert page["suppressed_count"] == 2
+    assert {b["brief_id"] for b in page["suppressed_held"]} == {"n2", "n3"}
+
+
+def test_governor_full_budget_delivers_all_normal():
+    """Budget >= briefs: all normal briefs are delivered, nothing held."""
+    briefs = [_b("n1"), _b("n2"), _b("n3")]
+    page = page_inbox(briefs, governor_budget=_FULL_BUDGET, plant_suppressed=False, limit=10)
+
+    assert len(page["delivered"]) == 3
+    assert page["suppressed_count"] == 0
+
+
+# ---------------------------------------------------------------------------
 # Ranking
 # ---------------------------------------------------------------------------
 
@@ -188,7 +216,7 @@ def test_suppressed_briefs_are_returned_not_just_counted():
         {"brief_id": "b1", "priority": "high", "asset_id": "EQ-101"},
         {"brief_id": "b2", "priority": "medium", "asset_id": "EQ-102"},
     ]
-    page = page_inbox(briefs, governor_suppressed=True, plant_suppressed=False, limit=10)
+    page = page_inbox(briefs, governor_budget=0, plant_suppressed=False, limit=10)
 
     assert page["delivered"] == [], "the governor still withholds delivery"
     assert page["suppressed_count"] == 2
@@ -201,7 +229,7 @@ def test_held_briefs_are_not_folded_into_delivered():
     from api.routers.briefs import page_inbox
 
     briefs = [{"brief_id": "b1", "priority": "high"}]
-    page = page_inbox(briefs, governor_suppressed=True, plant_suppressed=False, limit=10)
+    page = page_inbox(briefs, governor_budget=0, plant_suppressed=False, limit=10)
 
     delivered_ids = {b["brief_id"] for b in page["delivered"]}
     held_ids = {b["brief_id"] for b in page["suppressed_held"]}
@@ -215,7 +243,7 @@ def test_critical_briefs_are_never_held():
         {"brief_id": "ptw", "priority": "critical"},
         {"brief_id": "routine", "priority": "low"},
     ]
-    page = page_inbox(briefs, governor_suppressed=True, plant_suppressed=True, limit=10)
+    page = page_inbox(briefs, governor_budget=0, plant_suppressed=True, limit=10)
 
     assert [b["brief_id"] for b in page["delivered"]] == ["ptw"]
     assert [b["brief_id"] for b in page["suppressed_held"]] == ["routine"]
@@ -225,7 +253,7 @@ def test_held_page_respects_limit():
     from api.routers.briefs import page_inbox
 
     briefs = [{"brief_id": f"b{i}", "priority": "medium"} for i in range(20)]
-    page = page_inbox(briefs, governor_suppressed=True, plant_suppressed=False, limit=5)
+    page = page_inbox(briefs, governor_budget=0, plant_suppressed=False, limit=5)
 
     assert page["suppressed_count"] == 20, "the count reports everything waiting"
     assert len(page["suppressed_held"]) == 5, "the page it returns stays bounded"
@@ -235,7 +263,7 @@ def test_nothing_held_when_the_governor_is_clear():
     from api.routers.briefs import page_inbox
 
     briefs = [{"brief_id": "b1", "priority": "high"}]
-    page = page_inbox(briefs, governor_suppressed=False, plant_suppressed=False, limit=10)
+    page = page_inbox(briefs, governor_budget=_FULL_BUDGET, plant_suppressed=False, limit=10)
 
     assert page["suppressed_held"] == []
     assert page["suppressed_count"] == 0

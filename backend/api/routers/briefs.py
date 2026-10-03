@@ -49,7 +49,7 @@ def _priority_rank(b: dict) -> tuple[int, int]:
 def page_inbox(
     all_briefs: list[dict],
     *,
-    governor_suppressed: bool,
+    governor_budget: int,
     plant_suppressed: bool,
     limit: int,
 ) -> dict:
@@ -68,6 +68,13 @@ def page_inbox(
         make the page was not delivered and must not spend EEMUA governor budget.
       * `delivered + frozen_page` never exceeds `limit`. `limit` is the caller's
         page size, not a per-category allowance.
+
+    B9b: `governor_budget` replaces the old boolean `governor_suppressed`.
+    When plant_suppressed all normal briefs are held (full suppression, as before).
+    When the governor budget is positive, up to `governor_budget` ranked normal
+    briefs are delivered and the rest are held -- partial delivery instead of
+    all-or-nothing, so an operator who has 2 slots left still receives the two
+    highest-priority normal briefs.
     """
     frozen = [b for b in all_briefs if b.get("delivery_frozen")]
     unfrozen = [b for b in all_briefs if not b.get("delivery_frozen")]
@@ -79,13 +86,21 @@ def page_inbox(
 
     suppressed_count = 0
     suppressed_held: list[dict] = []
-    if (governor_suppressed or plant_suppressed) and normal:
+    if plant_suppressed and normal:
+        # Full plant-state suppression: hold all normal briefs.
         suppressed_count = len(normal)
-        # Keep what is being held, ranked, so the operator can judge whether it matters.
-        # A bare count answers "how many" but never "does the held one concern my asset",
-        # which is the only question that decides whether to go looking.
         suppressed_held = sorted(normal, key=_priority_rank)[:limit]
         normal = []
+    elif normal:
+        # Governor partial suppression: rank normal briefs and release only up to
+        # `governor_budget` of them. When budget >= len(normal) all are released.
+        ranked_normal = sorted(normal, key=_priority_rank)
+        deliverable = ranked_normal[:governor_budget]
+        held = ranked_normal[governor_budget:]
+        if held:
+            suppressed_count = len(held)
+            suppressed_held = held[:limit]
+        normal = deliverable
 
     ranked = sorted(critical + normal, key=_priority_rank)
     delivered = ranked[:limit]
@@ -196,7 +211,7 @@ async def get_my_briefs(
 
     page = page_inbox(
         all_briefs,
-        governor_suppressed=gov["state"] == "suppressed",
+        governor_budget=gov["remaining_budget"],
         plant_suppressed=plant_suppressed,
         limit=limit,
     )

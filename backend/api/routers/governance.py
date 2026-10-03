@@ -78,7 +78,11 @@ async def list_conflicts(
     if asset_id:
         query = query.eq("asset_id", asset_id)
     if conflict_status:
-        query = query.eq("status", conflict_status)
+        # "open,pending_moc" asks for both: the overview counts what still needs a decision.
+        if "," in conflict_status:
+            query = query.in_("status", conflict_status.split(","))
+        else:
+            query = query.eq("status", conflict_status)
 
     result = await asyncio.to_thread(
         lambda: query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()

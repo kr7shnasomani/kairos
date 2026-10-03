@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getConflicts, getQuarantine } from "@/lib/api";
+import { getPendingConflicts, getPendingQuarantine } from "@/lib/api";
 import { KpiCard, PageHeader, StatusBadge, statusTone } from "@/components/ui";
 
 type SurfaceKey = "conflicts" | "quarantine" | "moc" | "sla" | "timestamp-drift" | "push-volume-gate" | "circuit-breaker" | "model-gate";
@@ -81,19 +81,19 @@ export default function GovernancePage() {
 
   useEffect(() => {
     let alive = true;
-    Promise.all([getConflicts(), getQuarantine()]).then(([conflicts, quarantine]) => {
+    Promise.all([getPendingConflicts(), getPendingQuarantine()]).then(([conflicts, quarantine]) => {
       if (!alive) return;
       // Live-only is enforced in the fetchers now — they throw instead of returning a
       // fixture, so a failure lands in .catch() and the counts stay blank with a retry.
       setFailed(false);
-      const openConflicts = conflicts.data.items.filter((item) => item.status !== "resolved");
-      const pendingQuarantine = quarantine.data.items.filter((item) => item.review_status === "pending");
+      const openConflicts = conflicts.data.items;
+      const pendingQuarantine = quarantine.data.items;
       setOverview({
-        openConflicts: openConflicts.length,
+        openConflicts: conflicts.data.total ?? openConflicts.length,
         engineeringConflicts: openConflicts.filter((item) => item.track === "engineering").length,
         pendingMoc: openConflicts.filter((item) => item.status === "pending_moc").length,
-        // Use the query total, not items.length — the fetch is capped at limit=50,
-        // so a 59-item pending queue would otherwise under-report as 50.
+        // Use the query total, not items.length — the fetch is capped at limit=200,
+        // so a 250-item pending queue would otherwise under-report as 200.
         pendingQuarantine: quarantine.data.total ?? pendingQuarantine.length,
         overdue: openConflicts.filter((item) => item.is_overdue).length + pendingQuarantine.filter((item) => item.is_overdue).length,
       });

@@ -109,6 +109,9 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 		return nil, fmt.Errorf("PI search request: %w", scrubURL(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("PI search failed: HTTP %d", resp.StatusCode)
+	}
 
 	var searchResp piSearchResult
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBodyBytes)).Decode(&searchResp); err != nil {
@@ -138,6 +141,9 @@ func (c *PIWebAPIClient) Query(ctx context.Context, q TimeSeriesQuery) ([]TimeSe
 		return nil, fmt.Errorf("PI stream request: %w", scrubURL(err))
 	}
 	defer func() { _ = resp2.Body.Close() }()
+	if resp2.StatusCode >= 400 {
+		return nil, fmt.Errorf("PI stream failed: HTTP %d", resp2.StatusCode)
+	}
 
 	var streamResp piStreamRecorded
 	if err := json.NewDecoder(io.LimitReader(resp2.Body, maxBodyBytes)).Decode(&streamResp); err != nil {

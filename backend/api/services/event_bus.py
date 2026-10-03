@@ -37,7 +37,7 @@ class EventBusService:
         # Serialize to flat dict (Redis Streams don't support nested structures)
         flat_event = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in event.items()}
         flat_event["published_at"] = datetime.utcnow().isoformat()
-        entry_id = await self.redis.xadd(stream, flat_event)
+        entry_id = await self.redis.xadd(stream, flat_event, maxlen=1000)
         log.info("event_bus.published", stream=stream, event_id=flat_event.get("event_id"), entry_id=entry_id)
         return entry_id
 
@@ -55,7 +55,9 @@ class EventBusService:
     # -------------------------------------------------------------------------
 
     def _governor_key(self, user_id: str) -> str:
-        return f"kairos:governor:{user_id}:hourly_count"
+        # Sorted-set key. Each member is a brief_id (dedup); score is the UNIX timestamp
+        # of the push. Members older than 3600 s are pruned before every read.
+        return f"kairos:governor:{user_id}:pushes"
 
     async def check_governor(
         self,
@@ -87,8 +89,13 @@ class EventBusService:
                 return False
 
         count_key = self._governor_key(user_id)
-        current_count = await self.redis.get(count_key)
-        current_count = int(current_count) if current_count else 0
+        now_ts = datetime.now(UTC).timestamp()
+        cutoff = now_ts - 3600
+        # Atomically prune expired pushes, then count the remaining ones.
+        pipe = self.redis.pipeline()
+        pipe.zremrangebyscore(count_key, "-inf", cutoff)
+        pipe.zcard(count_key)
+        _, current_count = await pipe.execute()
 
         ceiling = self.settings.MAX_PUSH_PER_USER_PER_HOUR
         if current_count >= ceiling:
@@ -122,51 +129,68 @@ class EventBusService:
             log.warning("event_bus.plant_state_lookup_failed", site_id=site_id, error=str(exc))
             return self.settings.PLANT_STATE_DEFAULT
 
-    async def record_push(self, user_id: str) -> int:
-        """Increments the rolling hourly push counter for a user."""
+    async def record_push(self, user_id: str, brief_id: str) -> int:
+        """Records a governor push for `brief_id` in the sliding window sorted set.
+
+        Each member is the brief_id (dedup within the window); score is the current
+        Unix timestamp so `ZREMRANGEBYSCORE` can prune members older than 3600 s.
+
+        B9a: replaces the `incr` / `expire` pipeline. The old `expire` reset the TTL
+        on every push, so a user who pushed every 50 minutes reached ceiling ~6 after
+        5 hours — a 1-hour window was effectively infinite. A sorted set gives a true
+        sliding window: only pushes in the last 3600 s count.
+        """
         count_key = self._governor_key(user_id)
+        now_ts = datetime.now(UTC).timestamp()
+        cutoff = now_ts - 3600
         pipe = self.redis.pipeline()
-        pipe.incr(count_key)
-        pipe.expire(count_key, 3600)  # 1-hour rolling window
+        pipe.zadd(count_key, {brief_id: now_ts}, nx=True)  # nx=True: record each brief once
+        pipe.zremrangebyscore(count_key, "-inf", cutoff)
+        pipe.zcard(count_key)
+        # Keep the sorted set alive for 2 hours so an idle user's key cleans up.
+        pipe.expire(count_key, 7200)
         results = await pipe.execute()
-        new_count = results[0]
-        log.info("governor.push_recorded", user_id=user_id, count=new_count)
+        new_count = results[2]  # zcard result
+        log.info("governor.push_recorded", user_id=user_id, brief_id=brief_id, count=new_count)
         return new_count
 
     async def record_push_once(self, user_id: str, brief_id: str) -> bool:
         """
         Records a governor push for a brief at most once per rolling hour.
 
-        A brief is "pushed" the first time it is delivered to the operator; simply
-        re-viewing it (a page refresh) must not re-count, or opening the inbox twice
-        would blow past the hourly ceiling. Uses a per-brief SET NX marker so the
-        underlying counter is only incremented on the brief's first delivery.
+        B9a: the sorted set uses `zadd nx=True` internally, so a brief_id already in
+        the window is not re-added. This method now just delegates to record_push and
+        returns True if the count changed (i.e. the brief was new to the window).
         Returns True if this call counted a new push, False if already counted.
         """
-        seen_key = f"kairos:governor:{user_id}:counted:{brief_id}"
-        first = await self.redis.set(seen_key, "1", nx=True, ex=3600)
-        if first:
-            await self.record_push(user_id)
-        return bool(first)
+        count_key = self._governor_key(user_id)
+        now_ts = datetime.now(UTC).timestamp()
+        # Check whether this brief is already in the window before adding.
+        already = bool(await self.redis.zscore(count_key, brief_id))
+        if not already:
+            await self.record_push(user_id, brief_id)
+        return not already
 
     async def get_governor_state(self, user_id: str) -> dict[str, Any]:
-        from datetime import datetime, timedelta
         count_key = self._governor_key(user_id)
-        current_count = await self.redis.get(count_key)
-        current_count = int(current_count) if current_count else 0
+        now_ts = datetime.now(UTC).timestamp()
+        cutoff = now_ts - 3600
+        # Prune old entries then count — same logic as check_governor and record_push.
+        pipe = self.redis.pipeline()
+        pipe.zremrangebyscore(count_key, "-inf", cutoff)
+        pipe.zcard(count_key)
+        _, current_count = await pipe.execute()
+
         ceiling = self.settings.MAX_PUSH_PER_USER_PER_HOUR
         suppressed = current_count >= ceiling
-        next_delivery_allowed_at = None
-        if suppressed:
-            ttl = await self.redis.ttl(count_key)
-            if ttl > 0:
-                next_delivery_allowed_at = (datetime.now(UTC) + timedelta(seconds=ttl)).isoformat()
+        # Remaining budget: how many more briefs may be delivered this hour.
+        remaining = max(0, ceiling - current_count)
         return {
             "user_id": user_id,
             "push_count_last_hour": current_count,
             "ceiling": ceiling,
+            "remaining_budget": remaining,
             "state": "suppressed" if suppressed else "normal",
-            "next_delivery_allowed_at": next_delivery_allowed_at,
         }
 
     # -------------------------------------------------------------------------
