@@ -13,7 +13,7 @@ from typing import Annotated
 import redis.asyncio as aioredis
 import structlog
 from elasticsearch import AsyncElasticsearch
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from neo4j import AsyncDriver, AsyncGraphDatabase
 from qdrant_client import AsyncQdrantClient
@@ -21,6 +21,7 @@ from supabase import Client, create_client
 from temporalio.client import Client as TemporalClient
 
 from api.config import Settings, get_settings
+from api.services import tenant
 
 log = structlog.get_logger(__name__)
 
@@ -313,14 +314,81 @@ CurrentUserDep = Annotated[dict, Depends(get_current_user)]
 # Role-Based Access Control helpers
 # =============================================================================
 
+async def demo_write_fence(request: Request, settings: SettingsDep) -> None:
+    """Refuse a write from the demo role unless the route is one whose handler guards its target.
+
+    Runs for every route (an app-level dependency), before the handler. A request without a token
+    is left to the route's own authentication; a token that is not the demo role is untouched. The
+    allowed list is `tenant.DEMO_WRITE_ALLOWED`, and a test keeps it in step with the real routes.
+    """
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return
+    user = await resolve_token(auth[7:], settings)
+    if not tenant.is_demo_user(user):
+        return
+    route = request.scope.get("route")
+    template = getattr(route, "path", request.url.path)
+    if (request.method, template) not in tenant.DEMO_WRITE_ALLOWED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=tenant.DEMO_DENIED)
+
+
+async def showcase_read_fence(request: Request, settings: SettingsDep, supabase: SupabaseDep) -> None:
+    """Answer 404 when a real account reads a showcase record by its id.
+
+    The lists, counts and searches are scoped in their queries; this closes the same door for a request
+    that already knows an id (`/assets/DEMO-P-1101A`, a showcase document id). The demo role is untouched,
+    and so is a request with no path parameter (nothing to look up).
+    """
+    if request.method not in ("GET", "HEAD") or not request.path_params:
+        return
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return
+    user = await resolve_token(auth[7:], settings)
+    if tenant.sees_showcase(user):
+        return
+    if await tenant.names_showcase_record(supabase, request.path_params):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+
+async def demo_llm_budget(current_user: CurrentUserDep, redis: RedisDep, settings: SettingsDep) -> None:
+    """Cap the demo role's model-backed actions per hour, shared by every demo login.
+
+    The demo account is public, so a visitor could otherwise spend the provider quota. Only the
+    demo role is counted; a real account is never limited here. Redis failing must not take the
+    action down, so it fails open (the per-IP rate limiter in front still applies).
+    """
+    if not tenant.is_demo_user(current_user):
+        return
+    key = f"kairos:demo_budget:{int(time.time() // 3600)}"
+    try:
+        used = await redis.incr(key)
+        if used == 1:
+            await redis.expire(key, 3600)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("demo_budget.redis_unavailable", error=str(exc))
+        return
+    if used > settings.DEMO_LLM_ACTIONS_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="The demo has reached its hourly limit for AI-backed actions. Try again later.",
+        )
+
+
 def require_role(*roles: str):
     """
     Dependency factory: raises 403 if the current user's role is not in `roles`.
     Usage: Depends(require_role("engineer", "admin"))
+
+    The demo role passes a gate that names `engineer` or `reliability` (`tenant.has_role`) but never
+    one that names only `admin`.
     """
     async def _check(current_user: CurrentUserDep) -> dict:
         user_role = current_user.get("role", "")
-        if user_role not in roles:
+        if not tenant.has_role(current_user, *roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{user_role}' does not have access. Required: {list(roles)}",
@@ -337,7 +405,9 @@ def site_scope(current_user: dict, requested: str | None) -> str | None:
     any authenticated user could read any site by editing the URL. The site now comes from the
     verified token, not the request.
 
-    - `admin` keeps the cross-site view (`requested`, or `None` for all sites).
+    - `admin` and `demo` keep the cross-site view (`requested`, or `None` for all sites).
+    - With `SHOWCASE_VISIBLE_TO_ALL`, every role with a site reads across sites too: the showcase plant
+      sits on its own sites, so a role pinned to the real one could not otherwise see it.
     - Everyone else is pinned to their own `site_id`; asking for someone else's is a 403 rather
       than a silent re-scope, so a caller is never told it read one site while reading another.
     - An account with no `site_id` gets nothing. Fail closed: a blank site used to mean
@@ -346,7 +416,9 @@ def site_scope(current_user: dict, requested: str | None) -> str | None:
     ponytail: single-site MVP, so this is the whole tenancy boundary for reads that already
     carry a site axis. Search/documents have no site column yet — see the note in status.md.
     """
-    if current_user.get("role") == "admin":
+    # The demo role reads every site, real and showcase, exactly as admin does. What it may WRITE is
+    # restricted separately, to showcase rows (`services/tenant.py`).
+    if current_user.get("role") in ("admin", "demo"):
         return requested
     own = current_user.get("site_id") or ""
     if not own:
@@ -354,6 +426,8 @@ def site_scope(current_user: dict, requested: str | None) -> str | None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has no site assigned; ask an administrator to set one.",
         )
+    if tenant.VISIBLE_TO_ALL:
+        return requested
     if requested and requested != own:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

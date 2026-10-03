@@ -42,7 +42,7 @@ describe("LoginPage", () => {
     fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "password" } });
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/management"));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/overview"));
   });
 
   it("provides a back link to the public landing page", () => {
@@ -79,6 +79,6 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /live demo/i }));
 
     await waitFor(() => expect(mocks.login).toHaveBeenCalledWith("demo@kairos.local", "public-demo-pw"));
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/copilot"));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/overview"));
   });
 });

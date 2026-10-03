@@ -22,6 +22,7 @@ from api.dependencies import (
     require_role,
 )
 from api.models.document import PromoteQuarantineRequest, RequestQuarantineInfoRequest
+from api.services import tenant
 from api.services.corpus import document_rows
 from api.services.graph import GraphService
 from api.services.identity import display_names
@@ -73,6 +74,7 @@ async def list_conflicts(
     )
     if not include_non_asserting:
         query = query.not_.in_("parameter", sorted(GraphService.NON_ASSERTING_RELATIONSHIPS))
+    query = tenant.scope(query, current_user, "asset_id", nullable=True)
     if track:
         query = query.eq("track", track)
     if asset_id:
@@ -133,6 +135,7 @@ async def resolve_conflict(
     Resolves an administrative-track conflict (no MoC required).
     Engineering-track conflicts can only be resolved via MoC webhook.
     """
+    await tenant.guard_row(supabase, current_user, "knowledge_conflicts", conflict_id)
     result = await asyncio.to_thread(
         lambda: supabase.table("knowledge_conflicts")
         .select("conflict_id, track, status")
@@ -200,6 +203,7 @@ async def list_quarantine(
     # page) — not a field input anyone can promote or dispute, yet it sat in the review queue reading
     # "PID_TOPOLOGY_MANIFEST:DOC-…". Excluded in the query so `total` still matches the list.
     query = query.not_.like("content", "PID_TOPOLOGY_MANIFEST:%")
+    query = tenant.scope(query, current_user, "asset_id", nullable=True)
     if asset_id:
         query = query.eq("asset_id", asset_id)
     if reviewer_id:
@@ -222,7 +226,7 @@ async def list_quarantine(
         sla = row.get("sla_due_at")
         is_overdue = bool(sla and datetime.fromisoformat(sla.replace("Z", "+00:00")) < now)
         items.append({
-            **row,
+            **tenant.present_asset(dict(row)),
             "is_overdue": is_overdue,
             "submitted_by_name": names.get(row.get("submitted_by")),
             "reviewer_name": names.get(row.get("reviewer_id")),
@@ -249,6 +253,7 @@ async def promote_quarantine_item(
     Requires reliability or admin role — matches OPA `can_promote_quarantine` and the
     frontend PROMOTE_ROLES. Engineers resolve conflicts/MoC but do not promote quarantine.
     """
+    await tenant.guard_row(supabase, current_user, "quarantine_items", item_id)
     result = await asyncio.to_thread(
         lambda: supabase.table("quarantine_items")
         .select("*")
@@ -341,7 +346,7 @@ async def promote_quarantine_item(
     entity = ctx.get("entity") or {}
     entity_text = entity.get("text") or (item.get("content") or "")[:200]
     entity_type = entity.get("entity_type") or ""
-    if entity_text and entity_type:
+    if entity_text and entity_type and tenant.feeds_statistics(current_user, asset_id):
         try:
             await asyncio.to_thread(
                 lambda: supabase.table("validation_corpus").insert({
@@ -377,6 +382,7 @@ async def dispute_quarantine_item(
     reason: dict = Body(...),
 ) -> dict:
     """Flags a quarantine item as disputed with a reason. Does not delete it."""
+    await tenant.guard_row(supabase, current_user, "quarantine_items", item_id)
     result = await asyncio.to_thread(
         lambda: supabase.table("quarantine_items")
         .select("item_id, review_status, asset_id, session_context")
@@ -413,7 +419,8 @@ async def dispute_quarantine_item(
         if asset_row.data:
             asset_class = asset_row.data[0].get("equipment_class") or "unknown"
     doc_id = (item.get("session_context") or {}).get("document_id")
-    await cb.record_override(asset_class, doc_id, "quarantine_rejection")
+    if tenant.feeds_statistics(current_user, q_asset_id):
+        await cb.record_override(asset_class, doc_id, "quarantine_rejection")
 
     log.info("quarantine.disputed", item_id=item_id, user=current_user.get("user_id"))
     return {"status": "disputed", "item_id": item_id, "reason": reason}
@@ -434,6 +441,7 @@ async def request_quarantine_info(
     'info_requested' status + queue badge only if reviewers need it visible without
     reading the audit trail.
     """
+    await tenant.guard_row(supabase, current_user, "quarantine_items", item_id)
     result = await asyncio.to_thread(
         lambda: supabase.table("quarantine_items")
         .select("item_id, review_status, asset_id, work_order_id, input_type")
@@ -485,18 +493,22 @@ async def get_sla_report(
     now = datetime.now(UTC).isoformat()
 
     overdue_conflicts = await asyncio.to_thread(
-        lambda: supabase.table("knowledge_conflicts")
-        .select("conflict_id, track, asset_id, sla_deadline, escalated_at, status", count="exact")
-        .lt("sla_deadline", now)
-        .neq("status", "resolved")
-        .execute()
+        lambda: tenant.scope(
+            supabase.table("knowledge_conflicts")
+            .select("conflict_id, track, asset_id, sla_deadline, escalated_at, status", count="exact")
+            .lt("sla_deadline", now)
+            .neq("status", "resolved"),
+            current_user, "asset_id", nullable=True,
+        ).execute()
     )
     overdue_quarantine = await asyncio.to_thread(
-        lambda: supabase.table("quarantine_items")
-        .select("item_id, asset_id, input_type, content, sla_due_at, escalated_at", count="exact")
-        .lt("sla_due_at", now)
-        .eq("review_status", "pending")
-        .execute()
+        lambda: tenant.scope(
+            supabase.table("quarantine_items")
+            .select("item_id, asset_id, input_type, content, sla_due_at, escalated_at", count="exact")
+            .lt("sla_due_at", now)
+            .eq("review_status", "pending"),
+            current_user, "asset_id", nullable=True,
+        ).execute()
     )
 
     return {
@@ -550,6 +562,7 @@ async def list_moc(
         "moc_id, conflict_id, asset_id, description, status, approved_by, approved_at, created_at, blast_radius",
         count="exact",
     )
+    query = tenant.scope(query, current_user, "asset_id", nullable=True)
     if moc_status:
         query = query.eq("status", moc_status)
     result = await asyncio.to_thread(
@@ -799,6 +812,7 @@ async def approve_moc_item(
     """
     approver = current_user.get("user_id", "unknown")
     note = (payload or {}).get("note")
+    await tenant.guard_row(supabase, current_user, "moc_items", moc_id)
 
     moc_result = await asyncio.to_thread(
         lambda: supabase.table("moc_items").select("*").eq("moc_id", moc_id).execute()
@@ -933,12 +947,14 @@ async def push_volume_gate(
     decision (`KAIROS_PHASE`), informed by this number.
     """
     since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
-    result = await asyncio.to_thread(
-        lambda: supabase.table("briefs")
-        .select("recipient_user_id, delivered_at")
-        .gte("delivered_at", since)
-        .execute()
+    # Showcase briefs are hidden two ways: by their asset, and by recipient, because a brief the real
+    # assembler writes for a showcase shift handover carries no asset.
+    briefs_q = tenant.scope(
+        supabase.table("briefs").select("recipient_user_id, delivered_at").gte("delivered_at", since),
+        current_user, "asset_id", nullable=True,
     )
+    briefs_q = await tenant.scope_actor(briefs_q, current_user, supabase, "recipient_user_id")
+    result = await asyncio.to_thread(briefs_q.execute)
     rows = [r for r in (result.data or []) if r.get("delivered_at")]
 
     # Peak hourly rate per operator — the ceiling is a per-hour limit, so an average over the
@@ -992,11 +1008,10 @@ async def timestamp_drift_report(
     from api.services.timestamp_alignment import TimestampAlignmentService
 
     result = await asyncio.to_thread(
-        lambda: supabase.table("operational_events")
-        .select("compound_event_id")
-        .not_.is_("compound_event_id", "null")
-        .limit(limit * 4)
-        .execute()
+        lambda: tenant.scope_site(
+            supabase.table("operational_events").select("compound_event_id").not_.is_("compound_event_id", "null"),
+            current_user,
+        ).limit(limit * 4).execute()
     )
     compound_ids = list({r["compound_event_id"] for r in (result.data or []) if r.get("compound_event_id")})[:limit]
 

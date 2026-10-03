@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from api.dependencies import CurrentUserDep, SupabaseDep
+from api.services import tenant
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -53,6 +54,7 @@ async def create_annotation(
     Every correction feeds the facility-specific NER training corpus.
     """
     annotated_by = current_user.get("user_id", "unknown")
+    await tenant.guard_row(supabase, current_user, "documents", payload.document_id)
 
     # Rate limit and de-duplicate against this user's own earlier annotations. The table already
     # holds everything needed (annotated_by, document_id, entity_text), so no new store is added.
@@ -99,7 +101,7 @@ async def create_annotation(
 
     # Feed validation corpus — confirmed correct entities are verified ground truth, so only the
     # roles that own the model gate can contribute to it.
-    if payload.is_correct and current_user.get("role") in _CORPUS_ROLES:
+    if payload.is_correct and current_user.get("role") in _CORPUS_ROLES and tenant.feeds_statistics(current_user):
         try:
             await asyncio.to_thread(
                 lambda: supabase.table("validation_corpus").insert({
@@ -151,8 +153,9 @@ async def create_annotation(
                 quarantine_updated = True
                 break
 
-        # Circuit breaker: record annotation correction override (once per user and document)
-        if first_for_document:
+        # Circuit breaker: record annotation correction override (once per user and document).
+        # A showcase correction must not move a real asset class's SPC baseline.
+        if first_for_document and tenant.feeds_statistics(current_user, matched_asset_id):
             from api.services.circuit_breaker import CircuitBreakerService
             cb = CircuitBreakerService(supabase)
             ann_asset_class = "unknown"
@@ -241,24 +244,22 @@ async def annotation_stats(
     """
     week_ago = (datetime.now(UTC) - timedelta(days=7)).isoformat()
 
+    # The demo identity's corrections are not the operators' (`tenant.scope_actor`).
+    total_q = await tenant.scope_actor(
+        supabase.table("ner_annotations").select("id", count="exact"), current_user, supabase, "annotated_by"
+    )
+    week_q = await tenant.scope_actor(
+        supabase.table("ner_annotations").select("id", count="exact").eq("is_correct", False).gte("created_at", week_ago),
+        current_user, supabase, "annotated_by",
+    )
+    incorrect_q = await tenant.scope_actor(
+        supabase.table("ner_annotations").select("corrected_type").eq("is_correct", False).not_.is_("corrected_type", "null"),
+        current_user, supabase, "annotated_by",
+    )
     total_result, week_result, incorrect_result = await asyncio.gather(
-        asyncio.to_thread(
-            lambda: supabase.table("ner_annotations").select("id", count="exact").execute()
-        ),
-        asyncio.to_thread(
-            lambda: supabase.table("ner_annotations")
-            .select("id", count="exact")
-            .eq("is_correct", False)
-            .gte("created_at", week_ago)
-            .execute()
-        ),
-        asyncio.to_thread(
-            lambda: supabase.table("ner_annotations")
-            .select("corrected_type")
-            .eq("is_correct", False)
-            .not_.is_("corrected_type", "null")
-            .execute()
-        ),
+        asyncio.to_thread(total_q.execute),
+        asyncio.to_thread(week_q.execute),
+        asyncio.to_thread(incorrect_q.execute),
     )
 
     type_counts = Counter(

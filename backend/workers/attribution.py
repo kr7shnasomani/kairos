@@ -5,7 +5,6 @@ confidence adjustment is made in the knowledge graph.
 All three checks must confirm a genuine failure before any action is taken.
 """
 
-import asyncio
 import os
 import statistics
 from datetime import UTC, datetime, timedelta
@@ -90,9 +89,9 @@ def _check_telemetry_baseline(asset_id: str, event_id: str) -> dict[str, Any]:
     When it is instrumented: checks whether the post-maintenance mean deviates > 2σ from baseline.
     """
     try:
+        from api.services.http import run_with_client
         from api.services.ot_coverage import OtCoverageService
 
-        from api.services.http import run_with_client
         cov = run_with_client(OtCoverageService(_supabase()).asset_coverage(asset_id))
     except Exception as exc:
         log.warning("attribution.coverage_unavailable", error=str(exc))

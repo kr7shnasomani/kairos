@@ -93,9 +93,8 @@ export default function SlaPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance"
-        title="SLA escalations"
-        lede="Where governance SLAs are breached right now: overdue conflicts and quarantine reviews, escalated for attention."
+        title="SLA Escalations"
+        lede="Where review deadlines have been missed right now. Conflicts and quarantine items that are past their decision window are listed here and escalated, with how long each has been waiting."
       />
       {report && <p className="mt-2 text-caption text-muted">Checked {fmtRelTime(report.checked_at)}</p>}
 

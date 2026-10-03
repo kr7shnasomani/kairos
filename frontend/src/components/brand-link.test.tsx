@@ -13,8 +13,8 @@ describe("BrandLink", () => {
   });
 
   it("accepts an in-app overview destination", () => {
-    render(<BrandLink href="/management" />);
+    render(<BrandLink href="/overview" />);
 
-    expect(screen.getByRole("link", { name: /kairos home/i })).toHaveAttribute("href", "/management");
+    expect(screen.getByRole("link", { name: /kairos home/i })).toHaveAttribute("href", "/overview");
   });
 });

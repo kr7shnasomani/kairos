@@ -2,16 +2,17 @@
 Kairos — FastAPI Application Entry Point
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api.config import settings
-from api.dependencies import get_es_client, get_qdrant_client
+from api.dependencies import demo_write_fence, get_es_client, get_qdrant_client, showcase_read_fence
 from api.middleware.opa import OPAMiddleware
 from api.middleware.ratelimit import RateLimitMiddleware
 from api.middleware.telemetry import setup_telemetry
@@ -29,16 +30,36 @@ from api.routers import (
     health,
     search,
 )
+from api.services import tenant
 from api.services.search_engine import SearchEngineService
 from api.services.vector_store import VectorStoreService
 
 log = structlog.get_logger(__name__)
 
 
+async def _showcase_redate_loop() -> None:
+    """Shift the showcase plant's dates forward about once a day (`SHOWCASE_AUTO_REDATE`).
+
+    The same code as `scripts/redate_showcase.py`, so what runs here is what the dry run showed. A
+    failure is logged and retried at the next tick; it never stops the API.
+    """
+    from scripts.redate_showcase import run
+
+    await asyncio.sleep(120)
+    while True:
+        try:
+            summary = await asyncio.to_thread(run, settings, apply=True)
+            log.info("showcase.redate", **{k: v for k, v in summary.items() if k != "rows"}, rows=sum(summary["rows"].values()))
+        except Exception as exc:  # noqa: BLE001 — a failed tick must not take the API down
+            log.warning("showcase.redate_failed", error=repr(exc))
+        await asyncio.sleep(6 * 3600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifecycle: startup and shutdown."""
     log.info("kairos.startup", env=settings.APP_ENV, version=settings.APP_VERSION)
+    tenant.VISIBLE_TO_ALL = settings.SHOWCASE_VISIBLE_TO_ALL
 
     # Ensure collections/indices exist. A cloud store blip must not stop the API from booting: they
     # already exist after `make init-all`, a failure here used to exit the process on every hot reload,
@@ -55,7 +76,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:  # noqa: BLE001 — startup must survive a transient store outage
         log.error("startup.elasticsearch_ensure_failed", error=repr(exc))
 
+    redate_task = asyncio.create_task(_showcase_redate_loop()) if settings.SHOWCASE_AUTO_REDATE else None
+
     yield
+
+    if redate_task is not None:
+        redate_task.cancel()
 
     # Drain the pooled outbound HTTP client so in-flight provider connections close
     # cleanly instead of being dropped when the loop stops.
@@ -77,6 +103,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
         lifespan=lifespan,
+        # The demo role may write only through routes whose handler guards the target.
+        dependencies=[Depends(demo_write_fence), Depends(showcase_read_fence)],
     )
 
     # -------------------------------------------------------------------------

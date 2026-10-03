@@ -115,7 +115,7 @@ For the full design, including the 13-layer breakdown, knowledge-graph mechanics
 |---|---|
 | **Backend** | FastAPI (Python 3.12), Temporal (durable workflows), Celery (task queues), Go (Gin) OT connectors |
 | **Datastores** | Neo4j Aura (graph, cloud), Qdrant Cloud (vector), Elasticsearch (exact), Redis (streams/cache), Supabase (Postgres · Auth · Storage · Vault) |
-| **AI models** | NVIDIA NIM (LLM · NER · OCR), Groq Whisper (STT), Jina (embeddings). Cloud-only, no local weights. Synthesis runs on NIM Nemotron 3 Super 120B and falls back to OpenRouter (Llama 3.1 70B), then Gemini |
+| **AI models** | NVIDIA NIM (LLM · NER · OCR), Groq Whisper (STT), Jina (embeddings). Cloud-only, no local weights. Synthesis runs on NIM Nemotron 3 Ultra 550B and falls back to OpenRouter (Llama 3.1 70B), then Gemini |
 | **Frontend** | Next.js 16, React 19, Tailwind CSS v4, TypeScript (strict) |
 | **Platform** | Docker Compose, OPA (authz), Supabase Vault (secrets), OpenTelemetry → Grafana Cloud (traces + metrics) |
 

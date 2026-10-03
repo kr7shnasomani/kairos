@@ -29,6 +29,8 @@ services:
       # to collect. CLAUDE.md requires vitest to run in Docker, so the mount is the fix rather
       # than the test. Read-only: the frontend must never write the benchmark of record.
       - ./benchmark:/benchmark:ro
+      # The public /docs section reads the repository's docs/ folder (`../docs` from /app).
+      - ./docs:/docs:ro
 
   # --- API: --reload + source mount ----------------------------------------
   kairos-backend-api:

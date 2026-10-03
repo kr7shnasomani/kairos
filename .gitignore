@@ -144,6 +144,4 @@ logs/
 # Benchmark run logs + checkpoints
 backend/.benchmark_runs/
 
-# Supabase CLI link cache (project ref, pooler URL) — written by `supabase link`, machine-local
-supabase/.temp/
 .vercel

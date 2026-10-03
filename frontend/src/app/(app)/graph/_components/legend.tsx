@@ -10,9 +10,26 @@ const LEGEND_ITEMS = [
   { var: "var(--danger)",   label: "Disputed" },
 ] satisfies { var: string; label: string; dashed?: boolean }[];
 
+// What each node colour means (the same tokens the canvas uses in `knowledge-graph.tsx`).
+const NODE_ITEMS = [
+  { var: "var(--accent)", label: "Asset" },
+  { var: "var(--caution)", label: "Document" },
+  { var: "var(--info)", label: "Person" },
+  { var: "var(--verified)", label: "Organisation" },
+  { var: "var(--danger)", label: "Event" },
+] satisfies { var: string; label: string }[];
+
 export function GraphLegend() {
   return (
     <div className="grid gap-2 text-label text-muted">
+      <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1.5 border-b border-line pb-2.5">
+        {NODE_ITEMS.map(({ var: c, label }) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-1.5 rounded-sm" style={{ backgroundColor: c }} />
+            {label}
+          </span>
+        ))}
+      </div>
       {LEGEND_ITEMS.map(({ var: c, label, dashed }) => (
         <div key={label} className="flex items-center gap-1.5">
           {dashed

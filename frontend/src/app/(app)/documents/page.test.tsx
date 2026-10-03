@@ -17,8 +17,13 @@ function doc(i: number, over: Partial<VaultDocument> = {}): VaultDocument {
 }
 
 function respond(items: VaultDocument[]) {
-  mocks.getDocuments.mockResolvedValue({ data: { items, total: items.length, limit: 50, offset: 0 }, source: "live" });
+  mocks.getDocuments.mockImplementation(async (opts: { status?: string } = {}) => {
+    const scoped = opts.status === "active" ? items.filter((d) => d.status === "active") : items;
+    return { data: { items: scoped, total: scoped.length, limit: 100, offset: 0 }, source: "live" };
+  });
 }
+
+const open = (page?: string) => DocumentsPage({ searchParams: Promise.resolve({ page }) });
 
 describe("DocumentsPage", () => {
   afterEach(() => {
@@ -29,7 +34,7 @@ describe("DocumentsPage", () => {
   it("paginates a 10k vault to at most 25 rendered rows", async () => {
     respond(Array.from({ length: 10_000 }, (_, i) => doc(i)));
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(document.querySelectorAll("tbody tr").length).toBeLessThanOrEqual(25);
     expect(screen.getByText(/Showing 1–25 of 10000/)).toBeInTheDocument();
@@ -41,7 +46,7 @@ describe("DocumentsPage", () => {
       doc(2, { status: "superseded", file_name: "old.pdf" }),
     ]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.getByTestId("documents-summary")).toHaveTextContent("Active");
     expect(screen.getByText("2 linked assets")).toBeInTheDocument();
@@ -58,7 +63,7 @@ describe("DocumentsPage", () => {
   it("shows the tailored empty state with an ingest CTA", async () => {
     respond([]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.getByText("No documents ingested")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ingest a document" })).toHaveAttribute("href", "/documents/ingest");
@@ -67,7 +72,7 @@ describe("DocumentsPage", () => {
   it("renders document ids quietly, not in the brand accent", async () => {
     respond([doc(1)]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.getByText("DOC-1")).not.toHaveClass("text-accent");
     expect(screen.getByText("DOC-1")).toHaveClass("text-muted", "tabular");
@@ -80,7 +85,7 @@ describe("DocumentsPage", () => {
   it("gives each row a download action that does not link straight to the vault URL", async () => {
     respond([doc(1, { vault_url: "https://vault.example/doc-1" })]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /download/i })).not.toBeInTheDocument();
@@ -90,7 +95,7 @@ describe("DocumentsPage", () => {
   it("omits the download action when there is no artifact", async () => {
     respond([doc(1, { vault_url: null })]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.queryByRole("button", { name: /download/i })).not.toBeInTheDocument();
   });
@@ -98,7 +103,7 @@ describe("DocumentsPage", () => {
   it("shows the exact ingest timestamp", async () => {
     respond([doc(1)]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.getByText("2026-07-12 10:00:00")).toBeInTheDocument();
   });
@@ -106,8 +111,22 @@ describe("DocumentsPage", () => {
   it("does not render the raw ingested_by UUID", async () => {
     respond([doc(1, { ingested_by: "123e4567-e89b-12d3-a456-426614174000" })]);
 
-    render(await DocumentsPage());
+    render(await open());
 
     expect(screen.queryByText(/^[0-9a-f]{8}-/)).not.toBeInTheDocument();
+  });
+
+  it("pages the vault and counts the whole vault in the pills, not the page in view", async () => {
+    mocks.getDocuments.mockImplementation(async (opts: { status?: string; offset?: number } = {}) => ({
+      data: { items: [doc(1)], total: opts.status === "active" ? 230 : 250, limit: 100, offset: opts.offset ?? 0 }, source: "live",
+    }));
+
+    render(await open("2"));
+
+    expect(mocks.getDocuments).toHaveBeenCalledWith({ limit: 100, offset: 100 });
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute("href", "/documents?page=3");
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute("href", "/documents?page=1");
+    expect(screen.getByTestId("documents-summary")).toHaveTextContent(/250[\s\S]*230[\s\S]*20/);
   });
 });

@@ -1,0 +1,11 @@
+Veridian Petrochemicals
+Dahej Tank Farm
+
+Document no: PTW-TKF-TANK-ENTRY   Revision: A
+Title: Permit to work: confined space entry into tank T-6103
+Owner: Gopal Iyer
+Issued: 27 September 2026
+
+Primary equipment: T-6103, Product storage tank 3
+
+Permit PTW-DEMO-0455. Work: internal cleaning of tank T-6103. Isolation: all inlet and outlet valves XV-6103 and XV-6104 blanked, tank gas-freed and tested. Entry requires a standby person and a rescue plan. Issuing engineer: Gopal Iyer.

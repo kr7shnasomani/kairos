@@ -8,6 +8,8 @@ from typing import Any
 
 import structlog
 
+from api.services import tenant
+
 log = structlog.get_logger(__name__)
 
 _ESCALATION_ROLE = "reliability_engineer"
@@ -53,6 +55,7 @@ class SLAService:
                         "asset_id": r["asset_id"],
                         "sla_deadline": r["sla_deadline"],
                         "escalated_to": _ESCALATION_ROLE,
+                        **tenant.audit_marker(r["asset_id"]),
                     },
                 }).execute()
             )
@@ -86,6 +89,7 @@ class SLAService:
                         "input_type": r["input_type"],
                         "sla_due_at": r["sla_due_at"],
                         "escalated_to": _ESCALATION_ROLE,
+                        **tenant.audit_marker(r["asset_id"]),
                     },
                 }).execute()
             )

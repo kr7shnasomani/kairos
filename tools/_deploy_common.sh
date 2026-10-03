@@ -16,7 +16,7 @@ SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=20)
 RSYNC_EXCLUDES=(
   --exclude '.git' --exclude 'frontend' --exclude 'node_modules' --exclude '__pycache__'
   --exclude '.pytest_cache' --exclude '.ruff_cache' --exclude '.claude' --exclude '.agents'
-  --exclude '.vercel' --exclude 'supabase/.temp' --exclude 'docker-compose.override.yml'
+  --exclude '.vercel' --exclude 'docker-compose.override.yml'
   --exclude '.env' --exclude '.env.bak' --exclude '.env.bak.*' --exclude '.DS_Store'
 )
 
@@ -24,5 +24,5 @@ remote() { ssh "${SSH_OPTS[@]}" "$SERVER" "$@"; }
 
 # A hash of every frontend file that would be uploaded to Vercel (tracked or not, minus ignored).
 frontend_hash() {
-  (cd "$ROOT" && git ls-files -co --exclude-standard -z frontend | xargs -0 shasum | shasum | cut -c1-12)
+  (cd "$ROOT" && git ls-files -co --exclude-standard -z frontend docs | xargs -0 shasum | shasum | cut -c1-12)
 }

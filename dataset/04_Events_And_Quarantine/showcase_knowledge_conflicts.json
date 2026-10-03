@@ -1,0 +1,302 @@
+[
+  {
+    "conflict_id": "bd9cfbec-3e0c-5128-bb87-615a75224490",
+    "track": "engineering",
+    "asset_id": "DEMO-PSV-1101",
+    "parameter": "set_pressure",
+    "source_a": {
+      "value": "18.0 barg",
+      "origin": "operating procedure",
+      "file_name": "SOP-CDU-PSV-test-and-reset.pdf",
+      "document_id": "DOC-PENDING-09294540",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "16.8 barg",
+      "origin": "manufacturer service bulletin",
+      "file_name": "SVW-SB-2026-07-psv-set-pressure.pdf",
+      "document_id": "DOC-PENDING-55380699",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "major",
+    "status": "pending_moc",
+    "sla_deadline": "2026-09-08T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-08T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-07T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "07a77048-f574-502e-8c29-1d265400d705",
+    "track": "engineering",
+    "asset_id": "DEMO-P-1101A",
+    "parameter": "minimum_continuous_flow",
+    "source_a": {
+      "value": "120 m3/h",
+      "origin": "operating procedure",
+      "file_name": "SOP-CDU-crude-feed-pump-operation.pdf",
+      "document_id": "DOC-PENDING-44506289",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "150 m3/h",
+      "origin": "manufacturer service bulletin",
+      "file_name": "HFS-SB-2026-05-minimum-flow.pdf",
+      "document_id": "DOC-PENDING-82387966",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "major",
+    "status": "pending_moc",
+    "sla_deadline": "2026-09-10T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-10T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-09T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "71781ffe-0b7e-5a6b-8a2c-50a1ebca96e9",
+    "track": "engineering",
+    "asset_id": "DEMO-K-2101A",
+    "parameter": "discharge_temperature_trip",
+    "source_a": {
+      "value": "135 degC",
+      "origin": "operating procedure",
+      "file_name": "SOP-HDT-recycle-compressor-start.pdf",
+      "document_id": "DOC-PENDING-92026714",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "125 degC",
+      "origin": "manufacturer service bulletin",
+      "file_name": "NWC-SB-2026-09-discharge-temperature.pdf",
+      "document_id": "DOC-PENDING-86733415",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "major",
+    "status": "open",
+    "sla_deadline": "2026-09-12T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-12T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-11T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "a855064d-7642-52bf-8dca-2925d340724c",
+    "track": "engineering",
+    "asset_id": "DEMO-H-1101",
+    "parameter": "tube_metal_temperature_limit",
+    "source_a": {
+      "value": "620 degC",
+      "origin": "operating procedure",
+      "file_name": "SOP-CDU-heater-light-off.pdf",
+      "document_id": "DOC-PENDING-88069138",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "595 degC",
+      "origin": "manufacturer service bulletin",
+      "file_name": "THX-SB-2026-06-tube-metal-limit.pdf",
+      "document_id": "DOC-PENDING-23886905",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "major",
+    "status": "open",
+    "sla_deadline": "2026-09-14T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-14T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-13T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "7ab2822e-6f45-5179-b5ac-a6b4ae472888",
+    "track": "engineering",
+    "asset_id": "DEMO-T-6101",
+    "parameter": "maximum_fill_level",
+    "source_a": {
+      "value": "92 percent",
+      "origin": "operating procedure",
+      "file_name": "SOP-TKF-tank-filling-limits.pdf",
+      "document_id": "DOC-PENDING-73855215",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "88 percent",
+      "origin": "manufacturer service bulletin",
+      "file_name": "OTS-SB-2026-08-fill-level.pdf",
+      "document_id": "DOC-PENDING-53532102",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "major",
+    "status": "pending_moc",
+    "sla_deadline": "2026-09-15T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-15T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-14T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "e0bfc10f-54d6-5dc0-8cd0-3016f87d5e6b",
+    "track": "administrative",
+    "asset_id": "DEMO-XV-1102",
+    "parameter": "stroke_test_interval",
+    "source_a": {
+      "value": "12 months",
+      "origin": "operating procedure",
+      "file_name": "SOP-CDU-ESD-valve-testing.pdf",
+      "document_id": "DOC-PENDING-05673228",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "6 months",
+      "origin": "manufacturer service bulletin",
+      "file_name": "SVW-SB-2026-04-esd-valve-test-interval.pdf",
+      "document_id": "DOC-PENDING-91835898",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "minor",
+    "status": "open",
+    "sla_deadline": "2026-09-21T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-21T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-16T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "50a7ba6d-29f0-5777-9d9a-2764fc157937",
+    "track": "administrative",
+    "asset_id": "DEMO-P-3101A",
+    "parameter": "bearing_temperature_alarm",
+    "source_a": {
+      "value": "85 degC",
+      "origin": "operating procedure",
+      "file_name": "SOP-UTL-cooling-water-pump-operation.pdf",
+      "document_id": "DOC-PENDING-69187745",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "80 degC",
+      "origin": "manufacturer service bulletin",
+      "file_name": "HFS-SB-2026-02-bearing-temperature.pdf",
+      "document_id": "DOC-PENDING-85742904",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "minor",
+    "status": "resolved",
+    "sla_deadline": "2026-09-24T14:16:35.377098+00:00",
+    "escalated_at": null,
+    "escalated_to": null,
+    "resolved_by": "Dr. Sunita Rao",
+    "resolved_at": "2026-09-22T14:16:35.377098+00:00",
+    "created_at": "2026-09-19T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "420be84b-36cb-53e4-8fe9-e38819fe0a91",
+    "track": "administrative",
+    "asset_id": "DEMO-E-1101",
+    "parameter": "cleaning_interval",
+    "source_a": {
+      "value": "24 months",
+      "origin": "operating procedure",
+      "file_name": "SOP-CDU-preheat-train-cleaning.pdf",
+      "document_id": "DOC-PENDING-32838303",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "18 months",
+      "origin": "manufacturer service bulletin",
+      "file_name": "KHT-SB-2026-03-cleaning-interval.pdf",
+      "document_id": "DOC-PENDING-04091160",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "minor",
+    "status": "resolved",
+    "sla_deadline": "2026-09-26T14:16:35.377098+00:00",
+    "escalated_at": null,
+    "escalated_to": null,
+    "resolved_by": "Dr. Sunita Rao",
+    "resolved_at": "2026-09-24T14:16:35.377098+00:00",
+    "created_at": "2026-09-21T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "36a86b24-87ee-5e71-9af2-71ec728093b3",
+    "track": "engineering",
+    "asset_id": "DEMO-V-2101",
+    "parameter": "corrosion_allowance",
+    "source_a": {
+      "value": "3.0 mm",
+      "origin": "operating procedure",
+      "file_name": "SOP-HDT-separator-inspection-plan.pdf",
+      "document_id": "DOC-PENDING-79563631",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "2.5 mm",
+      "origin": "manufacturer service bulletin",
+      "file_name": "OEM-V-2101-design-revision.pdf",
+      "document_id": "DOC-PENDING-70079976",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "major",
+    "status": "resolved",
+    "sla_deadline": "2026-08-25T14:16:35.377098+00:00",
+    "escalated_at": null,
+    "escalated_to": null,
+    "resolved_by": "Dr. Sunita Rao",
+    "resolved_at": "2026-08-27T14:16:35.377098+00:00",
+    "created_at": "2026-08-24T14:16:35.377098+00:00"
+  },
+  {
+    "conflict_id": "2a6dfaa9-4e7c-5e0d-8e83-88c036e4dc88",
+    "track": "administrative",
+    "asset_id": "DEMO-LA-6101",
+    "parameter": "maximum_loading_rate",
+    "source_a": {
+      "value": "180 m3/h",
+      "origin": "operating procedure",
+      "file_name": "SOP-TKF-truck-loading.pdf",
+      "document_id": "DOC-PENDING-24883438",
+      "authority_level": 4
+    },
+    "source_b": {
+      "value": "150 m3/h",
+      "origin": "manufacturer service bulletin",
+      "file_name": "MLS-SB-2026-10-loading-rate.pdf",
+      "document_id": "DOC-PENDING-01426364",
+      "authority_level": 3
+    },
+    "authority_a": 4,
+    "authority_b": 3,
+    "severity": "minor",
+    "status": "open",
+    "sla_deadline": "2026-09-30T14:16:35.377098+00:00",
+    "escalated_at": "2026-09-30T14:21:35.377098+00:00",
+    "escalated_to": "reliability_engineer",
+    "resolved_by": null,
+    "resolved_at": null,
+    "created_at": "2026-09-25T14:16:35.377098+00:00"
+  }
+]

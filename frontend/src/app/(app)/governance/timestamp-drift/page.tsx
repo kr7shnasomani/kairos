@@ -30,8 +30,7 @@ export default function TimestampDriftPage() {
   return (
     <div data-testid="timestamp-drift-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Governance"
-        title="Timestamp drift"
+        title="Timestamp Drift"
         lede="Clock disagreement between systems that recorded the same physical event. Occurred-versus-ingested gaps are history, not drift, and are never counted."
       />
 

@@ -17,6 +17,7 @@ from supabase import Client
 from api.config import Settings
 from api.models.brief import Brief, SourceCitation
 from api.models.event import PTWEvent, ShiftHandoverEvent, WorkOrderEvent
+from api.services import tenant
 from api.services.event_bus import EventBusService
 from api.services.graph import GraphService
 from api.services.llm import LLMService
@@ -661,7 +662,13 @@ class BriefEngine:
             vector = await self.llm.embed(query, task="retrieval.query")
             # `kairos_documents`: ingestion never writes the knowledge collection (see the same
             # note in `routers/search.py`), so searching it returned nothing for every brief.
-            return await self.vector.search(
+            # A brief about a showcase asset also searches the showcase collection.
+            vector_svc = (
+                VectorStoreService(self.vector.client, self.settings, include_demo=True)
+                if tenant.is_demo_id(asset_id)
+                else self.vector
+            )
+            return await vector_svc.search(
                 self.settings.QDRANT_COLLECTION_DOCUMENTS,
                 vector,
                 asset_id=asset_id,
@@ -690,8 +697,10 @@ class BriefEngine:
 
     async def _es_procedures(self, asset_id: str) -> list[dict[str, Any]]:
         try:
+            docs_index = self.settings.ELASTICSEARCH_INDEX_DOCUMENTS
             resp = await self.es.search(
-                index=self.settings.ELASTICSEARCH_INDEX_DOCUMENTS,
+                index=f"{docs_index},{tenant.demo_store(docs_index)}" if tenant.is_demo_id(asset_id) else docs_index,
+                ignore_unavailable=True,
                 body={
                     "query": {"bool": {
                         "must": [

@@ -1,13 +1,12 @@
 "use client";
 
-import { Button, ButtonLink } from "@/components/ui";
-import { DEMO_DISABLED_MESSAGE, RESOLVE_ROLES, useRole } from "@/components/use-role";
+import { ButtonLink } from "@/components/ui";
+import { RESOLVE_ROLES, useRole, visibleTo } from "@/components/use-role";
 
 /** Ingest is a staff action (`ingest_document` in kairos.rego). Hidden for roles the API would refuse;
- *  shown disabled, with the reason, for the demo account. */
+ *  the demo account ingests into the showcase plant. */
 export function IngestDocumentAction() {
   const role = useRole();
-  if (role === "demo") return <Button variant="primary" disabled title={DEMO_DISABLED_MESSAGE}>Ingest document</Button>;
-  if (!RESOLVE_ROLES.includes(role)) return null;
+  if (!visibleTo(RESOLVE_ROLES, role)) return null;
   return <ButtonLink href="/documents/ingest" variant="primary">Ingest document</ButtonLink>;
 }

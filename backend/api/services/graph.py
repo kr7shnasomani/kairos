@@ -10,6 +10,7 @@ import structlog
 from neo4j import AsyncDriver
 
 from api.services.corpus import REAL_ASSET_CYPHER
+from api.services.tenant import DEMO_VISIBLE_CYPHER
 
 log = structlog.get_logger(__name__)
 
@@ -208,10 +209,15 @@ class GraphService:
         equipment_class: str | None = None,
         skip: int = 0,
         limit: int = 50,
+        hide_demo: bool = True,
     ) -> dict[str, Any]:
-        """Returns paginated asset list with total count. Authority pre-filter before traversal."""
+        """Returns paginated asset list with total count. Authority pre-filter before traversal.
+
+        `hide_demo` defaults to True: showcase assets are shown only to a caller that asks for them
+        (the demo role), so a new caller cannot leak them by forgetting the argument.
+        """
         where_clauses = []
-        params: dict[str, Any] = {"skip": skip, "limit": limit}
+        params: dict[str, Any] = {"skip": skip, "limit": limit, "hide_demo": hide_demo}
         if site_id:
             where_clauses.append("a.site_id = $site_id")
             params["site_id"] = site_id
@@ -220,7 +226,7 @@ class GraphService:
             params["equipment_class"] = equipment_class
 
         where = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-        list_where = "WHERE " + " AND ".join([*where_clauses, REAL_ASSET_CYPHER])
+        list_where = "WHERE " + " AND ".join([*where_clauses, REAL_ASSET_CYPHER, DEMO_VISIBLE_CYPHER])
 
         list_cypher = f"""
         MATCH (a:Asset) {list_where}
@@ -232,8 +238,8 @@ class GraphService:
         # (services/corpus.py: a filter that hides its own effect is how numbers go wrong).
         count_cypher = f"""
         MATCH (a:Asset) {where}
-        RETURN count(CASE WHEN {REAL_ASSET_CYPHER} THEN 1 END) AS total,
-               count(CASE WHEN NOT {REAL_ASSET_CYPHER} THEN 1 END) AS excluded
+        RETURN count(CASE WHEN {REAL_ASSET_CYPHER} AND {DEMO_VISIBLE_CYPHER} THEN 1 END) AS total,
+               count(CASE WHEN NOT {REAL_ASSET_CYPHER} AND {DEMO_VISIBLE_CYPHER} THEN 1 END) AS excluded
         """
 
         async with self.driver.session(database=self.database) as session:
@@ -705,6 +711,80 @@ class GraphService:
     # Time-travel queries (Layer 4)
     # -------------------------------------------------------------------------
 
+    async def get_asset_neighbourhood(
+        self, asset_id: str, *, hide_demo: bool, as_of: datetime | None = None, max_documents: int = 12,
+        max_people: int = 8, max_assets: int = 8, max_events: int = 6, max_children: int = 10,
+    ) -> dict[str, Any]:
+        """The asset and what surrounds it, two hops out, as raw nodes and edges for the graph view.
+
+        Hop one: the asset's position (the unit above it, the instruments below it), the documents that
+        document it (the best-authority, newest first) and its latest events. Hop two: the people and
+        organisations those documents mention, and the other assets that same documents document, so the
+        view is a network rather than a star. Every list is capped, because a hub asset would otherwise
+        return hundreds of nodes. Neighbouring assets honour `hide_demo` like every other asset read.
+        """
+        now = (as_of or datetime.now(UTC)).isoformat()
+        asset_cypher = "MATCH (a:Asset {asset_id: $id}) RETURN a"
+        parent_cypher = "MATCH (p:Asset)-[:PARENT_OF]->(a:Asset {asset_id: $id}) RETURN p LIMIT 1"
+        children_cypher = "MATCH (a:Asset {asset_id: $id})-[:PARENT_OF]->(c:Asset) RETURN c ORDER BY c.asset_id LIMIT $n"
+        documents_cypher = """
+        MATCH (a:Asset {asset_id: $id})-[r:KNOWLEDGE_EDGE]->(d:Document)
+        WHERE r.valid_from <= $now AND (r.valid_to IS NULL OR r.valid_to > $now)
+        WITH d, r ORDER BY r.authority_level ASC, r.valid_from DESC
+        WITH d, head(collect(r)) AS r
+        RETURN d, r ORDER BY r.authority_level ASC, r.valid_from DESC LIMIT $n
+        """
+        mentions_cypher = """
+        MATCH (d:Document)-[r:KNOWLEDGE_EDGE]->(x)
+        WHERE d.document_id IN $docs AND r.relationship_type IN ['MENTIONS_PERSON', 'MENTIONS_ORGANISATION']
+        RETURN d.document_id AS doc, x, labels(x)[0] AS kind, r
+        """
+        related_cypher = """
+        MATCH (o:Asset)-[r:KNOWLEDGE_EDGE]->(d:Document)
+        WHERE d.document_id IN $docs AND o.asset_id <> $id
+          AND ($hide_demo = false OR NOT o.asset_id STARTS WITH 'DEMO-')
+        RETURN d.document_id AS doc, o, r
+        """
+        events_cypher = """
+        MATCH (a:Asset {asset_id: $id})-[:OCCURRED_ON]->(e:Event)
+        RETURN e ORDER BY e.occurred_at DESC LIMIT $n
+        """
+        async with self.driver.session(database=self.database) as session:
+            record = await (await session.run(asset_cypher, id=asset_id)).single()
+            if not record:
+                return {}
+            asset = dict(record["a"])
+            parent_rec = await (await session.run(parent_cypher, id=asset_id)).single()
+            children = [dict(r["c"]) async for r in await session.run(children_cypher, id=asset_id, n=max_children)]
+            documents = [(dict(r["d"]), dict(r["r"])) async for r in await session.run(documents_cypher, id=asset_id, now=now, n=max_documents)]
+            doc_ids = [d["document_id"] for d, _ in documents]
+            mentions = [
+                (r["doc"], dict(r["x"]), r["kind"], dict(r["r"]))
+                async for r in await session.run(mentions_cypher, docs=doc_ids)
+            ] if doc_ids else []
+            related = [
+                (r["doc"], dict(r["o"]), dict(r["r"]))
+                async for r in await session.run(related_cypher, docs=doc_ids, id=asset_id, hide_demo=hide_demo)
+            ] if doc_ids else []
+            events = [dict(r["e"]) async for r in await session.run(events_cypher, id=asset_id, n=max_events)]
+
+        # Keep the people and organisations mentioned by the most of these documents, and the assets that
+        # share the most of them: the connections that join one document to another.
+        def top(rows, key, limit):
+            counts: dict[str, int] = {}
+            for row in rows:
+                counts[key(row)] = counts.get(key(row), 0) + 1
+            keep = {k for k, _ in sorted(counts.items(), key=lambda kv: -kv[1])[:limit]}
+            return [row for row in rows if key(row) in keep]
+
+        id_of = {"Person": "person_id", "Organisation": "org_id"}
+        mentions = top([m for m in mentions if m[2] in id_of], lambda m: m[1].get(id_of[m[2]], ""), max_people)
+        related = top(related, lambda r: r[1]["asset_id"], max_assets)
+        return {
+            "asset": asset, "parent": dict(parent_rec["p"]) if parent_rec else None, "children": children,
+            "documents": documents, "mentions": mentions, "related": related, "events": events,
+        }
+
     async def get_asset_knowledge_at(
         self,
         asset_id: str,
@@ -840,6 +920,7 @@ class GraphService:
         `merge_event_node`, but it carries no inspection date, so the edge is the source here.)
 
         Superseded edges are excluded: a retracted inspection must not read as the latest one.
+        An `inspection_complete` Event node is the fallback when no report edge exists.
         """
         cypher = """
         MATCH (a:Asset {asset_id: $asset_id})-[r:KNOWLEDGE_EDGE {relationship_type: 'INSPECTION_RECORD'}]->(:Document)
@@ -850,6 +931,15 @@ class GraphService:
         async with self.driver.session(database=self.database) as session:
             result = await session.run(cypher, asset_id=asset_id)
             record = await result.single()
+            if not (record and record["inspection_date"]):
+                # No report was attached to the event, so no edge was written; the event itself
+                # still dates the inspection (the bulk loader and any feed without a document).
+                result = await session.run(
+                    "MATCH (e:Event {asset_id: $asset_id, event_type: 'inspection_complete'}) "
+                    "RETURN e.occurred_at AS inspection_date ORDER BY e.occurred_at DESC LIMIT 1",
+                    asset_id=asset_id,
+                )
+                record = await result.single()
             if record and record["inspection_date"]:
                 val = record["inspection_date"]
                 return val.isoformat() if hasattr(val, "isoformat") else str(val)

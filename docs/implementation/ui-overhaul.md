@@ -53,7 +53,7 @@ Counts are from `frontend/src/app/(app)` + `frontend/src/components`.
 14. No frame rails, no corner ticks, no bands in the app: nothing ties it visually to the landing.
 
 ### E. Data display
-15. Overview "Operational events" is a **`type="monotone"` area** (`app/(app)/management/page.tsx:182`) over integer daily counts: one event on 13 Sept renders as a smooth hump with fractional values in between. It invents data. Landing uses bars (`.lp-bar`, hero-gradient leader).
+15. Overview "Operational events" is a **`type="monotone"` area** (`app/(app)/overview/page.tsx:182`) over integer daily counts: one event on 13 Sept renders as a smooth hump with fractional values in between. It invents data. Landing uses bars (`.lp-bar`, hero-gradient leader).
 16. Axis dates read "9 Sept … 22 Sept", 14 crowded labels.
 17. "Needs attention" is 8 near-identical rows ("Overdue conflict · engineering" x3, "Overdue quarantine · deviation_flag" x4) with raw snake_case.
 18. Graph node labels and the validity list show raw filenames (`regulatory_clause_excerpts.pdf`, `work_order_closeo…`).
@@ -154,7 +154,7 @@ the asset chip already separate the rows.
 Original intent:
 | Page | Work |
 |---|---|
-| Overview `/management` | KPI mesh; events chart → daily **bars** with lead-bar gradient + grow-in, fewer axis ticks ("9 Sep"); group "Needs attention" by type with counts, humanised labels; system health as a status cell mesh. |
+| Overview `/overview` | KPI mesh; events chart → daily **bars** with lead-bar gradient + grow-in, fewer axis ticks ("9 Sep"); group "Needs attention" by type with counts, humanised labels; system health as a status cell mesh. |
 | Copilot | Hero-voice empty state; suggestions as a 2x2 cell mesh; composer square with orange send block. |
 | Governance | Control cards → cell mesh with the accent top-bar hover; one badge colour language. |
 | Assets / Documents / Events / Audit | Table + filter restyle only (primitives do most of it). |

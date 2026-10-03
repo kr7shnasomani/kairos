@@ -16,7 +16,7 @@ async def test_es_scope_is_primary_asset_or_linked_document():
     captured = {}
 
     class FakeES:
-        async def search(self, index, body):
+        async def search(self, index, body, **kwargs):
             captured["body"] = body
             return {"hits": {"hits": []}}
 
@@ -104,8 +104,25 @@ def test_own_documents_rank_ahead_of_linked_ones_within_an_authority_level():
     # The linked shift log ranks first in its source; the asset's own closeout form ranks second.
     out = svc._fuse([[r("DOC-SHIFT-LOG", None), r("DOC-CLOSEOUT", "EQ-101"), r("DOC-SOP", None, authority=4)]], 2, asset_id="EQ-101")
 
-    # Authority still leads; within level 5 the asset's own document wins the last slot.
-    assert [x.document_id for x in out] == ["DOC-SOP", "DOC-CLOSEOUT"]
+    # Relevance keeps the two best; within level 5 the asset's own document is listed ahead of the linked one.
+    assert [x.document_id for x in out] == ["DOC-CLOSEOUT", "DOC-SHIFT-LOG"]
+
+
+def test_a_relevant_low_authority_record_is_not_cut_by_better_ranked_but_less_relevant_ones():
+    from api.models.document import SearchResult
+
+    def r(doc_id, authority):
+        return SearchResult(
+            document_id=doc_id, asset_id="P-1", document_type="manual", title="", snippet="",
+            authority_level=authority, status="active", relevance_score=0.0, retrieval_method="exact",
+        )
+
+    svc = SearchService.__new__(SearchService)
+    # The failure-history card (L5) is the second most relevant of five; the limit is three.
+    ranked_by_relevance = [r("DOC-MANUAL", 3), r("DOC-FAILURES", 5), r("DOC-SOP-A", 4), r("DOC-SOP-B", 4), r("DOC-SOP-C", 4)]
+    out = svc._fuse([ranked_by_relevance], 3, asset_id="P-1")
+
+    assert [x.document_id for x in out] == ["DOC-MANUAL", "DOC-SOP-A", "DOC-FAILURES"]  # kept, listed after the higher levels
 
 
 def test_a_provenance_stub_never_takes_a_slot_on_its_own():

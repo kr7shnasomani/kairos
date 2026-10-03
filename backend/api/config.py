@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     # meta/llama-3.1-70b-instruct was retired by NVIDIA (410 Gone, 2026-09-13). Of the chat models
     # the account still lists, this one answered in the ANSWER/CONFIDENCE contract at ~2.5 s with
     # thinking off; several other listed models 404 or hang. Probe before switching again.
-    NVIDIA_NIM_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
+    NVIDIA_NIM_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b"
     # Nemotron 3 reasons before answering by default, spending the token budget on hidden
     # reasoning (an answer came back truncated to 5 words) and never streaming `content` deltas.
     # Sent as `chat_template_kwargs.enable_thinking=false`; set False for a model that rejects it.
@@ -291,6 +291,17 @@ class Settings(BaseSettings):
     # Auth round-trip. Revocation staleness is bounded to this value. Set 0 to
     # disable (verify every request — strictest, slowest).
     AUTH_CACHE_TTL_SECONDS: int = 60
+    # Hourly ceiling, shared by every demo login, on the demo role's actions that call a model
+    # provider (Copilot, RCA, document ingest, event briefs, voice notes). The demo account is public.
+    DEMO_LLM_ACTIONS_PER_HOUR: int = 120
+    # Off by default. When true the API shifts the showcase plant's dates forward about once a day
+    # so it always reads as recent (`scripts/showcase/redate.py`). It updates time columns of the
+    # loader's own rows only, in the current stores.
+    SHOWCASE_AUTO_REDATE: bool = False
+    # True: every login sees the showcase plant as well as the real one (lists, search, graph, by-id reads,
+    # and a site-pinned role reads across sites). False: only the demo role does and real accounts see
+    # real data alone. The demo role can write only to showcase rows either way (`services/tenant.py`).
+    SHOWCASE_VISIBLE_TO_ALL: bool = True
 
     # HMAC-SHA256 shared secret for the inbound MoC resolution webhook
     # (POST /governance/moc/webhook). ARCHITECTURE.md requires the plant's MoC system to sign

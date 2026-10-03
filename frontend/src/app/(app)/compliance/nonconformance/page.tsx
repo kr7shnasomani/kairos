@@ -139,8 +139,7 @@ export default function NonConformancePage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Assure"
-        title="Non-conformance tracking"
+        title="Non-Conformance Tracking"
         lede="Open non-conformances composed from unresolved conflicts, failed inspections, and disputed field inputs. Each links to its root-cause workspace and originating record."
       />
 

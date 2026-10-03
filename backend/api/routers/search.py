@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from api.dependencies import (
@@ -18,6 +18,7 @@ from api.dependencies import (
     QdrantDep,
     SettingsDep,
     SupabaseDep,
+    demo_llm_budget,
     site_scope,
 )
 from api.models.document import (
@@ -28,6 +29,7 @@ from api.models.document import (
     SynthesizeRequest,
     SynthesizeResponse,
 )
+from api.services import tenant
 from api.services.corpus import document_rows
 from api.services.graph import GraphService
 from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService, query_asset_tags, valid_citations
@@ -124,8 +126,8 @@ async def search(
 
     svc = SearchService(
         graph=GraphService(driver, settings.NEO4J_DATABASE),
-        vector=VectorStoreService(qdrant, settings),
-        engine=SearchEngineService(es, settings),
+        vector=VectorStoreService(qdrant, settings, include_demo=tenant.sees_showcase(current_user)),
+        engine=SearchEngineService(es, settings, include_demo=tenant.sees_showcase(current_user)),
         llm=LLMService(settings),
         supabase=supabase,
     )
@@ -177,8 +179,8 @@ async def search_asset(
     """Asset-scoped hybrid search — delegates to the main search with asset_id locked."""
     svc = SearchService(
         graph=GraphService(driver, settings.NEO4J_DATABASE),
-        vector=VectorStoreService(qdrant, settings),
-        engine=SearchEngineService(es, settings),
+        vector=VectorStoreService(qdrant, settings, include_demo=tenant.sees_showcase(current_user)),
+        engine=SearchEngineService(es, settings, include_demo=tenant.sees_showcase(current_user)),
         llm=LLMService(settings),
         supabase=supabase,
     )
@@ -276,6 +278,7 @@ async def _server_evidence(
     driver,
     qdrant,
     es,
+    include_demo: bool = False,
 ) -> tuple[list[dict], str | None, list[dict[str, str]]]:
     """The evidence, safety category and alias map a synthesis request is judged on.
 
@@ -291,8 +294,8 @@ async def _server_evidence(
 
     svc = SearchService(
         graph=GraphService(driver, settings.NEO4J_DATABASE),
-        vector=VectorStoreService(qdrant, settings),
-        engine=SearchEngineService(es, settings),
+        vector=VectorStoreService(qdrant, settings, include_demo=include_demo),
+        engine=SearchEngineService(es, settings, include_demo=include_demo),
         llm=LLMService(settings),
         supabase=supabase,
     )
@@ -393,7 +396,7 @@ async def _record_synthesis(supabase, current_user: dict, query: str, category: 
     return pending_moc
 
 
-@router.post("/synthesize", response_model=SynthesizeResponse, summary="Synthesize an answer from retrieved knowledge")
+@router.post("/synthesize", dependencies=[Depends(demo_llm_budget)], response_model=SynthesizeResponse, summary="Synthesize an answer from retrieved knowledge")
 async def synthesize(
     payload: SynthesizeRequest,
     current_user: CurrentUserDep,
@@ -415,7 +418,9 @@ async def synthesize(
     retrieval is established before trust in synthesis is requested. The caller still gets its
     retrieved sources, so the answer surface degrades rather than breaking.
     """
-    evidence, category, aliases = await _server_evidence(payload, settings, supabase, driver, qdrant, es)
+    evidence, category, aliases = await _server_evidence(
+        payload, settings, supabase, driver, qdrant, es, include_demo=tenant.sees_showcase(current_user)
+    )
 
     if settings.KAIROS_PHASE < 2:
         log.info("synthesis.phase_gated", phase=settings.KAIROS_PHASE, query_category=category)
@@ -427,7 +432,7 @@ async def synthesize(
     return SynthesizeResponse(**body)
 
 
-@router.post("/synthesize/stream", summary="Synthesize an answer, streamed as Server-Sent Events")
+@router.post("/synthesize/stream", dependencies=[Depends(demo_llm_budget)], summary="Synthesize an answer, streamed as Server-Sent Events")
 async def synthesize_stream(
     payload: SynthesizeRequest,
     current_user: CurrentUserDep,
@@ -464,7 +469,9 @@ async def synthesize_stream(
 
     async def _events():
         try:
-            evidence, category, aliases = await _server_evidence(payload, settings, supabase, driver, qdrant, es)
+            evidence, category, aliases = await _server_evidence(
+                payload, settings, supabase, driver, qdrant, es, include_demo=tenant.sees_showcase(current_user)
+            )
             # The phase gate is repeated rather than shared with `synthesize()` because that handler
             # returns a response model and this one returns a byte stream; the *condition* is one
             # line and the divergence risk is lower than the coupling would be.
@@ -533,7 +540,7 @@ async def submit_answer_feedback(
     return {"status": "recorded", "rating": payload.rating}
 
 
-@router.post("/rca-pack", response_model=RCAPackResponse, summary="Generate RCA pack for an asset incident")
+@router.post("/rca-pack", dependencies=[Depends(demo_llm_budget)], response_model=RCAPackResponse, summary="Generate RCA pack for an asset incident")
 async def generate_rca_pack(
     payload: RCAPackRequest,
     current_user: CurrentUserDep,
@@ -561,7 +568,7 @@ async def generate_rca_pack(
 
     graph = GraphService(driver, settings.NEO4J_DATABASE)
     llm = LLMService(settings)
-    vector_store = VectorStoreService(qdrant, settings)
+    vector_store = VectorStoreService(qdrant, settings, include_demo=tenant.sees_showcase(current_user))
 
     # -- Parallel retrieval --
     neo4j_future = graph.get_event_timeline(payload.asset_id, window_start_iso)

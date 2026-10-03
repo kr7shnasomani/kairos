@@ -26,6 +26,17 @@ except ImportError:
         _purge_test_data = None
 
 
+@pytest.fixture(autouse=True)
+def _showcase_hidden_from_real_accounts_by_default():
+    """The API sets `tenant.VISIBLE_TO_ALL` at startup, so a test that runs the lifespan would leak it into
+    every later test. Each test starts from the code default (off); the ones about it turn it on."""
+    from api.services import tenant
+
+    tenant.VISIBLE_TO_ALL = False
+    yield
+    tenant.VISIBLE_TO_ALL = False
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _cleanup_test_data():
     """Delete every test-prefixed entity after the suite so runs don't accumulate DB junk."""

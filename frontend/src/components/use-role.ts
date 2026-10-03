@@ -40,25 +40,23 @@ export const ADMIN_ROLES: Role[] = ["admin"];
 /** Field worker personas — mobile-first, read-only on staff surfaces. */
 export const FIELD_ROLES: Role[] = ["field_worker"];
 
-/** The public demo identity: sees everything an admin sees, but destructive or mutating controls are
- *  disabled (`DemoGate`) and the API policy refuses the write regardless of what the UI shows. */
-export const READ_ONLY_ROLES: Role[] = ["demo"];
-
-/** Tooltip and message on every control the demo account cannot use. */
-export const DEMO_DISABLED_MESSAGE = "Disabled in the demo account";
+/** Tooltip on the few controls the demo account cannot use: the model gate and provider probes, which
+ *  spend provider quota and write statistics. Every other action works for it, on showcase data
+ *  only; the API refuses any write that is not on a showcase row. */
+export const DEMO_DISABLED_MESSAGE = "Not available in the demo";
 
 /** Surfaces an admin sees (system health, model gate): admin plus the demo identity. */
 export const ADMIN_VIEW_ROLES: Role[] = ["admin", "demo"];
 
 /** Does `role` get to SEE a control that `roles` may use? The demo account sees every control an
- *  admin sees; `DemoGate` then disables it. Use this for visibility, never for permission. */
+ *  admin sees, and `DemoGate` disables the few it cannot use. Use this for visibility, never for permission. */
 export function visibleTo(roles: Role[], role: Role): boolean {
   return role === "demo" || roles.includes(role);
 }
 
 /** True when the signed-in role is the demo identity. */
 export function useIsDemo(): boolean {
-  return READ_ONLY_ROLES.includes(useRole());
+  return useRole() === "demo";
 }
 
 /** Staff surfaces (engineers, reliability, admin) — field workers are excluded. */
@@ -74,7 +72,7 @@ const STAFF_AND_COMPLIANCE: Role[] = [...STAFF_ONLY, "compliance"];
 // the app shell so no page can be reached by URL without the right role.
 const ROUTE_ACCESS: ReadonlyArray<{ prefix: string; roles: Role[] }> = [
   { prefix: "/system-health", roles: ADMIN_ROLES },
-  { prefix: "/management", roles: STAFF_ONLY },
+  { prefix: "/overview", roles: STAFF_ONLY },
   { prefix: "/events", roles: STAFF_ONLY },
   { prefix: "/rca", roles: STAFF_ONLY },
   { prefix: "/graph", roles: STAFF_ONLY },
@@ -97,11 +95,11 @@ export function routeAllowed(path: string, role: Role): boolean {
 
 /** The landing surface for a role — where an unauthorized redirect sends them.
  *  Must be a route the role can actually view, or the shell's guard bounces them straight
- *  back and the user redirect-loops: `/management` is STAFF_ONLY, so compliance needs its own
+ *  back and the user redirect-loops: `/overview` is STAFF_ONLY, so compliance needs its own
  *  home rather than the default. */
 export function roleHome(role: Role): string {
   if (role === "field_worker") return "/briefs";
   if (role === "compliance") return "/compliance";
-  if (role === "demo") return "/copilot";
-  return "/management";
+  if (role === "demo") return "/overview";
+  return "/overview";
 }

@@ -44,6 +44,11 @@ const nextConfig: NextConfig = {
   // landing page. Dev-only overlay, so this has no effect on the production build.
   devIndicators: false,
 
+  // The overview used to live at /management; old bookmarks and links keep working.
+  async redirects() {
+    return [{ source: "/management/:path*", destination: "/overview/:path*", permanent: true }];
+  },
+
   async headers() {
     return [
       {

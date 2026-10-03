@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Conflict } from "@/lib/types";
 import { relativeTime, slaCountdown } from "@/lib/utils";
 import { Button, StatusBadge, type TableColumn } from "@/components/ui";
-import { DemoGate } from "@/components/demo-gate";
 
 /** Conflict re-mapped so it satisfies DataTable's Record constraint. */
 export type ConflictRow = Pick<Conflict, keyof Conflict>;
@@ -108,11 +107,11 @@ export function buildColumns(nowMs: number, busy: string | null, onResolve: (c: 
         ) : r.track === "engineering" ? (
           <Link href="/governance/moc" className="whitespace-nowrap text-caption font-semibold text-accent hover:underline">MoC required ›</Link>
         ) : (
-          <DemoGate>
+          <>
             <Button variant="primary" onClick={() => onResolve(r)} disabled={busy === r.conflict_id} className="h-8 whitespace-nowrap px-3 text-caption">
               {busy === r.conflict_id ? "Resolving…" : "Resolve"}
             </Button>
-          </DemoGate>
+          </>
         ),
     },
   ];

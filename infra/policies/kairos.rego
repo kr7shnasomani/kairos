@@ -18,14 +18,15 @@ default allow := false
 # admin          — full access (the Go connector's internal key resolves to admin)
 # compliance     — read-only access to compliance cockpit, non-conformance and audit trail
 # demo           — the public one-click demo identity: sees everything an admin sees (every read_*
-#                  action, including audit, governance and events) and may use the Copilot, but
-#                  every write is DENIED BY DEFAULT. The cloud stores have no backup, so it gets an
-#                  explicit allow list of the three writes that only append to the audit log and
-#                  touch nothing shared: `synthesize`, `rca_pack`, `answer_feedback`. It is NOT in
-#                  the catch-all at the bottom, so a write route added later is refused until it
-#                  is named here on purpose. Never ack a brief (it closes the shared brief), rate a
-#                  brief ("incorrect" queues a confidence recheck on the source documents), ingest,
-#                  supersede, resolve, promote, approve or edit.
+#                  action, including audit, governance and events) and works the showcase plant.
+#                  It holds the write actions below, but policy is only the coarse layer: the API
+#                  refuses a demo write that is not on a route in `tenant.DEMO_WRITE_ALLOWED`
+#                  (`dependencies.demo_write_fence`), and each of those handlers refuses a target that
+#                  is not a showcase row (`services/tenant.py` guard_*). The cloud stores have no
+#                  backup, so real data is protected by those guards, not by this table alone, and a
+#                  test fails when an allowed route has no guard. Admin-only routes (the model gate,
+#                  provider probes) stay closed to it: it satisfies a role gate that names engineer
+#                  or reliability, never one that names only admin.
 #
 # The read_* grants mirror the frontend route table (`components/use-role.ts`) — each role holds
 # exactly the actions its permitted routes actually call. Keep the two in step: a route that a
@@ -46,7 +47,7 @@ roles := {
     "engineer":      {"read_search", "read_briefs", "ack_brief", "ingest_document", "ingest_event", "read_governance", "read_nonconformance", "read_compliance", "read_audit", "read_documents", "read_events", "resolve_admin_conflict", "read_assets", "write_assets"},
     "reliability":   {"read_search", "read_briefs", "ingest_document", "ingest_event", "read_governance", "read_nonconformance", "read_compliance", "read_audit", "read_documents", "read_events", "promote_quarantine", "countersign_brief", "resolve_admin_conflict", "read_assets"},
     "compliance":    {"read_search", "read_compliance", "read_audit", "read_nonconformance", "read_events"},
-    "demo":          {"read_search", "read_briefs", "read_assets", "read_documents", "read_events", "read_compliance", "read_nonconformance", "read_audit", "read_governance", "read_other", "synthesize", "rca_pack", "answer_feedback"},
+    "demo":          {"read_search", "read_briefs", "read_assets", "read_documents", "read_events", "read_compliance", "read_nonconformance", "read_audit", "read_governance", "read_other", "synthesize", "rca_pack", "answer_feedback", "write_api", "ingest_document", "ingest_event", "write_assets", "promote_quarantine", "resolve_admin_conflict"},
     "admin":         {"*"},
 }
 

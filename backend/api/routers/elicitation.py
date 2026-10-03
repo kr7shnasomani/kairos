@@ -14,7 +14,7 @@ from typing import Any
 
 import shortuuid
 import structlog
-from fastapi import APIRouter, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from api.config import get_settings
@@ -23,7 +23,9 @@ from api.dependencies import (
     OffboardingSessionIdDep,
     SupabaseDep,
     TemporalDep,
+    demo_llm_budget,
 )
+from api.services import tenant
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -58,7 +60,7 @@ def _is_subject(session: dict, user: dict) -> bool:
 
 
 def _is_staff_or_subject(session: dict, user: dict) -> bool:
-    return user.get("role") in _STAFF_ROLES or _is_subject(session, user)
+    return tenant.has_role(user, *_STAFF_ROLES) or _is_subject(session, user)
 
 
 def _require_staff_or_subject(session: dict, user: dict) -> None:
@@ -103,7 +105,7 @@ class ElicitationResponseRequest(BaseModel):
     submitted_by: str | None = None
 
 
-@router.post("/trigger", summary="Trigger micro-interview if elicitation conditions are met")
+@router.post("/trigger", dependencies=[Depends(demo_llm_budget)], summary="Trigger micro-interview if elicitation conditions are met")
 async def trigger_elicitation(
     payload: ElicitationTriggerRequest,
     current_user: CurrentUserDep,
@@ -111,13 +113,16 @@ async def trigger_elicitation(
     temporal: TemporalDep,
 ) -> dict:
     reasons: list[str] = []
+    tenant.guard_asset(current_user, payload.asset_id)
 
     # (a) Rare failure code — count occurrences in operational_events for this equipment class
     events_result = await asyncio.to_thread(
-        lambda: supabase.table("operational_events")
-        .select("event_id", count="exact")
-        .filter("payload->>failure_code", "eq", payload.failure_code)
-        .execute()
+        lambda: tenant.scope_site(
+            supabase.table("operational_events")
+            .select("event_id", count="exact")
+            .filter("payload->>failure_code", "eq", payload.failure_code),
+            current_user,
+        ).execute()
     )
     failure_count = events_result.count or 0
     if failure_count < 3:
@@ -125,10 +130,12 @@ async def trigger_elicitation(
 
     # (b) Resolution time above 90th percentile for this failure type
     times_result = await asyncio.to_thread(
-        lambda: supabase.table("operational_events")
-        .select("payload")
-        .filter("payload->>failure_code", "eq", payload.failure_code)
-        .execute()
+        lambda: tenant.scope_site(
+            supabase.table("operational_events")
+            .select("payload")
+            .filter("payload->>failure_code", "eq", payload.failure_code),
+            current_user,
+        ).execute()
     )
     times = [
         float(r["payload"]["resolution_time_hours"])
@@ -218,6 +225,7 @@ async def submit_responses(
     )
     session = session_result.data[0] if session_result.data else {}
     asset_id = session.get("asset_id") or ""
+    tenant.guard_asset(current_user, asset_id)
     questions = session.get("questions") or []
 
     workflow_id = f"elicitation-store-{work_order_id}-{shortuuid.uuid()[:6]}"
@@ -242,7 +250,7 @@ async def submit_responses(
 
 
 @router.post(
-    "/{work_order_id}/voice",
+    "/{work_order_id}/voice", dependencies=[Depends(demo_llm_budget)],
     summary="Ingest voice note — transcribe via Whisper, route to quarantine",
     status_code=status.HTTP_202_ACCEPTED,
 )
@@ -255,6 +263,7 @@ async def ingest_voice_note(
 ) -> dict:
     settings = get_settings()
     submitted_by = current_user.get("user_id", "unknown")
+    await tenant.guard_work_order(supabase, current_user, work_order_id)
 
     # Reject oversized audio as early as the body allows: the declared size first, then a running
     # total over 1 MB chunks, so an oversized or unsized upload is never held in memory whole.
@@ -366,16 +375,19 @@ async def create_offboarding_programme(
     supabase: SupabaseDep,
 ) -> dict:
     # Role gate
-    if current_user.get("role") not in ("engineer", "admin"):
+    if not tenant.has_role(current_user, "engineer", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="engineer or admin role required")
+    tenant.guard_person(current_user, payload.personnel_id)
 
     # Identify top equipment classes from this person's WO history
     wo_result = await asyncio.to_thread(
-        lambda: supabase.table("operational_events")
-        .select("asset_id")
-        .eq("event_type", "work_order_created")
-        .filter("payload->>assigned_technician_id", "eq", payload.personnel_id)
-        .execute()
+        lambda: tenant.scope_site(
+            supabase.table("operational_events")
+            .select("asset_id")
+            .eq("event_type", "work_order_created")
+            .filter("payload->>assigned_technician_id", "eq", payload.personnel_id),
+            current_user,
+        ).execute()
     )
     asset_ids = list({row["asset_id"] for row in (wo_result.data or []) if row.get("asset_id")})
 
@@ -397,7 +409,7 @@ async def create_offboarding_programme(
     # Pad to 6 with site-wide common classes if needed
     if len(equipment_families) < 6:
         all_assets = await asyncio.to_thread(
-            lambda: supabase.table("assets").select("equipment_class").execute()
+            lambda: tenant.scope(supabase.table("assets").select("equipment_class"), current_user, "asset_id").execute()
         )
         site_classes = [(r["equipment_class"] or "").strip().upper() for r in (all_assets.data or []) if r.get("equipment_class")]
         for cls in site_classes:
@@ -470,11 +482,12 @@ async def list_offboarding_programmes(
     supabase: SupabaseDep,
 ) -> dict:
     result = await asyncio.to_thread(
-        lambda: supabase.table("offboarding_sessions")
-        .select("id, personnel_id, personnel_email, retirement_date, total_sessions, status, created_at")
-        .neq("status", "cancelled")
-        .order("created_at", desc=True)
-        .execute()
+        lambda: tenant.scope(
+            supabase.table("offboarding_sessions")
+            .select("id, personnel_id, personnel_email, retirement_date, total_sessions, status, created_at")
+            .neq("status", "cancelled"),
+            current_user, "personnel_id", nullable=True,
+        ).order("created_at", desc=True).execute()
     )
     # Staff see every programme; anyone else sees only the one about them.
     sessions = [s for s in (result.data or []) if _is_staff_or_subject(s, current_user)]
@@ -560,6 +573,7 @@ async def submit_offboarding_responses(
     submitter = current_user.get("user_id", "unknown")
     # Only staff or the person being offboarded may answer or complete a programme item.
     await _guard_session(supabase, session_id, current_user)
+    await tenant.guard_row(supabase, current_user, "offboarding_sessions", session_id)
     # Fetch the specific session item
     item_result = await asyncio.to_thread(
         lambda: supabase.table("offboarding_session_items")
@@ -587,7 +601,9 @@ async def submit_offboarding_responses(
     # Insert into quarantine_items with offboarding_response input_type
     quarantine_row = await asyncio.to_thread(
         lambda: supabase.table("quarantine_items").insert({
-            "asset_id": None,
+            # A showcase programme's answers hang off the showcase placeholder asset, so they are
+            # recognised as showcase and never reach a real reviewer's queue.
+            "asset_id": tenant.DEMO_GENERAL_ASSET if tenant.is_demo_id(session.get("personnel_id")) else None,
             "content": json.dumps(payload.responses),
             "input_type": "offboarding_response",
             "submitted_by": submitter,

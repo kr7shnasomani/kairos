@@ -1,0 +1,35 @@
+[
+  {
+    "id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "personnel_id": "DEMO-EXPERT-SKHANNA",
+    "personnel_email": "suresh.khanna@veridian.example",
+    "retirement_date": "2026-11-17",
+    "total_sessions": 6,
+    "session_interval_days": 7,
+    "status": "in_progress",
+    "created_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-09T14:07:35.667928+00:00"
+  },
+  {
+    "id": "2406d71e-d558-5f17-97cd-6387f3017954",
+    "personnel_id": "DEMO-EXPERT-MDALAL",
+    "personnel_email": "mohan.dalal@veridian.example",
+    "retirement_date": "2026-12-07",
+    "total_sessions": 5,
+    "session_interval_days": 10,
+    "status": "in_progress",
+    "created_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-20T14:07:35.667928+00:00"
+  },
+  {
+    "id": "b49eec65-5b2c-505a-81d4-85072ddc5256",
+    "personnel_id": "DEMO-EXPERT-VRAMAN",
+    "personnel_email": "vasanthi.raman@veridian.example",
+    "retirement_date": "2026-12-27",
+    "total_sessions": 5,
+    "session_interval_days": 12,
+    "status": "scheduled",
+    "created_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-30T14:07:35.667928+00:00"
+  }
+]

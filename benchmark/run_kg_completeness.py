@@ -46,6 +46,7 @@ from neo4j import AsyncGraphDatabase
 from supabase import create_client
 
 from api.config import Settings
+from api.services import tenant
 from api.services.corpus import is_test_artifact
 
 # Minted by `POST /governance/quarantine/{id}/promote` for field knowledge with no vault document.
@@ -70,7 +71,11 @@ async def measure() -> dict:
     settings = Settings()
     sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
 
-    rows = sb.table("documents").select("document_id, status, document_type, file_name").execute().data or []
+    all_rows = sb.table("documents").select("document_id, status, document_type, file_name, access_tags").execute().data or []
+    # Showcase documents (services/tenant.py) are a separate plant; the real linkage is measured without them,
+    # and so is their half of the graph: an edge citing one resolves to a showcase record, not a dangling id.
+    showcase_docs = {r["document_id"] for r in all_rows if tenant.is_demo_document(r)}
+    rows = [r for r in all_rows if r["document_id"] not in showcase_docs]
     # Superseded documents are excluded by design: Layer 2 keeps them forever, and retrieval
     # already filters them out, so requiring them to stay linked would measure the vault's memory
     # rather than the graph's coverage.
@@ -107,6 +112,7 @@ async def measure() -> dict:
                 doc_sources.setdefault(r["doc"], set()).update(r["source_labels"] or [])
     finally:
         await driver.close()
+    edge_docs -= showcase_docs
 
     linked = {d for d in active if d in edge_docs}
     unlinked = set(active) - linked

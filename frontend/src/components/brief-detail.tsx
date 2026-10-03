@@ -7,7 +7,6 @@ import type { Brief } from "@/lib/types";
 import { priorityMeta, relativeTime, triggerLabel } from "@/lib/utils";
 import { ackBrief, countersignBrief, sendBriefFeedback } from "@/lib/api";
 import { PROMOTE_ROLES, useMe } from "./use-role";
-import { DemoGate } from "./demo-gate";
 import { AuthorityBadge, Button, EvidenceLineage, PageHeader, SourceChip, StatusBadge } from "./ui";
 
 import { Icon } from "@/components/icon";
@@ -225,7 +224,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
       </div>
 
       {/* PTW dual sign-off or standard ack */}
-      <DemoGate>
+      <>
       <section data-testid="brief-acknowledgment" className="rounded-xl border border-line bg-surface p-5 shadow-sm lg:sticky lg:top-6" aria-label="Acknowledgment">
         {isComplete ? (
           <div className="space-y-2">
@@ -327,7 +326,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
           </div>
         )}
       </section>
-      </DemoGate>
+      </>
         </aside>
       </div>
     </div>

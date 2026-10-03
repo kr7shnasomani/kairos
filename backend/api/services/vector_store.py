@@ -17,6 +17,7 @@ from qdrant_client.models import (
 )
 
 from api.config import Settings
+from api.services import tenant
 
 log = structlog.get_logger(__name__)
 
@@ -29,9 +30,12 @@ class VectorStoreService:
     - kairos_documents: full document chunks for RAG-style retrieval
     """
 
-    def __init__(self, client: AsyncQdrantClient, settings: Settings):
+    def __init__(self, client: AsyncQdrantClient, settings: Settings, include_demo: bool = False):
         self.client = client
         self.settings = settings
+        # True only for the demo role (and for work on a showcase asset): the documents search then
+        # also covers the `_demo` sibling collection. Real callers never see showcase chunks.
+        self.include_demo = include_demo
 
     async def ensure_collections(self) -> None:
         """Creates Qdrant collections if they don't exist. Called at startup."""
@@ -77,7 +81,22 @@ class VectorStoreService:
             points=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]),
         )
 
-    async def search(
+    async def search(self, collection: str, query_vector: list[float], limit: int = 10, **kwargs: Any) -> list[dict[str, Any]]:
+        """Semantic search; for the demo role also the showcase sibling of the documents collection.
+
+        The sibling is queried separately and merged by score. A missing sibling (the showcase has
+        not been loaded) is skipped, so the demo role degrades to the real data, never to an error.
+        """
+        hits = await self._search_one(collection, query_vector, limit=limit, **kwargs)
+        if self.include_demo and collection == self.settings.QDRANT_COLLECTION_DOCUMENTS:
+            try:
+                hits += await self._search_one(tenant.demo_store(collection), query_vector, limit=limit, **kwargs)
+            except Exception as exc:  # noqa: BLE001 — absent until the showcase is loaded
+                log.info("qdrant.demo_collection_unavailable", error=str(exc)[:120])
+            hits.sort(key=lambda h: h["score"], reverse=True)
+        return hits[:limit]
+
+    async def _search_one(
         self,
         collection: str,
         query_vector: list[float],

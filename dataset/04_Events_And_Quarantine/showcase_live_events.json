@@ -1,0 +1,127 @@
+[
+  {
+    "route": "/events/work-order",
+    "body": {
+      "source_system": "CMMS",
+      "site_id": "SITE_DEMO",
+      "work_order_id": "WO-DEMO-0800",
+      "asset_id": "DEMO-P-1101A",
+      "failure_code": "SEAL-FAIL",
+      "description": "Mechanical seal leaking at the gland, product visible on the baseplate",
+      "priority": "critical",
+      "assigned_technician_id": "00000000-0000-0000-0000-00000000de40",
+      "occurred_at": "2026-10-03T11:16:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/work-order",
+    "body": {
+      "source_system": "CMMS",
+      "site_id": "SITE_DEMO",
+      "work_order_id": "WO-DEMO-0801",
+      "asset_id": "DEMO-K-2101A",
+      "failure_code": "VIBE-HIGH",
+      "description": "Vibration alarm on the drive end, reading above the alarm setpoint",
+      "priority": "high",
+      "assigned_technician_id": "00000000-0000-0000-0000-00000000de40",
+      "occurred_at": "2026-10-03T07:16:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/work-order",
+    "body": {
+      "source_system": "CMMS",
+      "site_id": "SITE_DEMO_B",
+      "work_order_id": "WO-DEMO-0802",
+      "asset_id": "DEMO-P-6101C",
+      "failure_code": "BEARING-FAIL",
+      "description": "Drive end bearing running hot, temperature trending up over the shift",
+      "priority": "high",
+      "assigned_technician_id": "Ravi Solanki",
+      "occurred_at": "2026-10-03T03:16:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/ptw",
+    "body": {
+      "source_system": "PTW_WORKFLOW",
+      "site_id": "SITE_DEMO",
+      "ptw_id": "PTW-DEMO-0800",
+      "work_area": "CDU pump house",
+      "asset_ids": [
+        "DEMO-P-1101A",
+        "DEMO-XV-1101",
+        "DEMO-XV-1102"
+      ],
+      "ptw_type": "isolation",
+      "issuing_engineer_id": "00000000-0000-0000-0000-00000000de40",
+      "occurred_at": "2026-10-03T11:36:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/ptw",
+    "body": {
+      "source_system": "PTW_WORKFLOW",
+      "site_id": "SITE_DEMO",
+      "ptw_id": "PTW-DEMO-0801",
+      "work_area": "HDT compressor house",
+      "asset_ids": [
+        "DEMO-K-2101A",
+        "DEMO-XV-2101"
+      ],
+      "ptw_type": "high_pressure_line",
+      "issuing_engineer_id": "00000000-0000-0000-0000-00000000de40",
+      "occurred_at": "2026-10-03T08:01:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/alarm",
+    "body": {
+      "source_system": "DCS",
+      "site_id": "SITE_DEMO",
+      "alarm_id": "ALM-DEMO-0800",
+      "asset_id": "DEMO-H-1101",
+      "alarm_tag": "TT-1102-HH",
+      "severity": "critical",
+      "alarm_description": "Heater outlet temperature high high",
+      "acknowledged_by": "Kiran Joshi",
+      "occurred_at": "2026-10-03T13:06:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/shift-handover",
+    "body": {
+      "source_system": "SHIFT_SCHEDULING",
+      "site_id": "SITE_DEMO",
+      "outgoing_shift_lead_id": "Kiran Joshi",
+      "incoming_shift_lead_id": "00000000-0000-0000-0000-00000000de40",
+      "handover_time": "2026-10-03T13:26:35.377098+00:00",
+      "occurred_at": "2026-10-03T13:26:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/tag-out",
+    "body": {
+      "source_system": "CMMS",
+      "site_id": "SITE_DEMO_B",
+      "asset_id": "DEMO-P-6101C",
+      "tag_out_reason": "Bearing replacement",
+      "performed_by": "Ravi Solanki",
+      "occurred_at": "2026-10-03T04:16:35.377098+00:00"
+    }
+  },
+  {
+    "route": "/events/inspection-complete",
+    "body": {
+      "source_system": "EAM_INSPECTION",
+      "site_id": "SITE_DEMO",
+      "asset_id": "DEMO-PSV-1102",
+      "inspection_type": "bench test",
+      "result": "conditional",
+      "performed_by": "Gopal Iyer",
+      "findings": "Re-test after seat lapping within tolerance, monitor next quarter.",
+      "confidence": 0.85,
+      "occurred_at": "2026-10-03T09:16:35.377098+00:00"
+    }
+  }
+]

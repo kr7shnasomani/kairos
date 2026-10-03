@@ -48,7 +48,7 @@ describe("SlaPage", () => {
     mocks.getSlaReport.mockResolvedValue({ data: makeReport(), source: "live" });
     render(<SlaPage />);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "SLA escalations" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "SLA Escalations" })).toBeInTheDocument());
     expect(screen.getByTestId("sla-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("sla-summary")).toHaveClass("grid-cols-2", "lg:grid-cols-4");
     expect(screen.getByTestId("sla-charts")).toHaveClass("lg:grid-cols-2");

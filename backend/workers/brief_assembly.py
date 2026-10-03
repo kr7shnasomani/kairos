@@ -4,7 +4,6 @@ Fires after LATE_ARRIVAL_WINDOW_MINUTES countdown, allowing correlated events fo
 same asset to be batched into a single contextual brief.
 """
 
-import asyncio
 import sys
 
 sys.path.insert(0, "/app")

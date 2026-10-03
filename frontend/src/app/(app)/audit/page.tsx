@@ -202,7 +202,6 @@ export default function AuditPage() {
   return (
     <div data-testid="audit-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Assure"
         title="Audit Trail"
         lede="Every governance decision, delivery, ingestion, and model-gate result, in chronological order. Immutable by design."
         actions={

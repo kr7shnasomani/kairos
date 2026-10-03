@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarContent } from "./app-shell";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/management",
+  usePathname: () => "/overview",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 

@@ -1,0 +1,449 @@
+[
+  {
+    "item_id": "f4e5ad1b-c5f7-5a35-bab5-01dccc081b45",
+    "asset_id": "DEMO-XV-1101",
+    "content": "Isolation valve XV-1101 handwheel is mounted on the opposite side to the P&ID. Operators may close the wrong one in an emergency.",
+    "input_type": "deviation_flag",
+    "submitted_by": "Ravi Solanki",
+    "submitted_at": "2026-09-27T08:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {
+      "reason": "physical deviation from drawing"
+    },
+    "sla_due_at": "2026-09-28T08:16:35.377098+00:00",
+    "escalated_at": "2026-09-28T08:19:35.377098+00:00"
+  },
+  {
+    "item_id": "884c9df1-b9fd-5429-b08a-f8a38cb1855f",
+    "asset_id": "DEMO-PSV-1102",
+    "content": "Relief valve PSV-1102 discharge line has an extra elbow that is not on the drawing.",
+    "input_type": "deviation_flag",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-09-28T05:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {
+      "reason": "physical deviation from drawing"
+    },
+    "sla_due_at": "2026-09-29T05:16:35.377098+00:00",
+    "escalated_at": "2026-09-29T05:19:35.377098+00:00"
+  },
+  {
+    "item_id": "3ba208fe-f6da-53dd-b4a2-b1d81d315676",
+    "asset_id": "DEMO-P-1103A",
+    "content": "Pump P-1103A suction strainer is missing from the as-built line.",
+    "input_type": "deviation_flag",
+    "submitted_by": "Dinesh Patel",
+    "submitted_at": "2026-09-29T02:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {
+      "reason": "physical deviation from drawing"
+    },
+    "sla_due_at": "2026-09-30T02:16:35.377098+00:00",
+    "escalated_at": "2026-09-30T02:19:35.377098+00:00"
+  },
+  {
+    "item_id": "6bed815e-dd72-5f16-b43c-dce39cd9bcb0",
+    "asset_id": "DEMO-V-2102",
+    "content": "Level glass on V-2102 is fitted with a different range from the one in the data sheet.",
+    "input_type": "deviation_flag",
+    "submitted_by": "Ravi Solanki",
+    "submitted_at": "2026-09-29T23:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {
+      "reason": "physical deviation from drawing"
+    },
+    "sla_due_at": "2026-09-30T23:16:35.377098+00:00",
+    "escalated_at": "2026-09-30T23:19:35.377098+00:00"
+  },
+  {
+    "item_id": "941f29b0-b2d5-5cc0-9940-eef886e53ba0",
+    "asset_id": "DEMO-XV-6101",
+    "content": "Tank outlet valve XV-6101 has a bypass that is not shown on the tank farm P&ID.",
+    "input_type": "deviation_flag",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-09-30T20:16:35.377098+00:00",
+    "reviewer_id": "Dr. Sunita Rao",
+    "review_status": "disputed",
+    "reviewed_at": "2026-10-02T02:16:35.377098+00:00",
+    "work_order_id": null,
+    "session_context": {
+      "reason": "physical deviation from drawing"
+    },
+    "sla_due_at": "2026-10-01T20:16:35.377098+00:00",
+    "escalated_at": "2026-10-01T20:19:35.377098+00:00"
+  },
+  {
+    "item_id": "3dae3748-abbf-52a5-b7ad-a2052d024dca",
+    "asset_id": "DEMO-E-1104",
+    "content": "Exchanger E-1104 vent is plumbed to the open drain, drawing shows the closed drain.",
+    "input_type": "deviation_flag",
+    "submitted_by": "Dinesh Patel",
+    "submitted_at": "2026-10-01T17:16:35.377098+00:00",
+    "reviewer_id": "Dr. Sunita Rao",
+    "review_status": "archived",
+    "reviewed_at": "2026-10-02T23:16:35.377098+00:00",
+    "work_order_id": null,
+    "session_context": {
+      "reason": "physical deviation from drawing"
+    },
+    "sla_due_at": "2026-10-02T17:16:35.377098+00:00",
+    "escalated_at": "2026-10-02T17:19:35.377098+00:00"
+  },
+  {
+    "item_id": "aef03a32-4ea7-5e22-8755-1e45796daa40",
+    "asset_id": "DEMO-P-1101A",
+    "content": "Yeah so when I pulled the seal this time the face wear was heavier on one side. It looked like the pump had been running at low flow for a while, I think the minimum flow valve is not opening fully when the flow drops.",
+    "input_type": "voice_note",
+    "submitted_by": "Ravi Solanki",
+    "submitted_at": "2026-09-25T06:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0040",
+    "session_context": {
+      "language": "en",
+      "confidence": 0.86,
+      "filename": "voice-note-1.wav"
+    },
+    "sla_due_at": "2026-09-30T06:16:35.377098+00:00",
+    "escalated_at": "2026-09-30T06:19:35.377098+00:00"
+  },
+  {
+    "item_id": "abe0be52-834e-57c0-8814-3e8223d86bad",
+    "asset_id": "DEMO-K-2101A",
+    "content": "The compressor has been louder than normal at night for about two weeks, a kind of knock at the second stage. The vibration gauge is still green so I did not raise it.",
+    "input_type": "voice_note",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-09-26T08:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0041",
+    "session_context": {
+      "language": "en",
+      "confidence": 0.83,
+      "filename": "voice-note-2.wav"
+    },
+    "sla_due_at": "2026-10-01T08:16:35.377098+00:00",
+    "escalated_at": "2026-10-01T08:19:35.377098+00:00"
+  },
+  {
+    "item_id": "678e83f1-4b2c-5c32-a1e0-a5a5eed61e5d",
+    "asset_id": "DEMO-FV-1103",
+    "content": "That control valve sticks on small moves, I have been nudging it by hand during the night shift. The positioner looks fine, I think it is the packing.",
+    "input_type": "voice_note",
+    "submitted_by": "Kiran Joshi",
+    "submitted_at": "2026-09-27T10:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0042",
+    "session_context": {
+      "language": "en",
+      "confidence": 0.8,
+      "filename": "voice-note-3.wav"
+    },
+    "sla_due_at": "2026-10-02T10:16:35.377098+00:00",
+    "escalated_at": "2026-10-02T10:19:35.377098+00:00"
+  },
+  {
+    "item_id": "2679682d-8369-54c9-991c-c1217bb282ab",
+    "asset_id": "DEMO-P-3101B",
+    "content": "Bearing housing on the standby cooling water pump runs hotter than its sister pump. Same oil, same load. I would swap the bearing next time it is down.",
+    "input_type": "voice_note",
+    "submitted_by": "Ravi Solanki",
+    "submitted_at": "2026-09-28T12:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0043",
+    "session_context": {
+      "language": "en",
+      "confidence": 0.77,
+      "filename": "voice-note-4.wav"
+    },
+    "sla_due_at": "2026-10-03T12:16:35.377098+00:00",
+    "escalated_at": "2026-10-03T12:19:35.377098+00:00"
+  },
+  {
+    "item_id": "6ea1d060-35f6-56d9-8424-cbfe9f661d4f",
+    "asset_id": "DEMO-T-6102",
+    "content": "The radar gauge on tank six one oh two reads about ten millimetres above the dip. It has done that since the last calibration.",
+    "input_type": "voice_note",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-09-29T14:16:35.377098+00:00",
+    "reviewer_id": "Farhan Qureshi",
+    "review_status": "disputed",
+    "reviewed_at": "2026-09-30T20:16:35.377098+00:00",
+    "work_order_id": "WO-DEMO-0044",
+    "session_context": {
+      "language": "en",
+      "confidence": 0.74,
+      "filename": "voice-note-5.wav"
+    },
+    "sla_due_at": "2026-10-04T14:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "ed073fe1-ef32-5920-954d-429ef7c8c3ab",
+    "asset_id": "DEMO-E-1107A",
+    "content": "Overhead condenser outlet temperature is creeping up. Probably fouling, we last cleaned it before the monsoon.",
+    "input_type": "voice_note",
+    "submitted_by": "Kiran Joshi",
+    "submitted_at": "2026-09-30T16:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0045",
+    "session_context": {
+      "language": "en",
+      "confidence": 0.71,
+      "filename": "voice-note-6.wav"
+    },
+    "sla_due_at": "2026-10-05T16:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "a26c4321-10c5-540b-8e77-789350fc11f3",
+    "asset_id": "DEMO-P-1102B",
+    "content": "Noticed a faint smell of product near the pump base during rounds. Could be a small seal weep, not sure yet.",
+    "input_type": "field_observation",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-09-29T20:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-04T20:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "78f28f93-0554-50a5-9961-fa4f887a8010",
+    "asset_id": "DEMO-P-1104A",
+    "content": "Pressure gauge on the discharge line reads a little low compared with the panel. Might be the gauge, not the pump.",
+    "input_type": "field_observation",
+    "submitted_by": "Meera Pillai",
+    "submitted_at": "2026-09-30T07:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-05T07:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "65459cf7-c9bc-5d43-8550-d7932217a9c5",
+    "asset_id": "DEMO-C-1101",
+    "content": "Paint blistering on the lower shell. Looks cosmetic but it is new since the last turnaround.",
+    "input_type": "field_observation",
+    "submitted_by": "Anita Chauhan",
+    "submitted_at": "2026-09-30T18:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-05T18:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "a9614a63-9ca3-566c-aa3b-2ac3168353bc",
+    "asset_id": "DEMO-E-1105",
+    "content": "Lagging is damp at the elbow after the heavy rain. Wanted it written down in case it points to a leak.",
+    "input_type": "field_observation",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-10-01T05:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-06T05:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "ab31e0ca-ddf5-54d6-9882-d31a5bb2867f",
+    "asset_id": "DEMO-P-1101B",
+    "content": "The standby pump started rough this morning. It settled after a few minutes but I want someone to listen to it.",
+    "input_type": "field_observation",
+    "submitted_by": "Meera Pillai",
+    "submitted_at": "2026-10-01T16:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-06T16:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "520a8e24-a027-55d0-8f3e-c6a655c08212",
+    "asset_id": "DEMO-P-6101A",
+    "content": "Gland drip rate looks higher than last week. Still within what I would call normal.",
+    "input_type": "field_observation",
+    "submitted_by": "Anita Chauhan",
+    "submitted_at": "2026-10-02T03:16:35.377098+00:00",
+    "reviewer_id": "Dr. Sunita Rao",
+    "review_status": "archived",
+    "reviewed_at": "2026-10-03T09:16:35.377098+00:00",
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-07T03:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "3a1bbccf-b574-5b2e-bef1-72c4cc783739",
+    "asset_id": "DEMO-E-1106",
+    "content": "Sample cooler is running warm. Cooling water flow might be restricted.",
+    "input_type": "field_observation",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-10-02T14:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {},
+    "sla_due_at": "2026-10-07T14:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "80a13fe8-f240-5328-bd24-26b12559c701",
+    "asset_id": "DEMO-P-1101A",
+    "content": "[{\"question_index\": 0, \"question\": \"Was the barrier fluid level normal before the seal failed?\", \"answer\": \"The barrier pot level had been dropping slowly for about a week.\"}, {\"question_index\": 1, \"question\": \"What was the discharge flow in the hour before the failure?\", \"answer\": \"Flow was around 95 cubic metres an hour, below what the manual says is the minimum.\"}]",
+    "input_type": "elicitation_response",
+    "submitted_by": "Ravi Solanki",
+    "submitted_at": "2026-09-29T00:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0042",
+    "session_context": {
+      "questions": [
+        "Was the barrier fluid level normal before the seal failed?",
+        "What was the discharge flow in the hour before the failure?"
+      ],
+      "work_order_id": "WO-DEMO-0042"
+    },
+    "sla_due_at": "2026-10-04T00:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "7d61fd1d-6270-50d6-b002-54d34b7e4899",
+    "asset_id": "DEMO-K-2101A",
+    "content": "[{\"question_index\": 0, \"question\": \"What did the vibration trend look like in the week before the alarm?\", \"answer\": \"It crept up about a millimetre per second a day.\"}, {\"question_index\": 1, \"question\": \"Was anything changed on the lube oil system?\", \"answer\": \"We changed the oil filter two weeks earlier.\"}]",
+    "input_type": "elicitation_response",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-09-29T19:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0044",
+    "session_context": {
+      "questions": [
+        "What did the vibration trend look like in the week before the alarm?",
+        "Was anything changed on the lube oil system?"
+      ],
+      "work_order_id": "WO-DEMO-0044"
+    },
+    "sla_due_at": "2026-10-04T19:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "f121aeef-a3d3-5618-84b3-93fa2ce22a1a",
+    "asset_id": "DEMO-P-3101B",
+    "content": "[{\"question_index\": 0, \"question\": \"How long did the standby pump run before the bearing alarm?\", \"answer\": \"It had run about nine days.\"}, {\"question_index\": 1, \"question\": \"Was the pump alignment checked after the last overhaul?\", \"answer\": \"We checked it cold but not hot. The thermal growth may have thrown it off.\"}]",
+    "input_type": "elicitation_response",
+    "submitted_by": "Ravi Solanki",
+    "submitted_at": "2026-09-30T14:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0047",
+    "session_context": {
+      "questions": [
+        "How long did the standby pump run before the bearing alarm?",
+        "Was the pump alignment checked after the last overhaul?"
+      ],
+      "work_order_id": "WO-DEMO-0047"
+    },
+    "sla_due_at": "2026-10-05T14:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "3b096188-45b8-5aaa-bdba-36a42d9d121f",
+    "asset_id": "DEMO-FV-1103",
+    "content": "[{\"question_index\": 0, \"question\": \"Did the deadband change after the packing was tightened?\", \"answer\": \"Yes, it improved for a few days and then came back.\"}, {\"question_index\": 1, \"question\": \"How often has the valve been stroked by hand?\", \"answer\": \"Most nights, I would say.\"}]",
+    "input_type": "elicitation_response",
+    "submitted_by": "Imran Sheikh",
+    "submitted_at": "2026-10-01T09:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": "WO-DEMO-0051",
+    "session_context": {
+      "questions": [
+        "Did the deadband change after the packing was tightened?",
+        "How often has the valve been stroked by hand?"
+      ],
+      "work_order_id": "WO-DEMO-0051"
+    },
+    "sla_due_at": "2026-10-06T09:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "43086736-1041-5705-96d2-36d03b528a6b",
+    "asset_id": "DEMO-GENERAL",
+    "content": "[{\"question_index\": 0, \"answer\": \"P-1101A. The seal pot level drops and the gland warms up in the first ten minutes.\"}]",
+    "input_type": "offboarding_response",
+    "submitted_by": "Dr. Sunita Rao",
+    "submitted_at": "2026-10-01T02:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {
+      "questions": [
+        "Which pump on the plant is the most sensitive to running below minimum flow, and how can you tell?"
+      ],
+      "equipment_family": "PUMPS AND SEALS",
+      "personnel_id": "DEMO-EXPERT-SKHANNA"
+    },
+    "sla_due_at": "2026-10-06T02:16:35.377098+00:00",
+    "escalated_at": null
+  },
+  {
+    "item_id": "0d011a80-d9b0-5274-85fc-ac0265a056b0",
+    "asset_id": "DEMO-GENERAL",
+    "content": "[{\"question_index\": 0, \"answer\": \"The skin thermocouples on the third pass. They move before the outlet temperature does.\"}]",
+    "input_type": "offboarding_response",
+    "submitted_by": "Dr. Sunita Rao",
+    "submitted_at": "2026-10-01T17:16:35.377098+00:00",
+    "reviewer_id": null,
+    "review_status": "pending",
+    "reviewed_at": null,
+    "work_order_id": null,
+    "session_context": {
+      "questions": [
+        "What do you watch first when a heater pass flow trips?"
+      ],
+      "equipment_family": "HEATERS",
+      "personnel_id": "DEMO-EXPERT-MDALAL"
+    },
+    "sla_due_at": "2026-10-06T17:16:35.377098+00:00",
+    "escalated_at": null
+  }
+]

@@ -9,9 +9,8 @@ export default function SettingsPage() {
     <div data-testid="settings-workspace" className="mx-auto max-w-[1400px]">
       <SystemTabs />
       <PageHeader
-        eyebrow="Account"
-        title="System settings"
-        lede="Display settings for this browser. Stored locally, so they follow the device, not the account."
+        title="System Settings"
+        lede="Tune how Kairos looks on this device: theme and contrast. These are stored in this browser, so they follow the device and not your account."
       />
 
       {/* One hairline panel: section list and content share a border, no floating gap. */}

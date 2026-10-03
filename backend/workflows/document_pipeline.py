@@ -87,6 +87,28 @@ def _get_neo4j_driver():
     return _neo4j_driver
 
 
+async def _is_showcase(document_id: str, metadata: dict[str, Any]) -> bool:
+    """True when this document belongs to the showcase plant, so it is indexed into the `_demo`
+    sibling collection and index instead of the real ones (`services/tenant.py`).
+
+    Decided in the activity, not the workflow, so the workflow's recorded history is unchanged.
+    The asset in the metadata is the cheap signal; otherwise the vault row's `access_tags.site_id`
+    (stamped from the uploader's site) is read once.
+    """
+    from api.services import tenant
+
+    if tenant.is_demo_document(metadata):
+        return True
+    try:
+        row = await asyncio.to_thread(
+            lambda: _get_supabase().table("documents").select("access_tags").eq("document_id", document_id).limit(1).execute()
+        )
+        return tenant.is_demo_document((row.data or [{}])[0])
+    except Exception as exc:  # noqa: BLE001 — a failed lookup must not stop real indexing
+        log.warning("index.showcase_lookup_failed", document_id=document_id, error=str(exc))
+        return False
+
+
 def _get_qdrant_client():
     """Returns a cached async Qdrant client — one per worker process."""
     global _qdrant_client
@@ -530,11 +552,14 @@ async def link_to_graph(
 
     doc_meta = await asyncio.to_thread(
         lambda: supabase.table("documents")
-        .select("document_type, occurred_at, ingested_at")
+        .select("document_type, occurred_at, ingested_at, access_tags")
         .eq("document_id", document_id)
         .execute()
     )
     doc_row = doc_meta.data[0] if doc_meta.data else {}
+    from api.services import tenant
+
+    showcase_doc = tenant.is_demo_id(asset_id) or tenant.is_demo_document(doc_row)
     doc_type = doc_row.get("document_type", "unknown")
     await graph.merge_document_node(document_id, {"authority_level": authority_level, "document_type": doc_type})
 
@@ -543,10 +568,12 @@ async def link_to_graph(
     cb = CircuitBreakerService(supabase)
 
     candidate_ids = list({
-        ner.resolve_asset_tag(e.get("text", ""), alias_map)
-        for e in entities
-        if e.get("entity_type") == "ASSET_TAG" and e.get("confidence", 0.0) >= 0.7
-    } - {None})
+        cid for cid in (
+            ner.resolve_asset_tag(e.get("text", ""), alias_map)
+            for e in entities
+            if e.get("entity_type") == "ASSET_TAG" and e.get("confidence", 0.0) >= 0.7
+        ) if cid and tenant.link_allowed(showcase_doc, cid)
+    })
 
     asset_class_map: dict[str, str] = {}
     if candidate_ids:
@@ -811,6 +838,12 @@ async def link_to_graph(
             continue
 
         canonical_id = ner.resolve_asset_tag(raw_tag, alias_map)
+        if not tenant.link_allowed(showcase_doc, canonical_id):
+            # The extractor sometimes names an asset the page does not (its own prompt example, EQ-101, turned up
+            # in 290 short showcase documents). A showcase document never links to a real asset: no edge, and no
+            # review item for a tag that is not in the document.
+            log.info("link.cross_plant_skipped", document_id=document_id, tag=raw_tag, asset_id=canonical_id)
+            continue
 
         if canonical_id:
             # Resolved: write unverified edge — human must verify before it becomes canonical
@@ -976,6 +1009,9 @@ async def index_vectors(
     asset_id = metadata.get("asset_id")
     authority_level = metadata.get("authority_level", 5)
     chunks_indexed = 0
+    from api.services import tenant
+
+    collection = tenant.store_for(settings.QDRANT_COLLECTION_DOCUMENTS, demo=await _is_showcase(document_id, metadata))
 
     for idx, chunk_text in enumerate(chunks):
         vector = await llm.embed(chunk_text)
@@ -989,7 +1025,7 @@ async def index_vectors(
 
         point_id = str(uuid_lib.uuid5(uuid_lib.NAMESPACE_URL, f"{document_id}:{idx}"))
         await vector_store.upsert(
-            collection=settings.QDRANT_COLLECTION_DOCUMENTS,
+            collection=collection,
             point_id=point_id,
             vector=vector,
             payload={
@@ -1032,10 +1068,15 @@ async def index_text(
     es = _get_es_client()
     search_svc = SearchEngineService(es, settings)
 
+    from api.services import tenant
+
     await search_svc.ensure_indices()
+    showcase = await _is_showcase(document_id, metadata)
+    if showcase:
+        await search_svc.ensure_demo_indices()
 
     await es.index(
-        index=settings.ELASTICSEARCH_INDEX_DOCUMENTS,
+        index=tenant.store_for(settings.ELASTICSEARCH_INDEX_DOCUMENTS, demo=showcase),
         id=document_id,
         document={
             "document_id": document_id,

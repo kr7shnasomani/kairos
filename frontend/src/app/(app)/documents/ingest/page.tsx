@@ -1,6 +1,5 @@
 "use client";
 
-import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { DocumentPipelineStage, DocumentStatus } from "@/lib/types";
@@ -126,7 +125,7 @@ export default function IngestPage() {
         Documents
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Knowledge" title="Ingest a document" lede="The entry point of the platform. Files are stored byte-for-byte in the immutable vault and run through the extraction pipeline. Identical files (same SHA-256) are de-duplicated, never re-stored." />
+      <PageHeader className="mt-4" title="Ingest a Document" lede="The entry point of the platform. Files are stored byte-for-byte in the immutable vault and run through the extraction pipeline. Identical files (same SHA-256) are de-duplicated, never re-stored." />
 
       {!canIngest && (
         <div className="mt-5 rounded-xl border border-line bg-surface p-5 text-body text-muted">
@@ -136,7 +135,7 @@ export default function IngestPage() {
       )}
 
       {canIngest && !result && (
-        <DemoGate>
+        <>
         <form data-testid="ingest-intake" onSubmit={handleSubmit} className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.65fr)] lg:items-start">
           <div className="rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
             <div className="mb-4">
@@ -216,7 +215,7 @@ export default function IngestPage() {
             </ol>
           </aside>
         </form>
-        </DemoGate>
+        </>
       )}
 
       {result && (

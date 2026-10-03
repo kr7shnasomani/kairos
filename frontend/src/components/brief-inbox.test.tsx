@@ -78,3 +78,27 @@ describe("held briefs", () => {
     expect(screen.queryByText(/EQ-101/)).not.toBeInTheDocument();
   });
 });
+
+describe("governor card", () => {
+  afterEach(cleanup);
+  const queued = {
+    brief_id: "b-q", asset_id: null, recipient_user_id: "u1", priority: "normal" as const, trigger_event_type: "shift_handover",
+    headline: "Shift handover: 1 open work orders, 2 alarms", body: "", action_items: [], warnings: [], sources: [],
+    requires_countersignature: false, delivery_frozen: false, delivered_at: "2026-08-22T10:00:00Z",
+  };
+
+  it("is a calm summary below the ceiling and keeps the queue closed until asked for", () => {
+    render(<BriefInbox response={{ ...response, suppressed_count: 10, suppressed_held: [queued] }} />);
+    expect(screen.getByText("10 routine briefs queued")).toBeInTheDocument();
+    expect(screen.getByLabelText("Brief delivery governor")).not.toHaveClass("bg-danger");
+    expect(screen.queryByText(/governor suppressed/)).not.toBeInTheDocument();
+    const details = screen.getByText("Show the queued briefs").closest("details")!;
+    expect(details).not.toHaveAttribute("open");
+    expect(details).toHaveTextContent("Shift handover: 1 open work orders, 2 alarms");
+  });
+
+  it("shows a brief with no asset by its headline alone", () => {
+    render(<BriefInbox response={{ ...response, suppressed_count: 1, suppressed_held: [queued] }} />);
+    expect(screen.getByText("Show the queued briefs").closest("details")!.textContent).not.toMatch(/DEMO-GENERAL|null/);
+  });
+});

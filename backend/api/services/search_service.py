@@ -81,7 +81,7 @@ class SearchService:
         """
         Parallel retrieval from ES + Qdrant + Neo4j.
         Deduplicates by document_id (lowest authority_level wins, then highest score).
-        Re-ranks: authority_level ASC, relevance_score DESC.
+        Keeps the `limit` most relevant, ordered authority_level ASC, relevance_score DESC.
         """
         query = expand_query_aliases(query, await self.confirmed_aliases())
         query_vector = await self.llm.embed(query, task="retrieval.query")
@@ -210,7 +210,7 @@ class SearchService:
         self, ranked_lists: list[list[SearchResult]], limit: int, asset_id: str | None = None
     ) -> list[SearchResult]:
         """
-        Reciprocal Rank Fusion across the retrieval sources, then authority-first ordering.
+        Reciprocal Rank Fusion across the retrieval sources, then relevance picks the `limit` documents and authority-first ordering presents them.
 
         RRF replaces a direct comparison of ES relevance against Qdrant cosine similarity:
         those are different scales (BM25 is unbounded, cosine is 0–1), so comparing them
@@ -218,9 +218,10 @@ class SearchService:
         each source's *rank*, which is scale-free, and rewards documents that more than one
         source agrees on.
 
-        Authority stays the primary sort key — a regulatory source outranking a field
+        Authority stays the primary *ordering* key — a regulatory source outranking a field
         observation is a deliberate safety property, not a relevance artefact. RRF decides
-        order *within* an authority level, which is where the scale bug actually did damage.
+        order *within* an authority level, which is where the scale bug actually did damage, and
+        which documents are kept at all.
         """
         fused: dict[str, float] = {}
         best: dict[str, SearchResult] = {}
@@ -232,20 +233,20 @@ class SearchService:
                 fused[r.document_id] = fused.get(r.document_id, 0.0) + 1.0 / (_RRF_K + rank)
                 best[r.document_id] = self._better(best.get(r.document_id), r)
 
-        # Within an authority level, the queried asset's own documents come before documents that
-        # are only graph-linked to it (filed under another asset, or none). Without this a linked
-        # shift log could push the asset's own closeout form out of `limit` (benchmark Q36).
+        # Which documents make the cut is decided by relevance; authority only orders the ones that did.
+        # Cutting after an authority sort let a dozen manuals and procedures of a well-documented asset fill
+        # the window and push out the one record that answered the question (its dated failure history, an
+        # L5 card, sat 8th of 9 and never reached synthesis although it was the second most relevant).
+        # Within an authority level the queried asset's own documents come before documents that are only
+        # graph-linked to it (filed under another asset, or none): benchmark Q36.
+        kept = sorted(best.values(), key=lambda x: -fused.get(x.document_id, 0.0))[:limit]
         ranked = sorted(
-            best.values(),
-            key=lambda x: (
-                x.authority_level,
-                bool(asset_id) and x.asset_id != asset_id,
-                -fused.get(x.document_id, 0.0),
-            ),
+            kept,
+            key=lambda x: (x.authority_level, bool(asset_id) and x.asset_id != asset_id, -fused.get(x.document_id, 0.0)),
         )
         for r in ranked:
             r.relevance_score = round(fused.get(r.document_id, 0.0), 6)
-        return ranked[:limit]
+        return ranked
 
     @staticmethod
     def _better(existing: SearchResult | None, candidate: SearchResult) -> SearchResult:

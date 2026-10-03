@@ -513,8 +513,9 @@ export async function getComplianceGaps(framework?: string): Promise<Fetched<Com
 // --- Assets ---
 // Fixture assets carry a richer shape; project them onto the live list envelope.
 
-export async function getAssets(): Promise<Fetched<AssetsResponse>> {
-  const data = await getJson<AssetsResponse>("/assets/?limit=100");
+export async function getAssets(limit = 100): Promise<Fetched<AssetsResponse>> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  const data = await getJson<AssetsResponse>(`/assets/?${qs}`);
   // An empty list is a valid live state: the page renders its own empty state.
   if (!data.items) throw new Error("no items");
   return { data, source: "live" };
@@ -811,8 +812,10 @@ export async function getRcaPack(
 }
 
 // --- Documents (GET /documents/, /documents/{id}) ---
-export async function getDocuments(): Promise<Fetched<DocumentsResponse>> {
-  const data = await getJson<DocumentsResponse>("/documents/?limit=50");
+export async function getDocuments(opts: { limit?: number; offset?: number; status?: string } = {}): Promise<Fetched<DocumentsResponse>> {
+  const { limit = 50, offset = 0, status } = opts;
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset), ...(status ? { doc_status: status } : {}) });
+  const data = await getJson<DocumentsResponse>(`/documents/?${qs}`);
   // An empty list is a valid live state: the page renders its own empty state.
   if (!data.items) throw new Error("no items");
   return { data, source: "live" };
@@ -1178,7 +1181,7 @@ export function ackEvent(eventId: string, body: { user_id: string; role: string;
   return postJson<{ status: string }>(`/events/${encodeURIComponent(eventId)}/ack`, body);
 }
 
-export async function getGovernorState(userId: string): Promise<Fetched<GovernorEventState | null>> {
+export async function getGovernorState(): Promise<Fetched<GovernorEventState | null>> {
   const data = await getJson<GovernorEventState>(`/briefs/governor/status`);
   return { data, source: "live" };
 }
@@ -1770,13 +1773,9 @@ export async function getAssetDetail(id: string): Promise<Fetched<AssetDetailVie
   return { data: view, source: "live" };
 }
 
-// --- Knowledge graph (Tasks 15-16, GET /assets/{id}/knowledge?as_of=) -------
-
-function graphNodeKind(target: Record<string, unknown>): string {
-  const t = target as Record<string, unknown>;
-  const labels = Array.isArray(t.labels) ? (t.labels as string[])[0] : undefined;
-  return String(t.__type__ ?? t.type ?? labels ?? "Concept");
-}
+// --- Knowledge graph (GET /assets/{id}/graph?as_of=) -------------------------------------------
+// The asset and its surroundings two hops out: hierarchy, documents, the people and organisations they
+// mention, the other assets they cover, and the latest events. The server builds nodes and edges.
 
 const LABEL_ACRONYMS: Record<string, string> = { oem: "OEM", pid: "P&ID", ptw: "PTW", sop: "SOP", moc: "MoC", rca: "RCA", eam: "EAM", sb: "SB" };
 
@@ -1790,70 +1789,26 @@ export function readableNodeLabel(raw: string): string {
   return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
-function graphNodeLabel(target: Record<string, unknown>): string {
-  const t = target as Record<string, string>;
-  const raw = t.name ?? t.title ?? t.asset_id ?? t.document_id ?? t.event_type ?? "Unknown";
-  return readableNodeLabel(raw);
+interface AssetGraphResponse {
+  asset_id: string;
+  as_of: string;
+  nodes: GraphNodeData[];
+  edges: GraphEdgeData[];
+  excluded_test_documents?: number;
 }
-
-function graphNodeId(target: Record<string, unknown>, i: number): string {
-  const t = target as Record<string, string>;
-  return String(t.id ?? t.asset_id ?? t.document_id ?? t.name ?? `node-${i}`);
-}
-
-function normVerifStatus(v: unknown): GraphEdgeData["verification_status"] {
-  if (v === "verified" || v === "disputed" || v === "superseded") return v;
-  return "unverified";
-}
-
 
 export async function getKnowledgeGraph(
   assetId: string,
   asOf?: string
 ): Promise<Fetched<KnowledgeGraphData>> {
   const qs = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
-  const raw = await getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(assetId)}/knowledge${qs}`);
-  const nodesMap = new Map<string, GraphNodeData>();
-  nodesMap.set(assetId, { id: assetId, label: assetId, kind: "Asset", properties: {} });
-  // Dedupe edges — re-ingested datasets leave many identical KNOWLEDGE_EDGEs
-  // (same target + relationship + document + validity). Left raw they stack as
-  // overlapping lines and repeat endlessly in the validity-window list.
-  const edges: GraphEdgeData[] = [];
-  const seenEdge = new Set<string>();
-  raw.facts.forEach((f, i) => {
-    const tId = graphNodeId(f.target, i);
-    const e = f.edge as Record<string, unknown>;
-    const label = String(e.parameter ?? e.relationship_type ?? "related_to");
-    const sig = `${tId}|${label}|${String(e.document_id ?? "")}|${String(e.valid_from ?? "")}`;
-    if (seenEdge.has(sig)) return;
-    seenEdge.add(sig);
-    if (!nodesMap.has(tId)) {
-      nodesMap.set(tId, {
-        id: tId,
-        label: graphNodeLabel(f.target),
-        kind: graphNodeKind(f.target),
-        properties: f.target,
-      });
-    }
-    edges.push({
-      id: `e-${i}`,
-      source: assetId,
-      target: tId,
-      label,
-      authority_level: Number(e.authority_level ?? 5),
-      verification_status: normVerifStatus(e.verification_status),
-      valid_from: String(e.valid_from ?? "2020-01-01T00:00:00"),
-      valid_to: String(e.valid_to ?? "9999-12-31T23:59:59"),
-      document_id: String(e.document_id ?? ""),
-      confidence: Number(e.confidence ?? 0),
-    });
-  });
+  const raw = await getJson<AssetGraphResponse>(`/assets/${encodeURIComponent(assetId)}/graph${qs}`, 8000);
   return {
     data: {
-      asset_id: assetId,
+      asset_id: raw.asset_id,
       as_of: raw.as_of,
-      nodes: Array.from(nodesMap.values()),
-      edges,
+      nodes: raw.nodes.map((n) => ({ ...n, label: n.kind === "Document" ? readableNodeLabel(n.label) : n.label })),
+      edges: raw.edges,
       excluded_test_documents: raw.excluded_test_documents ?? 0,
     },
     source: "live",

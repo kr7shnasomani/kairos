@@ -15,18 +15,17 @@ export function BriefCard({ brief }: { brief: Brief }) {
     <Link
       href={`/briefs/${brief.brief_id}`}
       className={cn(
-        "group grid grid-cols-[4px_1fr] overflow-hidden rounded-xl border transition-colors",
+        "group overflow-hidden rounded-xl border transition-colors",
         isFrozen
           ? "border-[color-mix(in_srgb,var(--info)_35%,var(--line))] bg-[color-mix(in_srgb,var(--info)_5%,var(--surface))] opacity-80"
           : "border-line bg-surface hover:border-[color-mix(in_srgb,var(--accent)_40%,var(--line))]",
         brief.acknowledged_at && "opacity-60",
       )}
+      // Urgency is a thin tint on the whole border, not a bar down one side.
+      style={!isFrozen && (brief.priority === "critical" || brief.priority === "high")
+        ? { borderColor: `color-mix(in srgb, ${p.color} 55%, var(--line))` }
+        : undefined}
     >
-      <span
-        aria-hidden="true"
-        style={{ background: isFrozen ? "var(--info)" : p.color }}
-        className={isFrozen ? "opacity-50" : ""}
-      />
       <div className="flex flex-col gap-2 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">

@@ -1,7 +1,6 @@
 "use client";
 
 // Operational event detail: payload, correlated events, acknowledge action.
-import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import type { OperationalEvent, EventPriority } from "@/lib/types";
@@ -74,7 +73,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           <div data-testid="event-summary" className="mt-4 rounded-xl border border-line bg-surface px-4 py-5 shadow-sm sm:px-5">
             <PageHeader
               compact
-              eyebrow={event.event_id}
               title={triggerLabel(event.event_type)}
               lede={
                 <>
@@ -182,11 +180,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
               <div className="border-t border-line px-4 py-4 sm:px-5">
                 {!event.acknowledged ? (
-                  <DemoGate>
+                  <>
                     <Button className="h-11 w-full" variant="primary" onClick={handleAck} disabled={acking}>
                       {acking ? "Acknowledging…" : "Acknowledge event"}
                     </Button>
-                  </DemoGate>
+                  </>
                 ) : event.acknowledged_by ? (
                   <p className="text-caption text-verified">Acknowledged by <span className="font-semibold">{event.acknowledged_by}</span></p>
                 ) : (

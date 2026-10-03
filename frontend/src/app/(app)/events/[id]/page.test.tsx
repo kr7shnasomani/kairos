@@ -58,14 +58,14 @@ describe("EventDetailPage", () => {
     expect(await screen.findByText(/Acknowledged by/)).toHaveTextContent("operator-7");
   });
 
-  it("disables acknowledging for the demo account", async () => {
+  it("lets the demo account acknowledge, on the showcase plant", async () => {
     mocks.getEvent.mockResolvedValue({ data: event, source: "live" });
     mocks.getMe.mockResolvedValue({ user_id: "demo-1", role: "demo" });
+    mocks.ackEvent.mockResolvedValue({ acknowledged_by: "demo-1" });
 
     await act(async () => render(<EventDetailPage params={Promise.resolve({ id: event.event_id })} />));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Acknowledge event" })).toBeDisabled());
-    expect(mocks.ackEvent).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Acknowledge event" })).toBeEnabled());
   });
 
   it("shows an error with retry when the fetch fails, instead of loading forever", async () => {

@@ -75,10 +75,10 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 | 27 | `/governance/model-gate` | Run enqueues; history; **per-asset-class rows** | ✅ renders, 0 console errors · ✅ **run verified 2026-08-23** — `validity: VALID`, **0 fallbacks, all 27 extractions on NIM**, **F1 0.7816** on 40 scored labels (12 `COMPONENT` disclosed as unscoreable), per-asset-class **and** per-document-type rows. Took ~12 min, not the ~2.5 min this row used to claim: the old figure was a run in which almost every call failed fast on a 429. Closing this row took four fixes (run-validity recording, a run-scoped extraction cache, a raised Celery time limit, and taxonomy alignment) — see status.md Known Pitfalls |
 | 28 | `/governance/circuit-breaker` | Live breaker state, **no fabricated rows** | ✅ 0 fabricated |
 | 29 | `/governance/sla` | Escalation report shape | ✅ renders, 0 console errors |
-| 30 | `/management` | Exec KPI view | ✅ **API-verified 2026-08-17** — all 5 core fetches 200 (conflicts · quarantine · SLA · compliance · events) |
-| 31 | `/management/coverage` | Knowledge-coverage heatmap | ✅ renders, 0 console errors |
-| 32 | `/management/cross-site` | Honest "single-site" state; **eyebrow must not say Layer 13** | ✅ **fixed** — eyebrow was 'Layer 13' (no such layer); now 'Overview · All sites' (2026-09-22 plain-language pass). Honest empty state correct. |
-| 33 | `/management/plant-state` | Plant state set/read (admin) | ✅ **API-verified 2026-08-17** **write path** — normal → set `turnaround` (202) → read back `turnaround` → restored to `normal`. Full round trip. |
+| 30 | `/overview` | Exec KPI view | ✅ **API-verified 2026-08-17** — all 5 core fetches 200 (conflicts · quarantine · SLA · compliance · events) |
+| 31 | `/overview/coverage` | Knowledge-coverage heatmap | ✅ renders, 0 console errors |
+| 32 | `/overview/cross-site` | Honest "single-site" state; **eyebrow must not say Layer 13** | ✅ **fixed** — eyebrow was 'Layer 13' (no such layer); now 'Overview · All sites' (2026-09-22 plain-language pass). Honest empty state correct. |
+| 33 | `/overview/plant-state` | Plant state set/read (admin) | ✅ **API-verified 2026-08-17** **write path** — normal → set `turnaround` (202) → read back `turnaround` → restored to `normal`. Full round trip. |
 | 34 | `/projects` | Project/procurement registry | ✅ renders, 0 console errors |
 | 35 | `/offboarding` | Programme list | ✅ **API-verified 2026-08-17** — 1 programme; detail returns 5 session items, and `/offboarding/{id}/questions` returns **5 questions per item** (the items themselves don't carry questions — that is the documented shape) |
 | 36 | `/offboarding/[sessionId]` | Session items, responses (6 s timeout) | ✅ **API-verified 2026-08-17** **write path** — response submitted → 200 with a `quarantine_item_id`, so the answer lands in quarantine, never the canonical graph |
@@ -98,8 +98,8 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 | admin | everything incl. `/system-health` | ✅ partial |
 | engineer | staff surfaces; **cannot** promote quarantine or countersign | ✅ countersign 403 confirmed |
 | reliability | staff + promote + countersign | ✅ countersign confirmed |
-| field_worker | `/briefs` + `/field/*`; gated URLs redirect to `/briefs` | ✅ **verified** — home `/briefs`; `/governance`, `/system-health`, `/management`, `/compliance`, `/audit` all redirect to `/briefs` |
-| compliance | `/compliance` + `/audit` only; home = `/compliance`, no redirect loop | ✅ **verified** (token asserted) — home `/compliance`; `/compliance` + `/audit` accessible; `/governance`, `/management`, `/system-health` redirect to `/compliance`. `/briefs` + `/assets` open, which is by design (unlisted paths are open to all authed). |
+| field_worker | `/briefs` + `/field/*`; gated URLs redirect to `/briefs` | ✅ **verified** — home `/briefs`; `/governance`, `/system-health`, `/overview`, `/compliance`, `/audit` all redirect to `/briefs` |
+| compliance | `/compliance` + `/audit` only; home = `/compliance`, no redirect loop | ✅ **verified** (token asserted) — home `/compliance`; `/compliance` + `/audit` accessible; `/governance`, `/overview`, `/system-health` redirect to `/compliance`. `/briefs` + `/assets` open, which is by design (unlisted paths are open to all authed). |
 
 ## C. Cross-cutting
 

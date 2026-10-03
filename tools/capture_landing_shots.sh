@@ -30,15 +30,17 @@ VW=1440
 VH=810
 DPR=2
 
-# route|filename
+# route|filename|optional JS run in the page before the shot (and the seconds to wait after it).
+# An empty form or a graph below the fold is not a product shot: the RCA page needs an
+# investigation run, and the graph canvas has to be scrolled into view.
 SHOTS=(
-  "/management|workspace"
-  "/rca|reliability"
+  "/overview|workspace"
+  "/rca|reliability|[...document.querySelectorAll('button')].find(b => /EQ-101, mechanical seal failure/.test(b.textContent)).click()|12"
   "/briefs|field"
   "/compliance|compliance"
   "/governance/quarantine|turnaround"
   "/offboarding|offboarding"
-  "/graph|graph"
+  "/graph|graph|document.querySelector('.react-flow').scrollIntoView({block: 'center'})|4"
 )
 
 mkdir -p "$OUT"
@@ -61,8 +63,7 @@ agent-browser eval "localStorage.setItem('kairos-token', '$TOKEN')" >/dev/null
 
 failures=0
 for entry in "${SHOTS[@]}"; do
-  route="${entry%%|*}"
-  name="${entry##*|}"
+  IFS='|' read -r route name action wait_s <<< "$entry"
 
   agent-browser open "$BASE$route" >/dev/null
   agent-browser wait --load networkidle >/dev/null 2>&1 || true
@@ -92,6 +93,11 @@ for entry in "${SHOTS[@]}"; do
     echo "  FAILED $name.png: $route rendered the 404 page"
     failures=$((failures + 1))
     continue
+  fi
+
+  if [ -n "${action:-}" ]; then
+    agent-browser eval "$action" >/dev/null
+    sleep "${wait_s:-3}"
   fi
 
   agent-browser screenshot "$OUT/$name.png" >/dev/null

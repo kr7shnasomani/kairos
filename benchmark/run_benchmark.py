@@ -459,8 +459,10 @@ async def _kg_completeness() -> str:
                 rec = await (await sess.run(cypher)).single()
                 return int(rec[key]) if rec and rec[key] is not None else 0
 
-            assets = await scalar("MATCH (a:Asset) RETURN count(a) AS n", "n")
-            linked = await scalar("MATCH (a:Asset)-[:KNOWLEDGE_EDGE]-() RETURN count(DISTINCT a) AS n", "n")
+            assets = await scalar("MATCH (a:Asset) WHERE NOT a.asset_id STARTS WITH 'DEMO-' RETURN count(a) AS n", "n")
+            linked = await scalar(
+                "MATCH (a:Asset)-[:KNOWLEDGE_EDGE]-() WHERE NOT a.asset_id STARTS WITH 'DEMO-' RETURN count(DISTINCT a) AS n", "n"
+            )
             edges = await scalar("MATCH ()-[k:KNOWLEDGE_EDGE]->() RETURN count(k) AS n", "n")
             verified = await scalar("MATCH ()-[k:KNOWLEDGE_EDGE]->() WHERE k.verification_status='verified' RETURN count(k) AS n", "n")
     finally:

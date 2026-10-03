@@ -53,7 +53,7 @@ export default function RcaPage() {
 
   return (
     <div data-testid="rca-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader eyebrow="Analyze" title="RCA workspace" lede="Assemble failure timelines, evidence-weighted hypotheses, and supporting documents for engineering review." />
+      <PageHeader title="RCA Workspace" lede="Pick an asset and a failure and the system assembles the timeline of events, the documents that bear on it, and ranked hypotheses weighted by evidence authority, ready for an engineer to review. Nothing here is a verdict." />
 
       <form
         data-testid="rca-builder"

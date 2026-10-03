@@ -40,7 +40,7 @@ const API_GROUPS: { group: string; layer: string; endpoint: string; probe: strin
 // Display names come from providerName(), the one map the Copilot badge uses too.
 const MODELS: { key: string; sub: string }[] = [
   { key: "tokenfactory", sub: "LLM synthesis, nemotron-3-super-120b" },
-  { key: "nim", sub: "LLM synthesis fallback, nemotron-3-super-120b" },
+  { key: "nim", sub: "LLM synthesis fallback, nemotron-3-ultra-550b" },
   { key: "gemini", sub: "LLM fallback, gemini-2.5-flash-lite" },
   { key: "jina", sub: "Embeddings, powers Search & RAG" },
   { key: "groq", sub: "Whisper STT, voice notes" },
@@ -111,7 +111,7 @@ export default function SystemHealthPage() {
       if (!alive) return;
       const ok = !!u && ADMIN_VIEW_ROLES.includes(u.role);
       setAuthorized(ok);
-      if (!ok) router.replace(u?.role === "field_worker" ? "/briefs" : "/management");
+      if (!ok) router.replace(u?.role === "field_worker" ? "/briefs" : "/overview");
     });
     return () => { alive = false; };
   }, [router]);
@@ -180,9 +180,8 @@ export default function SystemHealthPage() {
     <div className="w-full">
       <SystemTabs />
       <PageHeader
-        eyebrow="Infrastructure"
         title="System Health"
-        lede="Live status of every API surface and datastore, grouped by domain. Auto-refreshes every 30 seconds."
+        lede="Live status and response time of every API surface and datastore behind the platform, grouped by domain. It refreshes every 30 seconds, so a slow or failing dependency shows up here before anyone notices it in a page."
         actions={
           <button
             type="button"

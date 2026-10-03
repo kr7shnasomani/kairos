@@ -1,6 +1,5 @@
 "use client";
 
-import { DemoGate } from "@/components/demo-gate";
 import { useState } from "react";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { submitVoiceNote } from "@/lib/api";
@@ -36,13 +35,12 @@ export default function VoiceCapturePage() {
   }
 
   return (
-    <DemoGate>
+    <>
     <div data-testid="field-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         className="mb-6"
-        eyebrow="Field capture"
-        title="Voice note"
-        lede="Record a field observation. Transcribed by Whisper and routed to the knowledge quarantine for engineering review."
+        title="Voice Note"
+        lede="Say what you see in your own words. The recording is transcribed, tagged to the equipment you name, and held in the review queue until an engineer verifies it, so a field observation is never lost and never trusted blindly."
       />
 
       <div data-testid="field-voice-layout" className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -146,6 +144,6 @@ export default function VoiceCapturePage() {
         </aside>
       </div>
     </div>
-    </DemoGate>
+    </>
   );
 }

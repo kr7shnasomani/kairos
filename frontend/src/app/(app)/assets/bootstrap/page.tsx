@@ -1,6 +1,5 @@
 "use client";
 
-import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -95,9 +94,8 @@ export default function BootstrapPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Operate"
-        title="Asset identity confirmation"
-        lede="Review provisional equipment records and approve only identities that belong to a canonical asset."
+        title="Asset Identity Confirmation"
+        lede="Equipment found in documents and work orders arrives as a provisional record. Check each one against the registry and approve only the identities that really are an existing canonical asset, so the same pump never ends up under two names."
       />
 
       <div data-testid="identity-guardrail" className="mt-5 flex gap-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
@@ -160,11 +158,11 @@ export default function BootstrapPage() {
                     <p className="truncate font-medium text-ink">{p.equipment_class.replaceAll("_", " ")}</p>
                     <p className="mt-0.5 truncate">Source: {(p.eam_source || "manual").replaceAll("_", " ")}</p>
                   </div>
-                  <DemoGate>
+                  <>
                     <Button className="h-11 w-full md:h-9 md:w-auto" variant="primary" disabled={busy === p.asset_id || !me} onClick={() => confirm(p)}>
                       {busy === p.asset_id ? "Confirming…" : "Confirm identity"}
                     </Button>
-                  </DemoGate>
+                  </>
                 </div>
               ))}
             </div>
@@ -207,12 +205,12 @@ export default function BootstrapPage() {
                       </div>
                       <StatusBadge tone="info" dot={false}>{Math.round(a.confidence * 100)}% match</StatusBadge>
                     </div>
-                    <DemoGate>
+                    <>
                       <div className="grid grid-cols-2 gap-2 md:flex">
                         <Button variant="ghost" className="h-11 md:h-9" disabled={busy === key} aria-label={`Confirm alias ${a.alias}`} onClick={() => decideAlias(a, true)}>Confirm</Button>
                         <Button variant="ghost" className="h-11 text-danger md:h-9" disabled={busy === key} aria-label={`Reject alias ${a.alias}`} onClick={() => decideAlias(a, false)}>Reject</Button>
                       </div>
-                    </DemoGate>
+                    </>
                   </div>
                 );
               })}

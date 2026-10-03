@@ -325,13 +325,13 @@ tooling folders. It goes over SSH, so no GitHub token is needed.
 **First time only** (copies your `.env` too, which section 9 then switches to production):
 
 ```bash
-rsync -az --delete --exclude '.git' --exclude 'frontend' --exclude 'node_modules' --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.ruff_cache' --exclude '.claude' --exclude '.agents' --exclude 'supabase/.temp' --exclude 'docker-compose.override.yml' -e "ssh -i ~/.ssh/kairos-aws.pem" /Users/apple/Documents/Projects/kairos/ ubuntu@kairos-deterium.duckdns.org:~/kairos/
+rsync -az --delete --exclude '.git' --exclude 'frontend' --exclude 'node_modules' --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.ruff_cache' --exclude '.claude' --exclude '.agents' --exclude 'docker-compose.override.yml' -e "ssh -i ~/.ssh/kairos-aws.pem" /Users/apple/Documents/Projects/kairos/ ubuntu@kairos-deterium.duckdns.org:~/kairos/
 ```
 
 **Every update after that** (never touches the server's `.env` or its backups):
 
 ```bash
-rsync -az --delete --exclude '.git' --exclude 'frontend' --exclude 'node_modules' --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.ruff_cache' --exclude '.claude' --exclude '.agents' --exclude 'supabase/.temp' --exclude 'docker-compose.override.yml' --exclude '.env' --exclude '.env.bak.*' -e "ssh -i ~/.ssh/kairos-aws.pem" /Users/apple/Documents/Projects/kairos/ ubuntu@kairos-deterium.duckdns.org:~/kairos/
+rsync -az --delete --exclude '.git' --exclude 'frontend' --exclude 'node_modules' --exclude '__pycache__' --exclude '.pytest_cache' --exclude '.ruff_cache' --exclude '.claude' --exclude '.agents' --exclude 'docker-compose.override.yml' --exclude '.env' --exclude '.env.bak.*' -e "ssh -i ~/.ssh/kairos-aws.pem" /Users/apple/Documents/Projects/kairos/ ubuntu@kairos-deterium.duckdns.org:~/kairos/
 ```
 
 **About `.env`:**
@@ -474,7 +474,7 @@ rebuild, not just recreate: `docker compose -f docker-compose.yml --profile prod
 
 The Vercel project `kairos` already exists and is linked to `kr7shnasomani/kairos` with **Root Directory**
 `frontend`; every push to `main` deploys. For a new project, import the repository at
-**https://vercel.com/new** and set the root directory to `frontend`.
+**https://vercel.com/new** and set the root directory to `frontend`. The public `/docs` section is built from the repository's `docs/` folder (`../docs` from the root directory), so keep **Include source files outside of the Root Directory in the Build Step** enabled (Project Settings, General); `tools/deploy_frontend.sh` uploads the whole repository, so a CLI deploy has it either way.
 
 **1. Environment variables (Production):**
 

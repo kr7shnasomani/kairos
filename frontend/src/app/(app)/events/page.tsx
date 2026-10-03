@@ -3,19 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts";
 import type { OperationalEvent } from "@/lib/types";
 import { getEvents } from "@/lib/api";
 import { useFetch } from "@/lib/use-fetch";
 import { getMe } from "@/lib/auth";
 import { useRole, RESOLVE_ROLES, visibleTo } from "@/components/use-role";
-import { DemoGate } from "@/components/demo-gate";
 import { Button, DataTable, EmptyState, FilterTabs, PageHeader, StatusBadge, statusTone, type TableColumn } from "@/components/ui";
-import { AXIS, ChartContainer, GRID, TONE_VAR, TOOLTIP } from "@/components/charts";
+import { AXIS, ChartContainer, GRID, TOOLTIP } from "@/components/charts";
 import { useReducedMotion } from "@/lib/motion";
 import { relativeTime, triggerLabel } from "@/lib/utils";
 import { label } from "@/lib/labels";
 import { EmitPanel } from "./_components/emit-panel";
+import { CHART_DAYS, dailyByPriority } from "./_components/daily-volume";
 
 import { Icon } from "@/components/icon";
 /** OperationalEvent re-mapped so it satisfies DataTable's Record constraint. */
@@ -27,24 +27,34 @@ type EventRow = Pick<OperationalEvent, keyof OperationalEvent>;
 const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, normal: 2, low: 3 };
 const rankOf = (p: string) => PRIORITY_RANK[p] ?? 99;
 
-/** statusTone() returns the full Tone union; TONE_VAR only carries the chart
- *  subset. `validation` has no chart colour, so it falls back to neutral.
- *  Colour comes from the VALUE, never from its index in the series — a `low`
- *  event arriving first in the payload must not render as danger red. */
-const priorityFill = (priority: string) => {
-  const tone = statusTone(priority);
-  return tone === "validation" ? TONE_VAR.neutral : TONE_VAR[tone];
+/** Chart colour comes from the VALUE, never from its index in the series: a `low` event arriving
+ *  first in the payload must not render as danger red. Routine (`normal`) events, the bulk of the
+ *  volume, are the brand accent; only the priorities that need attention take a status colour. */
+const PRIORITY_FILL: Record<string, string> = {
+  critical: "var(--danger)",
+  high: "var(--caution)",
+  normal: "var(--accent)",
+  low: "var(--muted)",
 };
-// A trend needs more than two observations; shorter series are discrete counts.
-const MAX_POINTS_FOR_BARS = 2;
+const priorityFill = (priority: string) => PRIORITY_FILL[priority] ?? "var(--muted)";
 
 // ponytail: first known payload string wins; extend the key list if new event
 // types grow their own summary field.
 const SUMMARY_KEYS = ["alarm_description", "findings", "tag_out_reason", "description", "summary"] as const;
+const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
 function describeEvent(e: EventRow): string {
   for (const key of SUMMARY_KEYS) {
     const v = e.payload?.[key];
     if (typeof v === "string" && v) return v;
+  }
+  // Permits and handovers carry no free-text summary; say what they are rather than repeating the type.
+  const p = e.payload ?? {};
+  if (e.event_type === "ptw_generated" && typeof p.ptw_type === "string") {
+    return `${label(p.ptw_type)} permit${typeof p.work_area === "string" ? `, ${p.work_area}` : ""}`;
+  }
+  if (e.event_type === "shift_handover" && typeof p.outgoing_shift_lead_id === "string" && typeof p.incoming_shift_lead_id === "string"
+      && !UUID_LIKE.test(p.outgoing_shift_lead_id) && !UUID_LIKE.test(p.incoming_shift_lead_id)) {
+    return `${p.outgoing_shift_lead_id} handing over to ${p.incoming_shift_lead_id}`;
   }
   return triggerLabel(e.event_type);
 }
@@ -83,8 +93,8 @@ export default function EventsPage() {
   const reduced = useReducedMotion();
 
   const [reload, setReload] = useState(0);
-  // Spec §5: params unchanged — same { limit: 50 } call shape as before.
-  const state = useFetch(() => getEvents({ limit: 50 }), [reload]);
+  // 200 is the API's page cap: enough to cover the chart's 14 days, and the header says how many of the total are loaded.
+  const state = useFetch(() => getEvents({ limit: 200 }), [reload]);
   const loading = state.status === "loading";
   const hasData = state.status === "live";
   const events = useMemo<OperationalEvent[]>(() => (hasData ? state.data.items ?? [] : []), [state, hasData]);
@@ -123,28 +133,17 @@ export default function EventsPage() {
       .sort((a, b) => Date.parse(b.occurred_at) - Date.parse(a.occurred_at));
   }, [events, typeFilter, priorityFilter, search]);
 
-  // Events/day × priority over the received window — follows the active filters.
-  const trend = useMemo(() => {
-    const byDay = new Map<string, Record<string, number>>();
-    for (const e of rows) {
-      const day = e.occurred_at.slice(0, 10);
-      const bucket = byDay.get(day) ?? {};
-      bucket[e.priority] = (bucket[e.priority] ?? 0) + 1;
-      byDay.set(day, bucket);
-    }
-    return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, counts]) => ({ day, ...counts }));
-  }, [rows]);
-  const showDiscreteBars = trend.length <= MAX_POINTS_FOR_BARS;
+  // Events/day × priority for the last two weeks of what is loaded, following the active filters.
+  const trend = useMemo(() => dailyByPriority(rows), [rows]);
 
   const hasFilters = search !== "" || typeFilter !== "all" || priorityFilter !== "all";
 
   return (
     <div data-testid="events-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Operate"
-        title="Operational events"
-        lede="Monitor the event sources that trigger proactive briefs and compound operational context."
-        actions={canEmit && <DemoGate><Button variant="primary" className="h-11 sm:h-9" onClick={() => setShowEmitter((open) => !open)}>{showEmitter ? "Close emitter" : "Emit event"}</Button></DemoGate>}
+        title="Operational Events"
+        lede="The live feed of work orders, alarms, permits, tag-outs, inspections and shift handovers from the plant's systems. Each event can trigger a brief, and together they form the operating history shown on every asset."
+        actions={canEmit && <Button variant="primary" className="h-11 sm:h-9" onClick={() => setShowEmitter((open) => !open)}>{showEmitter ? "Close emitter" : "Emit event"}</Button>}
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-caption text-muted">
@@ -177,36 +176,24 @@ export default function EventsPage() {
       <ChartContainer
         className="mt-4"
         title="Event volume"
-        sub="Events per day by priority, last 50 events"
-        height={160}
+        sub={`Events per day by priority, last ${CHART_DAYS} days`}
+        height={180}
         loading={loading}
         empty={trend.length === 0 && "No events in window"}
         error={state.status === "error"}
         onRetry={state.status === "error" ? state.retry : undefined}
       >
-        {showDiscreteBars ? (
-          <BarChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid {...GRID} />
-            <XAxis dataKey="day" {...AXIS} tickFormatter={(d) => String(d).slice(5)} interval={0} />
-            <YAxis {...AXIS} width={32} allowDecimals={false} />
-            <Tooltip {...TOOLTIP} />
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "var(--muted)" }} />
-            {priorities.map((p) => (
-              <Bar key={p} dataKey={p} name={label(p)} fill={priorityFill(p)} isAnimationActive={!reduced} />
-            ))}
-          </BarChart>
-        ) : (
-          <LineChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid {...GRID} />
-            <XAxis dataKey="day" {...AXIS} tickFormatter={(d) => String(d).slice(5)} interval={0} />
-            <YAxis {...AXIS} width={32} allowDecimals={false} />
-            <Tooltip {...TOOLTIP} />
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "var(--muted)" }} />
-            {priorities.map((p) => (
-              <Line key={p} type="monotone" dataKey={p} name={label(p)} stroke={priorityFill(p)} strokeWidth={2} dot={false} isAnimationActive={!reduced} />
-            ))}
-          </LineChart>
-        )}
+        <BarChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
+          <CartesianGrid {...GRID} />
+          <XAxis dataKey="day" {...AXIS} interval="preserveStartEnd" minTickGap={28} />
+          <YAxis {...AXIS} width={32} allowDecimals={false} />
+          <Tooltip {...TOOLTIP} cursor={{ fill: "var(--surface-2)" }} />
+          <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "var(--muted)" }} />
+          {/* Stacked, least severe at the bottom, so the bar height is the day's volume and the colours say how much of it needs attention. */}
+          {[...priorities].reverse().map((p) => (
+            <Bar key={p} dataKey={p} name={label(p)} stackId="volume" fill={priorityFill(p)} isAnimationActive={!reduced} />
+          ))}
+        </BarChart>
       </ChartContainer>
 
       <section data-testid="events-table" className="mt-4">

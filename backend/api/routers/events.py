@@ -23,6 +23,7 @@ from api.dependencies import (
     RedisDep,
     SettingsDep,
     SupabaseDep,
+    demo_llm_budget,
     require_role,
     site_scope,
 )
@@ -39,6 +40,7 @@ from api.models.event import (
     WorkOrderEvent,
 )
 from api.routers.briefs import _brief_recipients, _sign_acknowledgment
+from api.services import tenant
 from api.services.brief_engine import BriefEngine
 from api.services.event_bus import EventBusService
 from api.services.identity import display_name
@@ -124,6 +126,7 @@ async def _canonical_asset(asset_id: str | None, driver, supabase, current_user:
         node = await GraphService(driver).get_asset(canonical)
         if node and node.get("site_id") != site:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' is not registered.")
+    tenant.guard_asset(current_user, canonical)  # a demo report must name a showcase asset
     return canonical
 
 
@@ -154,7 +157,7 @@ async def _materialise_event_node(
     )
 
 
-@router.post("/work-order", summary="Ingest work order event", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/work-order", dependencies=[Depends(demo_llm_budget)], summary="Ingest work order event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_work_order(
     payload: WorkOrderEvent,
     current_user: IngestUserDep,
@@ -171,6 +174,7 @@ async def ingest_work_order(
     Persists to operational_events, publishes to Redis Stream for brief assembly.
     """
     site_scope(current_user, payload.site_id)  # a non-admin may only report for their own site
+    tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
 
@@ -305,7 +309,7 @@ async def ingest_work_order(
     }
 
 
-@router.post("/ptw", summary="Ingest Permit-to-Work event", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/ptw", dependencies=[Depends(demo_llm_budget)], summary="Ingest Permit-to-Work event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_ptw(
     payload: PTWEvent,
     current_user: IngestUserDep,
@@ -323,6 +327,7 @@ async def ingest_ptw(
     with priority=critical to bypass the EEMUA 191 governor.
     """
     site_scope(current_user, payload.site_id)
+    tenant.guard_site(current_user, payload.site_id)
     payload.asset_ids = [await _canonical_asset(a, driver, supabase, current_user) for a in payload.asset_ids]
     bus = EventBusService(redis, settings)
     event_dict = payload.model_dump(mode="json")
@@ -379,7 +384,7 @@ async def ingest_ptw(
             "stream_entry_id": stream_id, "brief_id": brief_id}
 
 
-@router.post("/shift-handover", summary="Ingest shift handover event", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/shift-handover", dependencies=[Depends(demo_llm_budget)], summary="Ingest shift handover event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_shift_handover(
     payload: ShiftHandoverEvent,
     current_user: IngestUserDep,
@@ -392,6 +397,7 @@ async def ingest_shift_handover(
 ) -> dict:
     """Triggers a shift handover brief for the incoming crew."""
     site_scope(current_user, payload.site_id)
+    tenant.guard_site(current_user, payload.site_id)
     bus = EventBusService(redis, settings)
 
     # Handovers carry no asset. The crew pair plus the handover time identifies the event, so
@@ -451,7 +457,7 @@ async def ingest_shift_handover(
             "brief_task_id": task_id, "brief_due_in_seconds": window_secs}
 
 
-@router.post("/alarm", summary="Ingest alarm acknowledgment event", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/alarm", dependencies=[Depends(demo_llm_budget)], summary="Ingest alarm acknowledgment event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_alarm(
     payload: AlarmEvent,
     current_user: IngestUserDep,
@@ -462,6 +468,7 @@ async def ingest_alarm(
 ) -> dict:
     """Received when an operator acknowledges a DCS process alarm."""
     site_scope(current_user, payload.site_id)
+    tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
 
@@ -609,6 +616,7 @@ async def resolve_deviation_flag(
     """
     if payload.resolution not in ("promoted", "disputed"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="resolution must be 'promoted' or 'disputed'")
+    await tenant.guard_row(supabase, current_user, "quarantine_items", item_id)
 
     result = await asyncio.to_thread(
         lambda: supabase.table("quarantine_items")
@@ -698,6 +706,7 @@ async def set_plant_state(
     turnaround/shutdown/emergency suppresses all non-critical briefs for that site.
     """
     site_scope(current_user, payload.site_id)  # an engineer may only set their own site's state
+    tenant.guard_site(current_user, payload.site_id)
     now_iso = datetime.now(UTC).isoformat()
     set_by = current_user.get("user_id", "unknown")
 
@@ -735,7 +744,7 @@ async def set_plant_state(
     }
 
 
-@router.post("/tag-out", summary="Ingest equipment tag-out event", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/tag-out", dependencies=[Depends(demo_llm_budget)], summary="Ingest equipment tag-out event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_tag_out(
     payload: TagOutEvent,
     current_user: IngestUserDep,
@@ -749,6 +758,7 @@ async def ingest_tag_out(
     inserts into operational_events, triggers delayed brief assembly.
     """
     site_scope(current_user, payload.site_id)
+    tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
 
@@ -815,7 +825,7 @@ async def ingest_tag_out(
     }
 
 
-@router.post("/inspection-complete", summary="Ingest inspection completion event", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/inspection-complete", dependencies=[Depends(demo_llm_budget)], summary="Ingest inspection completion event", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_inspection_complete(
     payload: InspectionCompleteEvent,
     current_user: IngestUserDep,
@@ -833,6 +843,7 @@ async def ingest_inspection_complete(
     from api.services.graph import GraphService
 
     site_scope(current_user, payload.site_id)
+    tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
 
     if payload.document_id:
@@ -1020,6 +1031,7 @@ async def list_events(
             query = query.eq("event_type", event_type)
         if site:
             query = query.eq("site_id", site)
+        query = tenant.scope_site(query, current_user)
         return query.range(offset, offset + limit - 1).execute()
 
     result = await asyncio.to_thread(fetch_events)
@@ -1082,6 +1094,7 @@ async def acknowledge_event(
     audit trail the compliance role reads must not show acknowledgements the named person never made.
     """
     user_id = current_user.get("user_id", "unknown")
+    await tenant.guard_row(supabase, current_user, "operational_events", event_id)
 
     # Each ack is a server-signed audit row, so it needs an event that exists on the caller's site
     # (same 404 as `get_event`) and a caller with a stake in it: staff, or the recipient of a brief
@@ -1096,7 +1109,7 @@ async def acknowledge_event(
     )
     if not event.data or (site and event.data[0].get("site_id") != site):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
-    if current_user.get("role") not in _INGEST_ROLES:
+    if not tenant.has_role(current_user, *_INGEST_ROLES):
         brief = await asyncio.to_thread(
             lambda: supabase.table("briefs")
             .select("brief_id")

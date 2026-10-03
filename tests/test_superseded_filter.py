@@ -20,7 +20,7 @@ class _FakeES:
     def __init__(self) -> None:
         self.body: dict[str, Any] = {}
 
-    async def search(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def search(self, index: str, body: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
         self.body = body
         return {"hits": {"hits": []}}
 

@@ -67,7 +67,7 @@ The frontend is a Next.js 16 / React 19 / Tailwind v4 app (`frontend/`) with **a
 | Quality & compliance cockpit | `/compliance`, `/compliance/audit-pack`, `/compliance/nonconformance` | E |
 | Governance operations | `/governance/moc`, `/governance/sla`, `/governance/timestamp-drift`, `/governance/push-volume-gate`, `/governance/circuit-breaker`, `/governance/model-gate` | F |
 | Project & procurement | `/projects`, `/documents` (registry mode) | G |
-| Management & cross-functional | `/management`, `/management/cross-site`, `/management/plant-state` | H |
+| Management & cross-functional | `/overview`, `/overview/cross-site`, `/overview/plant-state` | H |
 | Operational events | `/events/*` | I |
 
 ---
@@ -541,13 +541,13 @@ This is the largest gap and the architectural heart of Kairos: knowledge deliver
 
 **Layer:** 12 · **Objective:** Replace the fixture-only overview with an executive KPI view fed by live aggregates — situational awareness without operational detail.
 
-- Refine `src/app/(app)/management/page.tsx`: fan-out fetch (parallel) `GET /health/detailed` (service health cards), `GET /assets/?limit=1` (total assets), `GET /briefs/` (pending + governor), `GET /compliance/dashboard` (gap posture), `GET /governance/conflicts?limit=1` (open conflicts), `GET /governance/quarantine?limit=1` (pending review).
+- Refine `src/app/(app)/overview/page.tsx`: fan-out fetch (parallel) `GET /health/detailed` (service health cards), `GET /assets/?limit=1` (total assets), `GET /briefs/` (pending + governor), `GET /compliance/dashboard` (gap posture), `GET /governance/conflicts?limit=1` (open conflicts), `GET /governance/quarantine?limit=1` (pending review).
 - KPIs: knowledge coverage by asset class (from graph/knowledge counts), unresolved conflicts by track, compliance posture by severity, brief delivery + governor suppression rate, quarantine backlog + SLA breaches.
 - **Elicitation participation tracking (Layer 9 edge case):** a KPI card for elicitation/off-boarding participation rate by department/individual — the organizational metric the architecture reports to operations leadership, and the surface that makes a non-participating expert's knowledge gap visible rather than hidden. Sourced from off-boarding programme completion (Task 8b) + elicitation response counts.
 - **Outcome-attribution summary (Layer 10/0):** a light admin KPI reflecting the learning loop — counts of recommendations confirmed / degraded / flagged-for-execution-deviation, and briefs marked not-relevant, from the audit-log signal. `ponytail:` summary counts only for the MVP; a full per-recommendation attribution drill-down is a documented cut (deep Layer 10 analytics).
 - Each KPI links through to its detail surface. Keep fixture fallback with the demo chip when live aggregates are empty.
 
-**Test:** Load `/management` with the stack up; verify every KPI shows a live number matching its source endpoint and the health cards reflect `GET /health/detailed`; stop one backend service and verify its health card degrades.
+**Test:** Load `/overview` with the stack up; verify every KPI shows a live number matching its source endpoint and the health cards reflect `GET /health/detailed`; stop one backend service and verify its health card degrades.
 
 ---
 
@@ -555,7 +555,7 @@ This is the largest gap and the architectural heart of Kairos: knowledge deliver
 
 **Layer:** 12, scale · **Objective:** Express the enterprise cross-site story — failure patterns detected at one site surfaced as advisories to sister sites, with the PII-redaction guarantee visible. `ponytail:` single-site MVP → this surface is mock/fixture, matching the architecture's explicit scope cut; wire live if a control-plane endpoint later exists.
 
-- Route `src/app/(app)/management/cross-site/page.tsx`: render cross-site advisories (originating site, equipment class, failure mode, sanitized pattern, "relevant to your assets: …") from a fixture that mirrors the intended control-plane shape.
+- Route `src/app/(app)/overview/cross-site/page.tsx`: render cross-site advisories (originating site, equipment class, failure mode, sanitized pattern, "relevant to your assets: …") from a fixture that mirrors the intended control-plane shape.
 - PII-redaction note: show that only the sanitized technical pattern crosses the boundary (names/shift-ids replaced with role-generalized tokens) — the DPDP Act 2023 guarantee made visible.
 - Clearly badge this surface as multi-site (architecture) vs single-site (this deployment).
 
@@ -567,7 +567,7 @@ This is the largest gap and the architectural heart of Kairos: knowledge deliver
 
 **Layer:** 8 · **Objective:** Let an engineer/admin set the plant operating state (normal/turnaround/shutdown/emergency) that drives governor state-based suppression, and show the current state as an operator banner.
 
-- Route `src/app/(app)/management/plant-state/page.tsx` (role-gated engineer/admin): `GET /events/plant-state/{site_id}` current state; `POST /events/plant-state` to set state + expiry; confirmation explains the suppression consequence.
+- Route `src/app/(app)/overview/plant-state/page.tsx` (role-gated engineer/admin): `GET /events/plant-state/{site_id}` current state; `POST /events/plant-state` to set state + expiry; confirmation explains the suppression consequence.
 - Global banner: when state ≠ normal, the app-shell shows a site-wide banner ("Turnaround — only critical briefs are being delivered"), tying to the governor pill (Task 3).
 
 **Test:** Set state to `turnaround`; verify the global banner appears and the briefs governor reflects state-based suppression (only critical briefs delivered); reset to normal; verify the banner clears.

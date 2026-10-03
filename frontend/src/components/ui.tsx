@@ -925,19 +925,17 @@ export function RefusalCard({
 // ─── EmptyState (Task 4) ─────────────────────────────────────────────────────
 
 /** Icon + message + optional CTA for empty list / no results states. */
-/** Standard page header — eyebrow, title, lede, right-aligned actions.
+/** Standard page header — title, lede, right-aligned actions.
  *  One h1 voice across the app: display (28px) for workspaces, title (20px)
  *  via `compact` for detail views. Use this instead of hand-rolled headers
  *  so typography can't drift page-to-page. */
 export function PageHeader({
-  eyebrow,
   title,
   lede,
   actions,
   compact,
   className,
 }: {
-  eyebrow?: string;
   title: React.ReactNode;
   lede?: React.ReactNode;
   actions?: React.ReactNode;
@@ -947,15 +945,10 @@ export function PageHeader({
   return (
     <header className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="min-w-0">
-        {eyebrow && (
-          <p className="mb-3 inline-flex bg-accent px-2.5 py-1 text-label font-semibold uppercase tracking-[0.08em] text-on-accent">
-            {eyebrow}
-          </p>
-        )}
         <h1 className={cn("display text-balance text-ink", compact ? "text-title" : "text-display sm:text-hero")}>
           {title}
         </h1>
-        {lede && <p className={cn("max-w-prose text-muted text-pretty", compact ? "mt-1.5 text-body" : "mt-3 text-subtitle")}>{lede}</p>}
+        {lede && <p className={cn("max-w-5xl text-muted text-pretty", compact ? "mt-1.5 text-body" : "mt-3 text-subtitle")}>{lede}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>

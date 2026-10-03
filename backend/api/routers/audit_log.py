@@ -9,6 +9,7 @@ import structlog
 from fastapi import APIRouter, Query
 
 from api.dependencies import CurrentUserDep, SupabaseDep
+from api.services import tenant
 from api.services.identity import display_names
 
 log = structlog.get_logger(__name__)
@@ -42,6 +43,7 @@ async def get_audit_log(
         query = query.eq("action", action)
     if performed_by:
         query = query.eq("performed_by", performed_by)
+    query = await tenant.scope_audit(query, current_user, supabase)
 
     result = await asyncio.to_thread(
         lambda: query.order("timestamp", desc=True).range(offset, offset + limit - 1).execute()

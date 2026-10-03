@@ -1,0 +1,11 @@
+Veridian Petrochemicals
+Bharuch Complex
+
+Document no: PTW-HDT-COMPRESSOR-VALVE-CHANGE   Revision: A
+Title: Permit to work: valve change on recycle compressor K-2101A
+Owner: Lata Deshmukh
+Issued: 21 September 2026
+
+Primary equipment: K-2101A, Recycle gas compressor A
+
+Permit PTW-DEMO-0438. Work: change second stage discharge valves on K-2101A. Isolation: compressor depressurised and purged with nitrogen, breaker locked out, suction and discharge isolation valves closed. Equipment on the boundary: K-2101A, XV-2101 and XV-2102. Issuing engineer: Lata Deshmukh.

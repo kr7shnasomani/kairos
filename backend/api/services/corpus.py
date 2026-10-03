@@ -34,6 +34,8 @@ from collections.abc import Collection, Iterable
 
 import structlog
 
+from api.services.tenant import DEMO_VISIBLE_CYPHER
+
 log = structlog.get_logger(__name__)
 
 # Documents written by the test suite and by hand during sweeps. Anchored at the start of the
@@ -72,18 +74,18 @@ REAL_ASSET_CYPHER = (
     "NONE(p IN [" + ", ".join(f"'{p}'" for p in TEST_ASSET_PREFIXES) + "] WHERE a.asset_id STARTS WITH p)"
 )
 _TEST_ASSET_COUNT_CYPHER = (
-    f"MATCH (a:Asset) WHERE NOT {REAL_ASSET_CYPHER} AND ($site_id IS NULL OR a.site_id = $site_id) "
-    "RETURN count(a) AS n"
+    f"MATCH (a:Asset) WHERE NOT {REAL_ASSET_CYPHER} AND {DEMO_VISIBLE_CYPHER} "
+    "AND ($site_id IS NULL OR a.site_id = $site_id) RETURN count(a) AS n"
 )
 
 
-async def excluded_test_asset_count(session, site_id: str | None = None) -> int:
+async def excluded_test_asset_count(session, site_id: str | None = None, hide_demo: bool = True) -> int:
     """How many assets `REAL_ASSET_CYPHER` hides, for a caller to report beside its own result.
 
     Every endpoint that applies the guard returns this as `excluded_test_assets` (see NEVER
     SILENTLY above). `site_id=None` counts across sites, matching the queries that do the same.
     """
-    record = await (await session.run(_TEST_ASSET_COUNT_CYPHER, site_id=site_id)).single()
+    record = await (await session.run(_TEST_ASSET_COUNT_CYPHER, site_id=site_id, hide_demo=hide_demo)).single()
     return record["n"] if record else 0
 
 # Supabase/PostgREST puts every `.in_()` value in the URL, so a huge list becomes an over-long

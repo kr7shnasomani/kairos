@@ -232,22 +232,13 @@ def test_dev_bypass_allowed(env, debug, expected):
 
 
 # =============================================================================
-# The `demo` role (security review C1): sees everything, writes only an explicit safe list
+# The `demo` role (security review C1): sees everything and works the showcase plant. Policy is the
+# coarse layer; the API fence and the per-handler guards are the fine one (`test_tenant_isolation.py`).
 # =============================================================================
 
 _REGO = Path(__file__).resolve().parents[1] / "infra" / "policies" / "kairos.rego"
 _needs_rego = pytest.mark.skipif(not _REGO.exists(), reason="infra/ is not mounted in this container")
 
-# The only writes the demo identity may make. Each was checked in the handler: it appends one row to
-# the audit log and touches nothing shared. Brief ack and brief feedback are deliberately NOT here:
-# ack closes a brief for every recipient, and an "incorrect" rating queues a confidence recheck
-# on the brief's source documents.
-DEMO_SAFE_WRITES = {
-    ("POST", "/search/synthesize"),
-    ("POST", "/search/synthesize/stream"),
-    ("POST", "/search/rca-pack"),
-    ("POST", "/search/feedback"),
-}
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
@@ -264,9 +255,12 @@ def test_demo_role_has_an_explicit_allow_list_and_is_not_in_the_catch_all():
         "read_search", "read_briefs", "read_assets", "read_documents", "read_events",
         "read_compliance", "read_nonconformance", "read_audit", "read_governance", "read_other",
         "synthesize", "rca_pack", "answer_feedback",
+        # The showcase writes. Each route is fenced to showcase rows by the API, not by this table.
+        "write_api", "ingest_document", "ingest_event", "write_assets",
+        "promote_quarantine", "resolve_admin_conflict",
     }
-    # The catch-all grants every non-sensitive action to the roles it names. If demo were named
-    # there it would inherit write_api, and with it every write route.
+    # The catch-all names the five staff roles; demo holds its grants by name, so a new action is
+    # refused for it until someone grants it here on purpose.
     catch_all = text[text.index("Catch-all"):]
     assert "demo" not in catch_all[catch_all.index("allow if"):]
     sensitive = text[text.index("_sensitive_actions :="):]
@@ -304,53 +298,54 @@ def test_demo_can_read_everything_an_admin_reads(path, action):
 @_needs_rego
 @pytest.mark.parametrize(
     ("method", "path", "action"),
-    [(m, p, a) for (m, p), a in [
-        (("POST", "/search/synthesize"), "synthesize"),
-        (("POST", "/search/synthesize/stream"), "synthesize"),
-        (("POST", "/search/rca-pack"), "rca_pack"),
-        (("POST", "/search/feedback"), "answer_feedback"),
-    ]],
+    [
+        ("POST", "/search/synthesize", "synthesize"),
+        ("POST", "/search/rca-pack", "rca_pack"),
+        ("POST", "/search/feedback", "answer_feedback"),
+        ("POST", "/documents/ingest", "ingest_document"),
+        ("POST", "/assets/", "write_assets"),
+        ("POST", "/events/work-order", "ingest_event"),
+        ("POST", "/governance/quarantine/Q-1/promote", "promote_quarantine"),
+        ("POST", "/governance/conflicts/C-1/resolve", "resolve_admin_conflict"),
+        ("POST", "/briefs/B-1/ack", "write_api"),
+    ],
 )
-def test_demo_safe_writes_resolve_to_named_actions(method, path, action):
+def test_demo_showcase_writes_resolve_to_granted_actions(method, path, action):
     assert action_for(method, path, "demo") == action
     assert action in _demo_grants()
 
 
 @_needs_rego
-def test_every_non_get_route_in_the_app_is_denied_for_demo_except_the_safe_list():
-    """Introspects the real app, so a write route added tomorrow is refused until someone names it."""
+def test_every_write_route_the_demo_role_can_reach_is_one_the_fence_lists():
+    """Introspects the real app. Policy now admits the demo role to most writes, so the fence is what
+    keeps an unlisted route closed; this proves every route policy would admit is either listed in
+    `tenant.DEMO_WRITE_ALLOWED` or a route the fence refuses by design."""
     import re as _re
 
     from api.main import create_app
+    from api.services import tenant
 
     granted = _demo_grants()
-    seen, safe_seen = 0, set()
+    unlisted_but_policy_admitted = set()
     for route in create_app().routes:
         methods = set(getattr(route, "methods", None) or ()) & _WRITE_METHODS
         path = getattr(route, "path", None)
         if not methods or not path:
             continue
-        concrete = _re.sub(r"\{[^}]+\}", "x", path)  # /documents/{document_id}/supersede -> /documents/x/supersede
+        concrete = _re.sub(r"\{[^}]+\}", "x", path)
         for method in methods:
             action = action_for(method, concrete, "demo")
-            if action is None:
-                # unenforced on purpose: auth handshake and the HMAC-signed MoC webhook
-                assert concrete.startswith("/auth/") or concrete == "/governance/moc/webhook", (method, path)
-                continue
-            seen += 1
-            if (method, concrete) in DEMO_SAFE_WRITES:
-                safe_seen.add((method, concrete))
-                assert action in granted, (method, path, action)
-            else:
-                assert action not in granted, f"demo could {method} {path} ({action})"
-    assert seen > 30, "route introspection found suspiciously few write routes"
-    assert safe_seen == DEMO_SAFE_WRITES, "the safe-write list names a route that does not exist"
+            if action in granted and (method, path) not in tenant.DEMO_WRITE_ALLOWED:
+                unlisted_but_policy_admitted.add((method, path))
+    # Policy admits these through `write_api`; the fence (and an admin-only role gate) refuse them.
+    assert unlisted_but_policy_admitted == {("POST", "/governance/model-gate/run")}
 
 
-@_needs_rego
-@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE", "POST"])
-def test_an_unknown_write_route_is_denied_for_demo(method):
-    assert action_for(method, "/brand/new/thing", "demo") not in _demo_grants()
+def test_the_fence_is_installed_on_the_app_so_an_unlisted_write_route_stays_closed_to_demo():
+    from api.dependencies import demo_write_fence
+    from api.main import create_app
+
+    assert demo_write_fence in [d.dependency for d in create_app().router.dependencies]
 
 
 def test_other_roles_keep_the_unenforced_reads_and_the_same_decisions():

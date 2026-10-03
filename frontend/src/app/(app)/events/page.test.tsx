@@ -48,7 +48,7 @@ describe("EventsPage", () => {
     mockLoaded();
     render(<EventsPage />);
 
-    expect(await screen.findByRole("heading", { name: "Operational events" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Operational Events" })).toBeInTheDocument();
     expect(screen.getByTestId("events-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByText("Event volume")).toBeInTheDocument();
     expect(screen.getByTestId("events-filter-toolbar")).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("EventsPage", () => {
     expect(screen.getByText("HX-2")).toBeInTheDocument();
     expect(screen.getByText("acknowledged")).toBeInTheDocument();
     // getEvents params unchanged (spec §10.4).
-    expect(mocks.getEvents).toHaveBeenCalledWith({ limit: 50 });
+    expect(mocks.getEvents).toHaveBeenCalledWith({ limit: 200 });
   });
 
   it("never flashes the empty state while loading", () => {

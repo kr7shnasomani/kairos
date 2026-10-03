@@ -22,9 +22,8 @@ export default async function AssetsPage() {
   return (
     <div data-testid="assets-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Operate"
         title="Assets"
-        lede="Every piece of knowledge orbits a canonical asset."
+        lede="The registry of every piece of equipment on site, by its canonical tag. Documents, work orders, events and procedures all attach to an asset here, so open one to see everything the plant knows about it."
         actions={
           <>
             <RegisterAssetAction />

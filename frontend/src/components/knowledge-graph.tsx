@@ -1,13 +1,17 @@
 "use client";
 
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ReactFlow,
   Background,
   Controls,
   Handle,
+  Panel,
   Position,
   useNodesState,
+  useNodesInitialized,
+  useReactFlow,
   useEdgesState,
   useInternalNode,
   getStraightPath,
@@ -37,7 +41,7 @@ const KIND_TOKENS: Record<string, CanvasTokenNameKey> = {
   Document: "--caution",
   Concept: "--muted",
   Person: "--info",
-  Organization: "--verified",
+  Organisation: "--verified",
   Valve: "--accent",
   Instrument: "--caution",
   Procedure: "--info",
@@ -56,12 +60,14 @@ function authorityStrokeColor(level: number, tokens: CanvasTokens): string {
 }
 
 function edgeStyle(e: GraphEdgeData, tokens: CanvasTokens): React.CSSProperties {
+  // Position in the plant (the unit above, an event on the asset): a quiet solid line, no authority colour.
+  if (e.structural) return { stroke: tokens["--muted"], strokeWidth: 1.2, opacity: 0.6 };
   const color = e.verification_status === "disputed" ? tokens["--danger"] : authorityStrokeColor(e.authority_level, tokens);
   return {
     stroke: color,
-    strokeWidth: 1.8,
+    strokeWidth: 1.2,
     strokeDasharray: e.verification_status === "unverified" ? "5,4" : e.verification_status === "superseded" ? "2,8" : undefined,
-    opacity: e.verification_status === "superseded" ? 0.3 : 1,
+    opacity: e.verification_status === "superseded" ? 0.3 : 0.7,
   };
 }
 
@@ -105,6 +111,9 @@ function FloatingEdge({ id, source, target, style, markerEnd, label }: EdgeProps
 
 // ── Custom node — MUST be at module scope + wrapped in memo ──────────────────
 
+const NODE_W = 132; // fixed card size: the layout below places nodes by these numbers
+const NODE_H = 50;
+
 const KairosNode = memo(function KairosNode({ data, selected }: NodeProps) {
   const nd = data as unknown as GraphNodeData;
   const tokens = useCanvasTokens();
@@ -115,16 +124,17 @@ const KairosNode = memo(function KairosNode({ data, selected }: NodeProps) {
     <>
       <Handle type="target" position={Position.Left} style={h} />
       <div
-        style={{ borderColor: color }}
+        style={{ width: NODE_W, minHeight: NODE_H, borderColor: color }}
+        title={nd.label}
         className={cn(
-          "min-w-[90px] max-w-[150px] rounded-xl border-2 bg-surface px-3 py-2 text-center shadow-sm",
+          "rounded-md border bg-surface px-2.5 py-1.5",
           selected && "ring-2 ring-accent ring-offset-1 ring-offset-surface"
         )}
       >
-        <p className="text-[9px] font-bold uppercase tracking-[0.1em]" style={{ color }}>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color }}>
           {nd.kind}
         </p>
-        <p className="mt-0.5 truncate text-label font-semibold leading-snug text-ink">
+        <p className="line-clamp-2 break-words text-caption font-semibold leading-tight text-ink">
           {nd.label}
         </p>
       </div>
@@ -135,44 +145,111 @@ const KairosNode = memo(function KairosNode({ data, selected }: NodeProps) {
 
 // Module-scope type maps — never define inside a component (causes remount).
 const nodeTypes = { kairos: KairosNode };
+// A wide graph needs to zoom out further than React Flow's default floor of 0.5, or "fit" and the
+// zoom-out button stop working once the network is bigger than the canvas.
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 2.5;
+const FIT_PADDING = 0.12;
 const edgeTypes = { floating: FloatingEdge };
 
-// ── Layout — radial around the center asset ──────────────────────────────────
+// ── Layout — two elliptical rings around the centre asset ───────────────────
+// Ring one is everything the asset touches directly (the unit above and the instruments below, its
+// documents, its events). Ring two is what only those reach: the people and organisations a document
+// mentions and the other assets it covers, each placed at the average angle of the ring-one nodes it
+// connects to, so a shared person sits between its documents and the lines stay short.
+// The rings are ellipses (the canvas is wider than it is tall) and alternate ring-one nodes sit a little
+// further out, so neighbours never overlap at the top and bottom where the ring runs horizontally.
 
+const ASPECT = 1.75; // ellipse width over height
+const STAGGER = 1.3; // every second ring-one node sits this much further out
+const RING_GAP = 150;
+const ARC = NODE_W + 6; // px of ring one node needs along the ring
+const KIND_ORDER = ["Asset", "Document", "Event"];
 
-function buildRFNodes(graph: KnowledgeGraphData): Node[] {
-  const others = graph.nodes.filter((n) => n.id !== graph.asset_id);
-  const count = others.length || 1;
-  const nodes: Node[] = [];
-  // Center node
-  const center = graph.nodes.find((n) => n.id === graph.asset_id) ?? graph.nodes[0];
-  nodes.push({ id: center.id, type: "kairos", position: { x: 0, y: 0 }, data: center as unknown as Record<string, unknown>, draggable: true, focusable: true, ariaLabel: `${center.kind}: ${center.label}` });
-  // Satellite nodes
-  others.forEach((n, i) => {
-    const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
-    const r = 280;
-    nodes.push({
-      id: n.id,
-      type: "kairos",
-      position: { x: Math.cos(angle) * r, y: Math.sin(angle) * r },
-      data: n as unknown as Record<string, unknown>,
-      draggable: true,
-      focusable: true,
-      ariaLabel: `${n.kind}: ${n.label}`,
-    });
-  });
-  return nodes;
+function circularMean(angles: number[]): number {
+  return Math.atan2(
+    angles.reduce((s, a) => s + Math.sin(a), 0),
+    angles.reduce((s, a) => s + Math.cos(a), 0),
+  );
 }
 
-function buildRFEdges(graph: KnowledgeGraphData, tokens: CanvasTokens): Edge[] {
+/** Spread desired angles so neighbours keep `minGap` radians apart; order is preserved. */
+function spreadAngles(desired: number[], minGap: number): number[] {
+  const order = desired.map((a, i) => [a, i] as const).sort((x, y) => x[0] - y[0]);
+  const out = new Array<number>(desired.length);
+  let prev = -Infinity;
+  for (const [a, i] of order) {
+    const placed = Math.max(a, prev + minGap);
+    out[i] = placed;
+    prev = placed;
+  }
+  return out;
+}
+
+export function buildRFNodes(graph: KnowledgeGraphData): Node[] {
+  const center = graph.nodes.find((n) => n.id === graph.asset_id) ?? graph.nodes[0];
+  const direct = new Set<string>();
+  for (const e of graph.edges) {
+    if (e.source === center.id) direct.add(e.target);
+    if (e.target === center.id) direct.add(e.source);
+  }
+  const ringOne = graph.nodes
+    .filter((n) => n.id !== center.id && direct.has(n.id))
+    .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
+  const ringTwo = graph.nodes.filter((n) => n.id !== center.id && !direct.has(n.id));
+
+  // Semi-height of ring one: enough perimeter for one card per node, with the stagger doing the rest.
+  const b1 = Math.max(150, ringOne.length * 14);
+  const b2 = b1 * STAGGER + RING_GAP;
+  const angleOf = new Map<string, number>();
+  ringOne.forEach((n, i) => angleOf.set(n.id, (i / (ringOne.length || 1)) * 2 * Math.PI - Math.PI / 2));
+
+  // Ring two: the mean angle of whatever it is linked to in ring one, then spread apart.
+  const desired = ringTwo.map((n) => {
+    const linked = graph.edges
+      .filter((e) => e.source === n.id || e.target === n.id)
+      .flatMap((e) => [angleOf.get(e.source), angleOf.get(e.target)])
+      .filter((a): a is number => a !== undefined);
+    return linked.length ? circularMean(linked) : -Math.PI / 2;
+  });
+  const meanR2 = b2 * Math.sqrt((ASPECT * ASPECT + 1) / 2);
+  const spread = spreadAngles(desired, ARC / meanR2);
+  ringTwo.forEach((n, i) => angleOf.set(n.id, spread[i]));
+
+  // Positions are card centres on the ellipse; React Flow positions the top-left corner.
+  const at = (n: GraphNodeData, b: number) => {
+    const angle = angleOf.get(n.id) ?? 0;
+    return { x: Math.cos(angle) * b * ASPECT - NODE_W / 2, y: Math.sin(angle) * b - NODE_H / 2 };
+  };
+  const make = (n: GraphNodeData, position: { x: number; y: number }): Node => ({
+    id: n.id,
+    type: "kairos",
+    position,
+    data: n as unknown as Record<string, unknown>,
+    draggable: true,
+    focusable: true,
+    ariaLabel: `${n.kind}: ${n.label}`,
+  });
+  return [
+    make(center, { x: -NODE_W / 2, y: -NODE_H / 2 }),
+    ...ringOne.map((n, i) => make(n, at(n, i % 2 ? b1 * STAGGER : b1))),
+    ...ringTwo.map((n) => make(n, at(n, b2))),
+  ];
+}
+
+function buildRFEdges(graph: KnowledgeGraphData, tokens: CanvasTokens, focusId: string | null): Edge[] {
   return graph.edges.map((e) => ({
     id: e.id,
     type: "floating",
     source: e.source,
     target: e.target,
-    label: e.label,
-    style: edgeStyle(e, tokens),
-    markerEnd: arrowMarker(e.verification_status === "disputed" ? tokens["--danger"] : authorityStrokeColor(e.authority_level, tokens)),
+    // No label on the line: the same few relationship names repeated on every edge were clutter.
+    // The relationship is in the panel that opens on click, and node colours are in the legend.
+    // With a node selected, only its own lines stay at full strength.
+    style: focusId && e.source !== focusId && e.target !== focusId
+      ? { ...edgeStyle(e, tokens), opacity: 0.12 }
+      : edgeStyle(e, tokens),
+    markerEnd: arrowMarker(e.structural ? tokens["--muted"] : e.verification_status === "disputed" ? tokens["--danger"] : authorityStrokeColor(e.authority_level, tokens)),
     data: e as unknown as Record<string, unknown>,
     focusable: true,
     ariaLabel: `${e.label}: ${e.verification_status}`,
@@ -226,6 +303,16 @@ function NodePanel({ node, onClose }: { node: GraphNodeData; onClose: () => void
 }
 
 function EdgePanel({ edge, onClose }: { edge: GraphEdgeData; onClose: () => void }) {
+  if (edge.structural) {
+    return (
+      <SidePanel title={edge.label.replace(/_/g, " ").toLowerCase()} onClose={onClose}>
+        <p className="text-label text-muted">
+          {edge.label === "PARENT_OF" ? "Where the asset sits in the plant hierarchy." : "An event recorded against the asset."}{" "}
+          It is not a knowledge fact, so it has no authority level or validity window.
+        </p>
+      </SidePanel>
+    );
+  }
   const isOpen = edge.valid_to.startsWith("9999");
   const validTo = isOpen ? "Current" : edge.valid_to.slice(0, 10);
   return (
@@ -286,6 +373,34 @@ function CoverageIndicator({ assetId }: { assetId: string }) {
   );
 }
 
+// ── Canvas toolbar — lives inside <ReactFlow> so it can fit the view ──────────
+
+const TOOL_BTN =
+  "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-label font-semibold text-muted shadow-sm transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent";
+
+function GraphToolbar({ full, layoutKey, onToggleFull, onRearrange }: { full: boolean; layoutKey: number; onToggleFull: () => void; onRearrange: () => void }) {
+  const { fitView } = useReactFlow();
+  const measured = useNodesInitialized();
+  const fit = useCallback(() => void fitView({ padding: FIT_PADDING, minZoom: MIN_ZOOM, duration: 250 }), [fitView]);
+  // Fit once every card has been measured (fitting earlier works from zero-sized cards and zooms far
+  // too wide), and again whenever the canvas changes size or the layout is reset.
+  useEffect(() => {
+    if (!measured) return;
+    const t = window.setTimeout(fit, 120);
+    return () => window.clearTimeout(t);
+  }, [measured, full, layoutKey, fit]);
+  return (
+    <Panel position="bottom-right" className="flex gap-2">
+      <button type="button" onClick={fit} title="Fit the whole graph in view" className={TOOL_BTN}>Fit</button>
+      <button type="button" onClick={onRearrange} title="Put every node back where it started" className={TOOL_BTN}>Rearrange</button>
+      <button type="button" onClick={onToggleFull} title={full ? "Exit full screen (Esc)" : "Full screen"} className={TOOL_BTN}>
+        <Icon name={full ? "arrows-in" : "arrows-out"} size={14} />
+        {full ? "Exit full screen" : "Full screen"}
+      </button>
+    </Panel>
+  );
+}
+
 // ── Public component ─────────────────────────────────────────────────────────
 
 export function KnowledgeGraph(props: { assetId: string; asOf?: string; height?: number }) {
@@ -310,6 +425,9 @@ function KnowledgeGraphInner({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [full, setFull] = useState(false);
+  const [layoutKey, setLayoutKey] = useState(0);
+  const frameRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -341,8 +459,38 @@ function KnowledgeGraphInner({
   // Edge colors are baked-in token strings (see lib/graph-theme.tsx), so rebuild
   // whenever the graph data or the resolved theme tokens change.
   useEffect(() => {
-    if (graphData) setEdges(buildRFEdges(graphData, tokens));
-  }, [graphData, tokens, setEdges]);
+    if (graphData) setEdges(buildRFEdges(graphData, tokens, selectedNode?.id ?? null));
+  }, [graphData, tokens, selectedNode, setEdges]);
+
+  // Full screen: the browser's own when it allows it, else the canvas fills the window. Esc leaves either.
+  useEffect(() => {
+    const sync = () => setFull(document.fullscreenElement === frameRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.fullscreenElement) setFull(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [full]);
+  const toggleFull = useCallback(async () => {
+    const el = frameRef.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (full) setFull(false);
+      else await el.requestFullscreen();
+    } catch {
+      setFull((f) => !f);
+    }
+  }, [full]);
+
+  const rearrange = useCallback(() => {
+    if (!graphData) return;
+    setNodes(buildRFNodes(graphData));
+    setLayoutKey((k) => k + 1);
+  }, [graphData, setNodes]);
 
   const onNodeClick = useCallback<NodeMouseHandler>((_evt, node) => {
     setSelectedNode(node.data as unknown as GraphNodeData);
@@ -411,8 +559,12 @@ function KnowledgeGraphInner({
     );
   }
 
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-line" style={{ height }}>
+  const frame = (
+    <div
+      ref={frameRef}
+      className={cn("overflow-hidden border border-line bg-canvas", full ? "fixed inset-0 z-50 h-dvh rounded-none" : "relative rounded-xl")}
+      style={full ? undefined : { height }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -424,11 +576,16 @@ function KnowledgeGraphInner({
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         fitView
-        fitViewOptions={{ padding: 0.35 }}
+        fitViewOptions={{ padding: FIT_PADDING, minZoom: MIN_ZOOM }}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        nodesFocusable
+        edgesFocusable
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={24} size={1} color={tokens["--line"]} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} showFitView={false} />
+        <GraphToolbar full={full} layoutKey={layoutKey} onToggleFull={() => void toggleFull()} onRearrange={rearrange} />
       </ReactFlow>
       <CoverageIndicator assetId={assetId} />
       {selectedNode && (
@@ -439,4 +596,8 @@ function KnowledgeGraphInner({
       )}
     </div>
   );
+
+  // The window-filling fallback goes through a portal: inside the page, an ancestor with a transform
+  // (the route transition) would make `fixed` fill that ancestor instead of the window.
+  return full && !document.fullscreenElement ? createPortal(frame, document.body) : frame;
 }

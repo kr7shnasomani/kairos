@@ -1,7 +1,6 @@
 "use client";
 
 // Voice-note capture deep-linked from a work order — transcribed and routed to quarantine.
-import { DemoGate } from "@/components/demo-gate";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { VoiceRecorder } from "@/components/voice-recorder";
@@ -39,14 +38,13 @@ export default function VoicePage() {
   }
 
   return (
-    <DemoGate>
+    <>
     <div data-testid="work-order-voice-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
         compact
         className="mb-6"
-        eyebrow={`Work order ${workOrderId}`}
-        title="Voice note"
-        lede="Record a field observation. Transcribed by Whisper and routed to the knowledge quarantine for engineering review."
+        title="Voice Note"
+        lede={`Work order ${workOrderId}. Record a field observation. It is transcribed, tagged to this work order and held in the review queue until an engineer verifies it.`}
       />
 
       <div data-testid="work-order-voice-layout" className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -129,6 +127,6 @@ export default function VoicePage() {
         </aside>
       </div>
     </div>
-    </DemoGate>
+    </>
   );
 }

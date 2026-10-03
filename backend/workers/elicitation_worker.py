@@ -3,7 +3,6 @@ Temporal activity worker for the Elicitation Engine (Layer 6).
 Polls the kairos-elicitation task queue and runs MicroInterviewWorkflow activities.
 """
 
-import asyncio
 import os
 
 import structlog

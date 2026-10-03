@@ -10,7 +10,6 @@ import { relativeTime } from "@/lib/utils";
 import { Button, PageHeader, StatusBadge } from "@/components/ui";
 import { DetailSkeleton } from "@/components/skeleton";
 import { BlastRadiusPanel } from "@/components/lazy";
-import { DemoGate } from "@/components/demo-gate";
 
 import { Icon } from "@/components/icon";
 const STATUS_TONE: Record<string, "caution" | "verified" | "danger"> = {
@@ -168,7 +167,7 @@ export default function MocDetailPage() {
             Approving this MoC closes the validity window of the old edge and clears downstream warning banners.
             This action is irreversible and logged.
           </p>
-          <DemoGate>
+          <>
           <div className="mt-3 flex flex-col gap-2.5">
             <input
               value={note}
@@ -190,7 +189,7 @@ export default function MocDetailPage() {
               </Link>
             </div>
           </div>
-          </DemoGate>
+          </>
         </section>
       )}
 

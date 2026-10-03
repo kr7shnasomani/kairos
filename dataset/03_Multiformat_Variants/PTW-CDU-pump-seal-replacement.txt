@@ -1,0 +1,11 @@
+Veridian Petrochemicals
+Bharuch Complex
+
+Document no: PTW-CDU-PUMP-SEAL-REPLACEMENT   Revision: A
+Title: Permit to work: seal replacement on crude feed pump P-1101A
+Owner: Prakash Menon
+Issued: 13 September 2026
+
+Primary equipment: P-1101A, Crude feed pump A
+
+Permit PTW-DEMO-0412. Work: replace the mechanical seal on P-1101A. Isolation boundary: suction and discharge valves of P-1101A closed and locked, motor breaker locked out, casing drained. Equipment on the boundary: P-1101A, XV-1101 and XV-1102. Issuing engineer: Prakash Menon. Receiver: Ravi Solanki. Valid for one shift.

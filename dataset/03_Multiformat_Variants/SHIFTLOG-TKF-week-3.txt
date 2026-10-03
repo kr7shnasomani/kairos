@@ -1,0 +1,17 @@
+Veridian Petrochemicals
+Dahej Tank Farm
+
+Document no: SHIFTLOG-TKF-WEEK-3   Revision: A
+Title: Shift log, TKF, week commencing 29 August
+Owner: Meera Pillai
+Issued: 29 August 2026
+
+Primary equipment: T-6101, Product storage tank 1
+
+Shift lead: Meera Pillai
+
+06:10 Took over from the previous shift. T-6101 running normally, discharge pressure steady.
+09:40 Walk-round of the TKF unit. Slight oil mist near the drive end of T-6101; reported to the technician.
+11:25 Radio check with the control room. Alarm acknowledged on the TKF panel.
+14:05 Handover meeting with the process engineer. Open work orders reviewed.
+15:50 Housekeeping complete, permits closed. Handed over to the next shift lead.

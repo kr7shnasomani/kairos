@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from api.config import settings as app_settings
 from api.dependencies import CurrentUserDep, RedisDep, SettingsDep, SupabaseDep, require_role
 from api.models.brief import BriefFeedback
+from api.services import tenant
 from api.services.event_bus import EventBusService
 from api.services.identity import display_names
 
@@ -148,6 +149,8 @@ def _brief_recipients(current_user: dict) -> list[str]:
     site_id = current_user.get("site_id", "")
     if site_id:
         recipients.append(f"site-{site_id}")
+    if tenant.sees_showcase(current_user):  # a caller who sees the showcase reads its sites' site-wide briefs too
+        recipients += [f"site-{s}" for s in tenant.DEMO_SITES]
     return recipients
 
 
@@ -156,7 +159,7 @@ def _may_read(brief: dict, current_user: dict) -> bool:
     posted safety document, not private correspondence (see `get_brief`)."""
     return brief.get("recipient_user_id") in _brief_recipients(current_user) or (
         bool(brief.get("requires_countersignature"))
-        and current_user.get("role") in {"engineer", "reliability", "admin"}
+        and tenant.has_role(current_user, "engineer", "reliability", "admin")
     )
 
 
@@ -261,10 +264,10 @@ async def get_my_briefs(
         )
 
     return {
-        "briefs": delivered + frozen_page,
+        "briefs": [tenant.present_asset(b) for b in delivered + frozen_page],
         "total_pending": page["total_pending"],
         "suppressed_count": suppressed_count,
-        "suppressed_held": page["suppressed_held"],
+        "suppressed_held": [tenant.present_asset(b) for b in page["suppressed_held"]],
         "governor_state": {
             "push_count_last_hour": gov["push_count_last_hour"],
             "ceiling": gov["ceiling"],
@@ -315,7 +318,7 @@ async def get_brief(
     if not result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brief '{brief_id}' not found")
 
-    brief = result.data[0]
+    brief = tenant.present_asset(result.data[0])
     if not _may_read(brief, current_user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Brief '{brief_id}' not found")
     # Signers are stored as auth UUIDs; the sign-off panel shows who signed, not an opaque id.
@@ -340,6 +343,7 @@ async def ack_brief(
     from datetime import datetime
     user_id = current_user.get("user_id", "")
     now = datetime.now(UTC).isoformat()
+    await tenant.guard_row(supabase, current_user, "briefs", brief_id)
 
     result = await asyncio.to_thread(
         lambda: supabase.table("briefs")
@@ -409,6 +413,7 @@ async def countersign_brief(
 
     user_id = current_user.get("user_id", "")
     now = datetime.now(UTC).isoformat()
+    await tenant.guard_row(supabase, current_user, "briefs", brief_id)
 
     # Deliberately NOT scoped by recipient. The countersigner is, by definition, someone other
     # than the person the brief was delivered to — Flow B has the issuing engineer acknowledge and
@@ -510,6 +515,7 @@ async def submit_feedback(
     cited in the brief. Task 16 attribution worker performs the actual adjustment.
     """
     user_id = current_user.get("user_id", "")
+    await tenant.guard_row(supabase, current_user, "briefs", brief_id)
     # Same visibility rule as reading the brief: feedback on a brief you cannot open is a 404.
     found = await asyncio.to_thread(
         lambda: supabase.table("briefs")

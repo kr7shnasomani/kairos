@@ -98,6 +98,18 @@ kairos/                          # repo root
 │   │   ├── redate_demo.py           # Shift demo event dates so the newest is "yesterday" (`make redate-demo`).
 │   │   │                             # Golden events only (matched via the loader's mapping). DRY RUN by
 │   │   │                             # default; --apply writes cloud Supabase + Neo4j. Safe to re-run.
+│   │   ├── generate_showcase.py     # Write the showcase_* files into dataset/ from the generator (`make generate-showcase`). No store.
+│   │   ├── load_showcase.py         # Load the showcase_* files in dataset/ (about 160 assets, about 470 documents, 90 days of history)
+│   │   │                             # into the CURRENT stores (`make load-showcase`). DRY RUN by default; --apply
+│   │   │                             # also needs SHOWCASE_CONFIRM. Fails if any row lacks a showcase marker or the
+│   │   │                             # real-mode counts change.
+│   │   ├── redate_showcase.py       # Shift the showcase's dates forward (`make redate-showcase`); time columns of the
+│   │   │                             # loader's own rows only. DRY RUN by default. SHOWCASE_AUTO_REDATE runs it daily.
+│   │   ├── reset_showcase.py        # Put the showcase's state back to its seed (`make reset-showcase`). The only
+│   │   │                             # delete: marker filters only, never the vault. DRY RUN by default.
+│   │   ├── showcase/                # The generator: spec.py (sites, people, assets), docs.py (the documents),
+│   │   │                             # history.py (events, briefs, governance, knowledge capture), redate.py;
+│   │   │                             # files.py writes and reads the showcase files in dataset/ and binds it to load time
 │   │   ├── purge_test_data.py       # Delete test-prefixed rows from all stores (`make purge-test-data`)
 │   │   └── wipe_local_stores.py     # Empty Neo4j + ES + Qdrant entirely (`make wipe-local` / `reset-local`)
 │   └── requirements.txt
@@ -352,7 +364,7 @@ Qdrant treats a missing key as non-matching, so requiring `active` would silentl
 
 LLM synthesis + embedding. Never originates knowledge — only assembles retrieved context.
 
-- `synthesize(query, context, query_category, aliases=None)` — `nvidia/nemotron-3-super-120b-a12b` on the first
+- `synthesize(query, context, query_category, aliases=None)` — `nvidia/nemotron-3-ultra-550b-a55b` on the first
   configured tier (NIM by default), falling through the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
   result after it (an honest "not specified in the sources" must not render as a hedged answer).
 - `evidence_gate(...)` / `result_gate(...)` — those two gates, as separate methods returning a
@@ -964,6 +976,9 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `APP_SECRET_KEY` | `CHANGE_ME_IN_PRODUCTION` | Change in prod |
 | `CORS_ORIGINS` | `["http://localhost:3000","http://localhost:8000"]` | Allowed origins |
 | `INTERNAL_API_KEY` | `kairos-internal-dev-key` | Service-to-service auth token |
+| `DEMO_LLM_ACTIONS_PER_HOUR` | `120` | Hourly ceiling, shared by every demo login, on the demo role's model-backed actions (Copilot, RCA, ingest, event briefs, voice). A real account is never counted; a Redis outage fails open |
+| `SHOWCASE_AUTO_REDATE` | `false` | When true the API shifts the showcase plant's dates forward about once a day (`scripts/showcase/redate.py`); time columns of the loader's own rows only |
+| `SHOWCASE_VISIBLE_TO_ALL` | `true` | Every login reads the showcase plant as well as the real one, and a site-pinned role reads across sites. False: only the demo role sees it and real accounts see real data alone. The demo role writes only to showcase rows either way (`services/tenant.py`) |
 | `MOC_WEBHOOK_SECRET` | `None` | HMAC secret for `POST /governance/moc/webhook`. Unset is accepted only in development; **boot refuses without it outside development** |
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP cap, enforced whenever `APP_ENV` is not `development` (0 = off) |
 | `MAX_UPLOAD_MB` | `25` | Reject document and voice-note uploads larger than this (Caddy caps the raw body at 30 MB) |
@@ -1029,7 +1044,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `NVIDIA_NIM_API_KEY` | `""` | Required for NIM synthesis, NER, and OCR |
-| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
+| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
 | `NVIDIA_NIM_NER_MODEL` | `meta/llama-3.2-11b-vision-instruct` | NER extraction. Was `mistralai/ministral-14b-instruct-2512`, **deprecated by NVIDIA** — the endpoint hangs until timeout and `NERService` degrades silently to its regex fallback (ASSET_TAG only). Verify any replacement responds before switching. |
 | `NVIDIA_NIM_NER_TIMEOUT` | `120.0` | NER's own per-attempt cap (3 attempts on a timeout or 5xx). Separate from `NVIDIA_NIM_TIMEOUT`, which must stay under the 90 s synthesis budget; NER runs in background ingestion, and a miss drops the document to the regex fallback. |
 | `NVIDIA_NIM_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | OCR for scanned docs/images |
@@ -1139,7 +1154,7 @@ skips them skips the point.
 | `reliability` | Engineer's reads and ingests (`ingest_document`, `ingest_event`) + `promote_quarantine`, **`countersign_brief`**, `resolve_admin_conflict` (no `ack_brief`, no `write_assets`) |
 | `compliance` | `read_search`, `read_compliance`, `read_audit`, `read_nonconformance`, `read_events` |
 | `admin` | `*` (all) |
-| `demo` | The public one-click demo identity. Every `read_*` action an admin has (including audit, governance and events), plus `synthesize`, `rca_pack` and `answer_feedback` (these only append to the audit log). Every other write is **denied by default**: it is not in the catch-all, so a route added later stays refused until it is named. Never acks or rates a brief, ingests, supersedes, resolves, promotes, approves or edits. `tests/test_sec_authz.py` enumerates every non-GET route and asserts the demo role is denied each one outside that list. |
+| `demo` | The public one-click demo identity, which works the showcase plant. Every `read_*` action an admin has, plus `synthesize`, `rca_pack`, `answer_feedback` and the write actions (`write_api`, `ingest_document`, `ingest_event`, `write_assets`, `promote_quarantine`, `resolve_admin_conflict`). Policy is the coarse layer: `dependencies.demo_write_fence` refuses a demo write on any route not in `tenant.DEMO_WRITE_ALLOWED`, each of those handlers guards its target to a showcase row (`tenant.guard_asset`, `guard_site`, `guard_row`, `guard_work_order`, `guard_person`), and the model-gate run and provider probes stay closed (it satisfies a role gate naming `engineer` or `reliability`, never admin only). Model-backed actions share an hourly cap (`DEMO_LLM_ACTIONS_PER_HOUR`). `tests/test_tenant_isolation.py` and `tests/test_authz_boundary.py` pin the registry, the fence and the guards. |
 
 > **Engineers deliberately cannot `promote_quarantine` or `countersign_brief`.** That is what makes
 > the one-way quarantine gate and the PTW dual signature real: the second signature can never come

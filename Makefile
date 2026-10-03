@@ -7,7 +7,8 @@
 # silently running nothing — exit 0, no benchmark, a green CI step that did no work.
 .PHONY: help dev prod stop nuke logs ps sync-check deploy-backend deploy-frontend local-refresh \
         init-neo4j init-qdrant init-all \
-        seed load-dataset redate-demo purge-test-data wipe-local reset-local \
+        seed load-dataset redate-demo generate-showcase load-showcase redate-showcase reset-showcase \
+        purge-test-data wipe-local reset-local \
         test test-api test-connectors \
         verify benchmark model-gate \
         lint format
@@ -153,6 +154,25 @@ load-dataset:
 # default; APPLY=1 WRITES TO THE CLOUD GOLDEN STORES — run it yourself, on demo day. See DATASET.md.
 redate-demo:
 	docker compose exec kairos-backend-api python scripts/redate_demo.py $(if $(APPLY),--apply,)
+
+# Rewrite the showcase files (showcase_* beside the golden files in dataset/00_ to 05_) from the generator. Touches no
+# store and no golden file. The dataset mount is read-only in the container, so dataset/ is mounted writable at /out.
+generate-showcase:
+	docker compose run --rm --no-deps -v "$(CURDIR)/dataset:/out" kairos-backend-api python scripts/generate_showcase.py /out $(ARGS)
+
+# The showcase plant the public demo login works (docs/implementation/demo-data.md). All three are dry runs
+# unless APPLY=1, and APPLY=1 writes to the CURRENT stores, so run it yourself. A load also needs
+# SHOWCASE_CONFIRM=load-showcase-into-current-stores, a reset SHOWCASE_CONFIRM=reset-showcase-state.
+load-showcase:
+	docker compose exec -e SHOWCASE_CONFIRM kairos-backend-api python scripts/load_showcase.py $(if $(APPLY),--apply,)
+
+# Shift the showcase plant's dates forward so it reads as recent (updates time columns of its own rows only).
+redate-showcase:
+	docker compose exec kairos-backend-api python scripts/redate_showcase.py $(if $(APPLY),--apply,)
+
+# Put the showcase plant's state (events, briefs, conflicts, quarantine...) back to its seed. Never touches the vault.
+reset-showcase:
+	docker compose exec -e SHOWCASE_CONFIRM kairos-backend-api python scripts/reset_showcase.py $(if $(APPLY),--apply,)
 
 # Delete integration-test residue (ASSET-TEST/DEDUP/EV/ACK-*, WO-*, DOC-*) from every store.
 purge-test-data:

@@ -1,7 +1,6 @@
 "use client";
 
 // Step-through elicitation questionnaire for a work order — answers feed the knowledge quarantine.
-import { DemoGate } from "@/components/demo-gate";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getElicitationQuestions, submitElicitationResponses } from "@/lib/api";
@@ -174,8 +173,8 @@ export default function ElicitationPage() {
       <PageHeader
         compact
         className="mb-6"
-        eyebrow={`Work order ${workOrderId}`}
-        title="Knowledge capture"
+        title="Knowledge Capture"
+        lede={`Work order ${workOrderId}. A few short questions about this job, so what the person who did it knows stays with the plant.`}
       />
 
       {/* Progress */}
@@ -241,7 +240,7 @@ export default function ElicitationPage() {
             Back
           </Button>
         )}
-        <DemoGate when={isLast}>
+        <>
         <Button
           variant="primary"
           onClick={advance}
@@ -254,7 +253,7 @@ export default function ElicitationPage() {
               : "Submit responses"
             : "Next →"}
         </Button>
-        </DemoGate>
+        </>
       </div>
         </main>
 

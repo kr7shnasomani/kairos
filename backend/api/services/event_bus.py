@@ -164,7 +164,6 @@ class EventBusService:
         Returns True if this call counted a new push, False if already counted.
         """
         count_key = self._governor_key(user_id)
-        now_ts = datetime.now(UTC).timestamp()
         # Check whether this brief is already in the window before adding.
         already = bool(await self.redis.zscore(count_key, brief_id))
         if not already:

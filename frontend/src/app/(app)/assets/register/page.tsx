@@ -4,7 +4,6 @@
 // Separate from /assets/bootstrap on purpose: registering equipment is a data-entry job for admin and
 // engineer, confirming a provisional identity is an admin review. They shared one page and both Assets
 // buttons landed on it.
-import { DemoGate } from "@/components/demo-gate";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { bulkImportAssets, confirmAssetIdentity, type AssetBulkImportResult, type AssetImportRow } from "@/lib/api";
@@ -152,11 +151,11 @@ function RegisterAssetForm({ userId, siteId }: { userId: string; siteId: string 
       </label>
       <div className="flex flex-col justify-end gap-1">
         <span className="text-label text-muted">Site, <span className="tabular font-semibold text-ink">{siteId || "—"}</span> (from your account)</span>
-        <DemoGate>
+        <>
           <Button type="submit" variant="primary" className="h-11 md:h-9" disabled={busy || !siteId}>
             {busy ? "Registering…" : "Register asset"}
           </Button>
-        </DemoGate>
+        </>
       </div>
       {message && (
         <p role="status" className={`text-caption sm:col-span-2 ${message.ok ? "text-verified" : "text-danger"}`}>
@@ -222,13 +221,13 @@ function BulkImportPanel({ siteId }: { siteId: string }) {
               {parsed.errors.slice(0, 5).map((err) => <li key={err}>{err}</li>)}
             </ul>
           )}
-          <DemoGate>
+          <>
             <div>
               <Button variant="primary" className="h-11 md:h-9" disabled={busy || parsed.rows.length === 0} onClick={runImport}>
                 {busy ? "Importing…" : `Import ${parsed.rows.length} asset${parsed.rows.length === 1 ? "" : "s"}`}
               </Button>
             </div>
-          </DemoGate>
+          </>
         </div>
       )}
       {failure && <p role="alert" className="text-caption text-danger">{failure}</p>}
@@ -272,9 +271,8 @@ export default function RegisterAssetPage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Operate"
-        title="Register assets"
-        lede="Add equipment to the canonical registry one at a time, or import the golden record from your EAM system."
+        title="Register Assets"
+        lede="Add equipment to the canonical registry one asset at a time, or import the whole master record from your asset management system. A registered tag becomes the anchor that documents and events are linked to."
       />
 
       {!allowed && (

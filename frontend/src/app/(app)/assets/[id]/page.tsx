@@ -21,7 +21,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     { label: "Compliance gaps", value: a.compliance_gaps ?? "—" },
     // Read from the INSPECTION_RECORD edge written by an inspection-complete event, not from linked
     // documents, so an asset can show an inspection report under Knowledge and still have no date here.
-    { label: "Last inspection", value: a.last_inspection ?? "—", note: a.last_inspection ? null : "No inspection-complete event found" },
+    { label: "Last inspection", value: a.last_inspection ? new Date(a.last_inspection).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "—", note: a.last_inspection ? null : "No inspection-complete event found" },
   ];
 
   return (
@@ -35,9 +35,8 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
         <PageHeader
           compact
           className="px-4 py-5 sm:px-5"
-          eyebrow={a.asset_id}
           title={a.name}
-          lede={<>{a.equipment_class.replaceAll("_", " ")}{a.parent && <>, Parent {a.parent}</>}</>}
+          lede={<><span className="tabular text-accent">{a.asset_id}</span>, {a.equipment_class.replaceAll("_", " ")}{a.parent && <>, Parent {a.parent}</>}</>}
           actions={
             <>
               <span className="inline-flex h-[22px] items-center gap-1.5 bg-surface-2 px-2 text-label font-semibold" style={{ color: a.criticalityColor }}>

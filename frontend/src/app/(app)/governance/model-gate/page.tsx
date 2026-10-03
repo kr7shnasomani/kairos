@@ -160,7 +160,6 @@ export default function ModelGatePage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance"
         title="Model Gate"
         lede="Precision / recall gate on the validation corpus. A failed run blocks model promotion. Runs are triggered manually or by the nightly Temporal workflow."
         actions={

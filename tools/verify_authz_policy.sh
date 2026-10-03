@@ -56,7 +56,7 @@ CASES=(
   "reliability:countersign_brief:true"
   "engineer:countersign_brief:false"      # the acknowledger's role cannot also countersign
   "admin:promote_quarantine:true"
-  # --- demo: sees everything an admin sees, writes only what appends to the audit log --------
+  # --- demo: sees everything an admin sees; writes are allowed here and fenced by the API ----
   "demo:read_search:true"
   "demo:read_briefs:true"
   "demo:read_assets:true"
@@ -70,13 +70,13 @@ CASES=(
   "demo:synthesize:true"                  # the Copilot, without being granted write_api
   "demo:rca_pack:true"                    # audit-log append only
   "demo:answer_feedback:true"             # audit-log append only
-  "demo:write_api:false"                  # brief ack/feedback, annotations, deviation flags, elicitation
-  "demo:write_assets:false"
-  "demo:ingest_document:false"
-  "demo:ingest_event:false"
-  "demo:promote_quarantine:false"
+  "demo:write_api:true"                   # brief ack/feedback, annotations, deviation flags, elicitation (API-fenced)
+  "demo:write_assets:true"
+  "demo:ingest_document:true"
+  "demo:ingest_event:true"
+  "demo:promote_quarantine:true"
   "demo:countersign_brief:false"
-  "demo:resolve_admin_conflict:false"     # supersede, MoC approve, conflict resolve
+  "demo:resolve_admin_conflict:true"      # supersede, MoC approve, conflict resolve (API-fenced)
   "demo:some_future_action:false"         # deny by default, not an exclusion list
   "field_worker:synthesize:true"          # the Copilot actions reach every staff role unchanged
   "compliance:rca_pack:true"

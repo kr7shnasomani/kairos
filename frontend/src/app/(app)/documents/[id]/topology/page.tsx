@@ -1,7 +1,6 @@
 "use client";
 
 // Interactive P&ID topology canvas for a vault document (React Flow).
-import { DemoGate } from "@/components/demo-gate";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -110,7 +109,6 @@ function TopologyPageInner() {
       <PageHeader
         compact
         className="mt-4 mb-5"
-        eyebrow="Knowledge"
         title={id}
         lede="Equipment, valves, instruments, and flow connections extracted from the P&ID drawing. Candidate topology until an engineer confirms it element by element — confirm or reject each element below."
       />
@@ -214,7 +212,7 @@ function TopologyPageInner() {
                   <span className="text-label text-muted">{n.node_type}</span>
                   <span className="ml-auto text-label capitalize" style={{ color }}>{n.verification_status}</span>
                   {canVerify && n.verification_status === "unverified" && (
-                    <DemoGate><span className="flex gap-1.5">
+                    <><span className="flex gap-1.5">
                       <Button
                         variant="ghost"
                         onClick={() => decide(n.node_id, "confirmed")}
@@ -231,7 +229,7 @@ function TopologyPageInner() {
                       >
                         Reject
                       </Button>
-                    </span></DemoGate>
+                    </span></>
                   )}
                 </div>
               );

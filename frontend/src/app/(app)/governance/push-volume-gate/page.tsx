@@ -26,8 +26,7 @@ export default function PushVolumeGatePage() {
   return (
     <div data-testid="push-volume-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="EEMUA 191"
-        title="Push-volume gate"
+        title="Push-Volume Gate"
         lede="Governed proactive mode stays the default only while briefs per operator stay within the hourly ceiling. This report informs that decision; it never blocks delivery."
         actions={
           <label className="flex items-center gap-2 text-caption">

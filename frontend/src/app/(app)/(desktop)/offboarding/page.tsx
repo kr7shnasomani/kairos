@@ -81,14 +81,12 @@ export default async function OffboardingPage() {
   return (
     <div data-testid="offboarding-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Knowledge transfer"
-        title="Expert handovers"
-        lede="Structured knowledge transfer for departing experts: graph-derived sessions targeting top failure modes by equipment family."
+        title="Expert Handovers"
+        lede="Capture what a departing expert knows before they leave. Each programme turns the plant's own failure history into short question sessions by equipment family, and the answers go to the review queue to be verified before they become governed knowledge."
       />
 
       <div data-testid="offboarding-summary" className="mt-6 grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(130px,0.55fr))]">
-        <div className="relative bg-[linear-gradient(120deg,color-mix(in_srgb,var(--info)_7%,var(--surface)),var(--surface))] px-5 py-5 sm:col-span-2 lg:col-span-1">
-          <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 w-[3px] bg-info" />
+        <div className="bg-surface-2 px-5 py-5 sm:col-span-2 lg:col-span-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-label font-semibold uppercase tracking-[0.1em] text-muted">Handover coverage</p>
           </div>

@@ -1,0 +1,11 @@
+Veridian Petrochemicals
+Bharuch Complex
+
+Document no: PTW-UTL-BOILER-BURNER-SERVICE   Revision: A
+Title: Permit to work: burner service on package boiler B-3101
+Owner: Rohit Bhatt
+Issued: 30 September 2026
+
+Primary equipment: B-3101, Package boiler
+
+Permit PTW-DEMO-0461. Work: replace the main burner igniter on B-3101. Isolation: fuel gas double block and bleed closed, boiler off line and cooled. Equipment on the boundary: B-3101, XV-3101 and XV-3102.

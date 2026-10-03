@@ -1,6 +1,5 @@
 "use client";
 
-import { DemoGate } from "@/components/demo-gate";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -76,7 +75,7 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
 
   return (
     <>
-      <DemoGate>
+      <>
         <Button
           variant="ghost"
           onClick={() => { setOpen(true); setDone(null); setPendingMoc(null); setError(null); }}
@@ -84,7 +83,7 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
         >
           Supersede document
         </Button>
-      </DemoGate>
+      </>
 
       {open && (
         <Modal title="Supersede document" onClose={() => setOpen(false)}>

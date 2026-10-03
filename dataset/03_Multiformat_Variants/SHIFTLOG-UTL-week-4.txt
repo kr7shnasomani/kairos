@@ -1,0 +1,17 @@
+Veridian Petrochemicals
+Bharuch Complex
+
+Document no: SHIFTLOG-UTL-WEEK-4   Revision: A
+Title: Shift log, UTL, week commencing 12 September
+Owner: Arvind Nair
+Issued: 12 September 2026
+
+Primary equipment: P-3101A, Cooling water pump A
+
+Shift lead: Arvind Nair
+
+06:10 Took over from the previous shift. P-3101A running normally, discharge pressure steady.
+09:40 Walk-round of the UTL unit. Slight oil mist near the drive end of P-3101A; reported to the technician.
+11:25 Radio check with the control room. Alarm acknowledged on the UTL panel.
+14:05 Handover meeting with the process engineer. Open work orders reviewed.
+15:50 Housekeeping complete, permits closed. Handed over to the next shift lead.

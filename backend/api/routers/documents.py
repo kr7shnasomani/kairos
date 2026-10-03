@@ -26,9 +26,11 @@ from api.dependencies import (
     SettingsDep,
     SupabaseDep,
     TemporalDep,
+    demo_llm_budget,
     require_role,
 )
 from api.models.document import DocumentStatus, ExtractionResult, VaultDocument
+from api.services import tenant
 from api.services.corpus import is_test_artifact
 from api.services.graph import GraphService, entities_from_edges, person_names_from_edges
 from api.services.identity import display_name
@@ -116,7 +118,9 @@ def _access_tags(current_user: dict, authority_level: int) -> dict:
     `site_id` comes from the verified token, never from the request — same rule as `site_scope`.
     """
     return {
-        "site_id": current_user.get("site_id") or None,
+        # A showcase upload (demo role) is stamped with the showcase site, which is what routes it to
+        # the `_demo` stores and hides it from real accounts (`services/tenant.py`).
+        "site_id": tenant.DEMO_SITES[0] if tenant.is_demo_user(current_user) else (current_user.get("site_id") or None),
         "required_action": "read_documents",
         # Authority 1–2 are regulatory/engineering standards, 3–4 controlled operational
         # documents, 5 informational field material. This mirrors the authority hierarchy that
@@ -131,6 +135,14 @@ def _access_tags(current_user: dict, authority_level: int) -> dict:
     }
 
 
+async def _showcase_asset(supabase, document_id: str) -> str:
+    """A showcase document's asset (its first link), else the showcase placeholder asset."""
+    link = await asyncio.to_thread(
+        lambda: supabase.table("document_asset_links").select("asset_id").eq("document_id", document_id).limit(1).execute()
+    )
+    return (link.data or [{}])[0].get("asset_id") or tenant.DEMO_GENERAL_ASSET
+
+
 class TopologyElementDecision(BaseModel):
     """One engineer verdict on one extracted P&ID element."""
 
@@ -143,7 +155,7 @@ class TopologyVerifyRequest(BaseModel):
     decisions: list[TopologyElementDecision] = Field(min_length=1)
 
 
-@router.post("/ingest", summary="Ingest a document into the immutable vault", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/ingest", dependencies=[Depends(demo_llm_budget)], summary="Ingest a document into the immutable vault", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_document(
     current_user: CurrentUserDep,
     supabase: SupabaseDep,
@@ -178,6 +190,7 @@ async def ingest_document(
         occurred_at = parse_occurred_at(occurred_at, now_dt)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid occurred_at: {exc}") from exc
+    tenant.guard_asset(current_user, asset_id)  # a demo upload must be filed against a showcase asset
     if asset_id:
         known_asset = await asyncio.to_thread(
             lambda: supabase.table("assets").select("asset_id").eq("asset_id", asset_id).limit(1).execute()
@@ -189,7 +202,7 @@ async def ingest_document(
     # request records both the level asked for and who asserted the level that stuck.
     requested_authority = authority_level
     role = current_user.get("role", "")
-    if authority_level <= MAX_UNASSERTED_AUTHORITY_LEVEL and role not in AUTHORITY_ASSERT_ROLES:
+    if authority_level <= MAX_UNASSERTED_AUTHORITY_LEVEL and not tenant.has_role(current_user, *AUTHORITY_ASSERT_ROLES):
         authority_level = CAPPED_AUTHORITY_LEVEL
         log.warning("ingest.authority_capped", user_id=uploader, role=role, requested=requested_authority)
 
@@ -397,8 +410,10 @@ async def list_documents(
     `.eq()`/`.neq()`/`.in_()` all work), so pattern-matching has to happen client-side and the
     exclusion applied as a plain `.not_.in_()` id list instead.
     """
-    base_filters_query = supabase.table("documents").select("document_id, file_name")
-    query = supabase.table("documents").select("*", count="exact")
+    base_filters_query = tenant.scope_document_site(
+        supabase.table("documents").select("document_id, file_name"), current_user
+    )
+    query = tenant.scope_document_site(supabase.table("documents").select("*", count="exact"), current_user)
 
     if document_type:
         query = query.eq("document_type", document_type)
@@ -654,6 +669,7 @@ async def release_held_document(
     `unverified` edges and low-confidence entities still quarantine, so releasing the scan does not
     verify what is read from it. The previous job row is kept; the release gets a new one.
     """
+    await tenant.guard_row(supabase, current_user, "documents", document_id)
     held = await _held_job(supabase, document_id)
     reviewer = current_user.get("user_id", "unknown")
 
@@ -723,6 +739,7 @@ async def reject_held_document(
     The vault artifact is never deleted (immutability) — the job is closed as `rejected` so it leaves the
     review state, and a legible rescan is ingested as a new document (and may supersede this one).
     """
+    await tenant.guard_row(supabase, current_user, "documents", document_id)
     held = await _held_job(supabase, document_id)
     reviewer = current_user.get("user_id", "unknown")
     note = (decision.note if decision else None) or "scan unreadable"
@@ -850,6 +867,7 @@ async def verify_document_topology(
     element, what becomes canonical. Safety-critical groups (isolation boundaries, instrumentation
     loops) must be fully confirmed before `canonical_ready` turns true.
     """
+    await tenant.guard_row(supabase, current_user, "documents", document_id)
     svc = TopologyVerificationService(supabase, GraphService(driver))
     result = await svc.verify_elements(
         document_id=document_id,
@@ -947,9 +965,11 @@ async def get_redacted_document(
     that never reached the graph. Structured identifiers (email, phone, Aadhaar, PAN,
     employee/shift IDs) are matched by pattern. The vault copy is never modified.
     """
+    # The document may be real or showcase; the id is unique across both, so look in both.
     result = await es.search(
-        index=settings.ELASTICSEARCH_INDEX_DOCUMENTS,
+        index=f"{settings.ELASTICSEARCH_INDEX_DOCUMENTS},{tenant.demo_store(settings.ELASTICSEARCH_INDEX_DOCUMENTS)}",
         body={"query": {"term": {"document_id": document_id}}, "size": 1},
+        ignore_unavailable=True,
     )
     hits = result.get("hits", {}).get("hits", [])
     if not hits:
@@ -1066,12 +1086,17 @@ async def supersede_document(
     # Verify both documents exist
     old_result = await asyncio.to_thread(
         lambda: supabase.table("documents")
-        .select("document_id, status, authority_level")
+        .select("document_id, status, authority_level, access_tags")
         .eq("document_id", document_id)
         .execute()
     )
     if not old_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found")
+    showcase = tenant.is_demo_document(old_result.data[0])
+    tenant.guard_document(current_user, old_result.data[0])
+    await tenant.guard_row(supabase, current_user, "documents", new_document_id)
+    # A showcase MoC carries a showcase asset, so it is recognised as showcase (a NULL asset means real).
+    moc_asset = await _showcase_asset(supabase, document_id) if showcase else None
     if old_result.data[0]["status"] == "superseded":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1099,7 +1124,7 @@ async def supersede_document(
     approved_moc_id: str | None = None
     if (old_result.data[0].get("authority_level") or 5) <= GATED_SUPERSEDE_AUTHORITY:
         role = current_user.get("role", "")
-        if role not in SUPERSEDE_GATED_ROLES:
+        if not tenant.has_role(current_user, *SUPERSEDE_GATED_ROLES):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{role}' cannot supersede a document of authority "
@@ -1121,7 +1146,7 @@ async def supersede_document(
                 await asyncio.to_thread(
                     lambda: supabase.table("moc_items").insert({
                         "moc_id": moc_id,
-                        "asset_id": None,
+                        "asset_id": moc_asset,
                         "description": (
                             f"Supersede '{document_id}' (authority {old_result.data[0]['authority_level']}) with "
                             f"'{new_document_id}' (authority {new_row.get('authority_level')}, "
@@ -1177,7 +1202,7 @@ async def supersede_document(
     index_errors: list[str] = []
     try:
         await es.update(
-            index=settings_dep.ELASTICSEARCH_INDEX_DOCUMENTS,
+            index=tenant.store_for(settings_dep.ELASTICSEARCH_INDEX_DOCUMENTS, demo=showcase),
             id=document_id,
             body={"doc": {"status": "superseded"}},
         )
@@ -1189,7 +1214,7 @@ async def supersede_document(
 
     try:
         await VectorStoreService(qdrant, settings_dep).mark_superseded(
-            settings_dep.QDRANT_COLLECTION_DOCUMENTS, document_id
+            tenant.store_for(settings_dep.QDRANT_COLLECTION_DOCUMENTS, demo=showcase), document_id
         )
     except Exception as exc:
         index_errors.append("qdrant")
@@ -1209,7 +1234,7 @@ async def supersede_document(
         await asyncio.to_thread(
             lambda: supabase.table("moc_items").insert({
                 "moc_id": moc_id,
-                "asset_id": None,
+                "asset_id": moc_asset,
                 "description": (
                     f"Document '{document_id}' superseded by '{new_document_id}'. "
                     f"{closed_count} graph edges closed. "

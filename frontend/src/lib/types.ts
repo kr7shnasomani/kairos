@@ -760,7 +760,7 @@ export interface OtCoverage {
 export interface GraphNodeData {
   id: string;
   label: string;
-  kind: string; // Asset | Event | Document | Concept | Person | Organization | …
+  kind: string; // Asset | Event | Document | Concept | Person | Organisation | …
   properties: Record<string, unknown>;
 }
 
@@ -775,6 +775,8 @@ export interface GraphEdgeData {
   valid_to: string; // "9999-…" sentinel = currently open
   document_id: string;
   confidence: number;
+  /** A position in the plant (the unit above, an event on the asset), not a knowledge fact: no authority or validity window. */
+  structural?: boolean;
 }
 
 export interface KnowledgeGraphData {

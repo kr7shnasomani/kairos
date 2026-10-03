@@ -1,0 +1,106 @@
+[
+  {
+    "moc_id": "MOC-DEMO-0001",
+    "conflict_id": "bd9cfbec-3e0c-5128-bb87-615a75224490",
+    "asset_id": "DEMO-PSV-1101",
+    "description": "PSV-1101 set pressure: the manufacturer bulletin revises the value to 16.8 barg; the operating procedure still states 18.0 barg. Update the procedure and re-check dependent records.",
+    "conflicting_sources": [
+      {
+        "value": "18.0 barg",
+        "document_id": "DOC-PENDING-09294540"
+      },
+      {
+        "value": "16.8 barg",
+        "document_id": "DOC-PENDING-55380699"
+      }
+    ],
+    "blast_radius": [
+      "DOC-PENDING-09294540"
+    ],
+    "status": "pending_approval",
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-09-07T16:07:35.667928+00:00"
+  },
+  {
+    "moc_id": "MOC-DEMO-0002",
+    "conflict_id": "07a77048-f574-502e-8c29-1d265400d705",
+    "asset_id": "DEMO-P-1101A",
+    "description": "P-1101A minimum continuous flow: the manufacturer bulletin revises the value to 150 m3/h; the operating procedure still states 120 m3/h. Update the procedure and re-check dependent records.",
+    "conflicting_sources": [
+      {
+        "value": "120 m3/h",
+        "document_id": "DOC-PENDING-44506289"
+      },
+      {
+        "value": "150 m3/h",
+        "document_id": "DOC-PENDING-82387966"
+      }
+    ],
+    "blast_radius": [
+      "DOC-PENDING-44506289"
+    ],
+    "status": "draft",
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-09-09T16:07:35.667928+00:00"
+  },
+  {
+    "moc_id": "MOC-DEMO-0003",
+    "conflict_id": "7ab2822e-6f45-5179-b5ac-a6b4ae472888",
+    "asset_id": "DEMO-T-6101",
+    "description": "T-6101 maximum fill level: the manufacturer bulletin revises the value to 88 percent; the operating procedure still states 92 percent. Update the procedure and re-check dependent records.",
+    "conflicting_sources": [
+      {
+        "value": "92 percent",
+        "document_id": "DOC-PENDING-73855215"
+      },
+      {
+        "value": "88 percent",
+        "document_id": "DOC-PENDING-53532102"
+      }
+    ],
+    "blast_radius": [
+      "DOC-PENDING-73855215"
+    ],
+    "status": "draft",
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-09-14T16:07:35.667928+00:00"
+  },
+  {
+    "moc_id": "MOC-DEMO-0004",
+    "conflict_id": "36a86b24-87ee-5e71-9af2-71ec728093b3",
+    "asset_id": "DEMO-V-2101",
+    "description": "V-2101 corrosion allowance: the manufacturer bulletin revises the value to 2.5 mm; the operating procedure still states 3.0 mm. Update the procedure and re-check dependent records.",
+    "conflicting_sources": [
+      {
+        "value": "3.0 mm",
+        "document_id": "DOC-PENDING-79563631"
+      },
+      {
+        "value": "2.5 mm",
+        "document_id": "DOC-PENDING-70079976"
+      }
+    ],
+    "blast_radius": [
+      "DOC-PENDING-79563631"
+    ],
+    "status": "approved",
+    "approved_by": "Lata Deshmukh",
+    "approved_at": "2026-08-27T14:07:35.667928+00:00",
+    "created_at": "2026-08-24T16:07:35.667928+00:00"
+  },
+  {
+    "moc_id": "MOC-DEMO-0005",
+    "conflict_id": null,
+    "asset_id": "DEMO-P-1102A",
+    "description": "Proposed change of the reflux pump seal flush plan from API Plan 11 to Plan 53B. Rejected: the existing plan meets the duty and the change needs a shutdown.",
+    "conflicting_sources": [],
+    "blast_radius": [],
+    "status": "rejected",
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-08-19T14:07:35.667928+00:00"
+  }
+]

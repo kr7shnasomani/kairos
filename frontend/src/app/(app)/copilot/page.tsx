@@ -222,9 +222,6 @@ export default function CopilotPage() {
             // The landing's hero voice: display headline with an accent second line,
             // then the suggested questions as a numbered cell mesh.
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-10 sm:px-6">
-              <p className="mb-4 inline-flex self-start bg-accent px-2.5 py-1 text-label font-semibold uppercase tracking-[0.08em] text-on-accent">
-                Copilot
-              </p>
               <h1 className="display text-display text-balance text-ink sm:text-hero">
                 Ask the knowledge base.
                 <span className="block text-accent">It cites, or it refuses.</span>

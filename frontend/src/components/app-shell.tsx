@@ -10,7 +10,7 @@ import { getMe, logout } from "@/lib/auth";
 import { getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
 import { flushQueue } from "@/lib/idb";
 import { getUserInitials } from "@/lib/user-initials";
-import { ADMIN_VIEW_ROLES, READ_ONLY_ROLES, routeAllowed, roleHome } from "./use-role";
+import { ADMIN_VIEW_ROLES, routeAllowed, roleHome } from "./use-role";
 import type { Role, User, GovernorEventState, PlantState } from "@/lib/types";
 import { capitalize, cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
@@ -51,7 +51,7 @@ const navAllowed = (it: NavItem, role: Role) => !it.roles || role === "demo" || 
 const NAV: { group: string; items: NavItem[] }[] = [
   {
     group: "",
-    items: [{ href: "/management", label: "Overview", icon: "management", roles: STAFF }],
+    items: [{ href: "/overview", label: "Overview", icon: "management", roles: STAFF }],
   },
   {
     group: "Operate",
@@ -69,7 +69,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       { href: "/rca", label: "RCA", icon: "rca", roles: STAFF },
       { href: "/graph", label: "Graph", icon: "graph", roles: STAFF },
-      { href: "/management/coverage", label: "Coverage", icon: "coverage", roles: STAFF },
+      { href: "/overview/coverage", label: "Coverage", icon: "coverage", roles: STAFF },
     ],
   },
   {
@@ -96,7 +96,7 @@ function GovernorPill({ userId }: { userId: string }) {
   const [gov, setGov] = useState<GovernorEventState | null>(null);
   useEffect(() => {
     let alive = true;
-    getGovernorState(userId).then((r) => { if (alive && r.data) setGov(r.data); });
+    getGovernorState().then((r) => { if (alive && r.data) setGov(r.data); });
     return () => { alive = false; };
   }, [userId]);
   if (!gov) return null;
@@ -160,7 +160,7 @@ export type RailActions = { onSearch: () => void; onCreate?: () => void; onOpenU
 export function SidebarContent({ onNavigate, role, user, collapsible = false, actions }: { onNavigate?: () => void; role: Role; user: User | null; collapsible?: boolean; actions?: RailActions }) {
   const pathname = usePathname();
   const [railCollapsed, toggleRail] = useRailCollapsed();
-  const homeHref = role === "field_worker" || role === "demo" ? roleHome(role) : "/management";
+  const homeHref = role === "field_worker" || role === "demo" ? roleHome(role) : "/overview";
   const shortcut = getSearchShortcut(typeof navigator === "undefined" ? undefined : navigator.platform);
   const sections = NAV
     .map((s) => ({ ...s, items: s.items.filter((it) => navAllowed(it, role)) }))
@@ -456,7 +456,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const GO: Record<string, string> = {
       b: "/briefs", c: "/copilot", a: "/assets", e: "/events", g: "/graph",
-      d: "/documents", q: "/governance/quarantine", v: "/governance", m: "/management",
+      d: "/documents", q: "/governance/quarantine", v: "/governance", m: "/overview",
     };
     const isTyping = (t: EventTarget | null) =>
       t instanceof HTMLElement &&
@@ -488,10 +488,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
-  const readOnly = READ_ONLY_ROLES.includes(role);
   const railActions: RailActions = {
     onSearch: () => setPalette(true),
-    onCreate: readOnly ? undefined : () => router.push("/documents/ingest"),
+    onCreate: () => router.push("/documents/ingest"),
     onOpenUser: () => setAccountOpen((open) => !open),
     accountName: user?.email ?? "Kairos user",
     accountInitials: getUserInitials(user?.email),
@@ -503,7 +502,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-dvh">
         <aside data-rail className="sidebar-scope hidden w-[var(--rail-w)] shrink-0 border-r border-line transition-[width] duration-200 motion-reduce:transition-none lg:block" aria-hidden="true">
           <div className="sticky top-0 h-dvh px-4 py-4">
-            <BrandLink href="/management" />
+            <BrandLink href="/overview" />
           </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -539,7 +538,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <button className="absolute inset-0 animate-[overlay-in_150ms_ease-out] bg-[var(--scrim)]" aria-label="Close menu" onClick={() => setMobileDrawerOpen(false)} />
           <div className="sidebar-scope absolute inset-y-0 left-0 w-[316px] max-w-[86vw] overflow-y-auto border-r border-line outline-none animate-[drawer-in_250ms_ease-out]">
-            <SidebarContent onNavigate={() => setMobileDrawerOpen(false)} role={role} user={user} actions={railActions} />
+            <SidebarContent onNavigate={() => setMobileDrawerOpen(false)} role={role} user={user} />
           </div>
         </div>
       )}
@@ -575,19 +574,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <MobileAppHeader
           onOpenMenu={() => setMobileDrawerOpen(true)}
           onOpenSearch={() => setPalette(true)}
-          onCreate={readOnly ? undefined : () => router.push("/documents/ingest")}
+          onCreate={() => router.push("/documents/ingest")}
           onOpenUser={() => setAccountOpen((open) => !open)}
           userInitial={getUserInitials(user?.email)}
         />
-
-        {/* The demo identity is read-only by policy; say so, so a refused action is not a mystery. */}
-        {readOnly && (
-          <div role="status" data-testid="read-only-demo" className="flex items-center gap-2 border-b border-line bg-accent-soft px-5 py-2 text-caption font-semibold text-ink">
-            <SharedIcon name="lock-simple" className="size-4 shrink-0 text-accent" />
-            Demo account: destructive actions are disabled
-            <span className="font-normal text-muted">You can see everything and ask the Copilot. Changes to shared data are blocked.</span>
-          </div>
-        )}
 
         {/* Plant operating state banner */}
         {plantState && (

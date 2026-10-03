@@ -14,19 +14,21 @@ export default function ProjectsPage() {
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [events, setEvents] = useState<OperationalEvent[]>([]);
+  const [totals, setTotals] = useState({ assets: 0, documents: 0 });
   const [failed, setFailed] = useState(false);
   const [reload, setReload] = useState(0);
   const [active, setActive] = useState<string>("all");
 
   useEffect(() => {
     let alive = true;
-    Promise.all([getDocuments(), getAssets(), getEvents({ limit: 100 })]).then(([d, a, e]) => {
+    Promise.all([getDocuments({ limit: 100 }), getAssets(500), getEvents({ limit: 100 })]).then(([d, a, e]) => {
       if (!alive) return;
       // Live-only is now enforced in the fetchers themselves: they throw rather than
       // returning a fixture, so a failure lands in .catch() below.
       setFailed(false);
       setDocuments(d.data.items);
       setAssets(a.data.items);
+      setTotals({ assets: a.data.total ?? a.data.items.length, documents: d.data.total ?? d.data.items.length });
       setEvents(e.data.items);
     }).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
@@ -76,19 +78,18 @@ export default function ProjectsPage() {
 
   return (
     <div data-testid="projects-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader eyebrow="Project &amp; procurement" title="Engineering portfolio" lede="Documents, revisions, and failure/maintenance history organised by equipment class: the record a procurement officer needs when evaluating a replacement or a vendor." />
+      <PageHeader title="Engineering Portfolio" lede="Documents, revisions, and failure/maintenance history organised by equipment class: the record a procurement officer needs when evaluating a replacement or a vendor." />
 
       <div data-testid="projects-portfolio-pulse" className="mt-6 grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(130px,0.55fr))]">
-        <div className="relative bg-[linear-gradient(120deg,color-mix(in_srgb,var(--info)_7%,var(--surface)),var(--surface))] px-5 py-5 sm:col-span-2 lg:col-span-1">
-          <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 w-[3px] bg-info" />
+        <div className="bg-surface-2 px-5 py-5 sm:col-span-2 lg:col-span-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-label font-semibold uppercase tracking-[0.1em] text-muted">Portfolio coverage</p>
           </div>
           <p className="tabular mt-1 text-title font-semibold text-ink">{classNames.length} equipment classes</p>
           <p className="mt-1 text-label text-muted">{plural(revisionCount, "retained revision")} across the procurement record</p>
         </div>
-        <PortfolioMetric value={assets.length} label="assets" className="sm:border-r lg:border-l" />
-        <PortfolioMetric value={documents.length} label="documents" />
+        <PortfolioMetric value={totals.assets} label="assets" className="sm:border-r lg:border-l" />
+        <PortfolioMetric value={totals.documents} label="documents" />
         <PortfolioMetric value={maintenanceSignals} label="maintenance signals" tone={maintenanceSignals > 0 ? "caution" : undefined} className="sm:col-span-2 lg:col-span-1 lg:border-l" />
       </div>
 

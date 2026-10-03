@@ -38,10 +38,10 @@ describe("GraphPage", () => {
 
     expect(screen.getByTestId("graph-workspace")).toHaveClass("max-w-[1400px]");
     expect(screen.getByTestId("graph-controls")).toHaveClass("rounded-xl", "bg-surface");
-    expect(screen.getByTestId("graph-layout")).toHaveClass("lg:grid-cols-[minmax(0,1fr)_280px]");
+    expect(screen.getByTestId("graph-layout")).toHaveClass("min-w-0");
     expect(screen.getByTestId("graph-context")).toHaveTextContent("Authority & verification");
     await waitFor(() => expect(screen.getByTestId("graph-summary")).toHaveTextContent("3 nodes"));
     expect(screen.getByTestId("graph-summary")).toHaveTextContent("2 relationships");
-    expect(screen.getByTestId("knowledge-graph")).toHaveAttribute("data-asset", "EQ-101");
+    expect(screen.getByTestId("knowledge-graph")).toHaveAttribute("data-asset", "DEMO-P-1101A");
   });
 });

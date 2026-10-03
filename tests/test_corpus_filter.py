@@ -196,4 +196,4 @@ async def test_excluded_count_uses_the_negated_guard_and_the_site_scope():
 
     assert await excluded_test_asset_count(_Session(), "SITE_001") == 3
     assert "NOT " + REAL_ASSET_CYPHER in seen["cypher"]
-    assert seen["params"] == {"site_id": "SITE_001"}
+    assert seen["params"] == {"site_id": "SITE_001", "hide_demo": True}

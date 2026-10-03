@@ -5,6 +5,7 @@ Manages canonical asset identities, alias resolution, and the asset hierarchy.
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Any
 
 import shortuuid
 import structlog
@@ -20,6 +21,7 @@ from api.dependencies import (
     site_scope,
 )
 from api.models.asset import AssetBulkImport, AssetCreate
+from api.services import tenant
 from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.coverage import CoverageService
 from api.services.graph import GraphService
@@ -66,6 +68,11 @@ async def scoped_asset(graph: GraphService, asset_id: str, current_user: dict) -
     if not asset or (site is not None and asset.get("site_id") != site):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
     return asset
+
+
+def _id_prefix(current_user: dict) -> str:
+    """Generated asset ids: `DEMO-` for the demo role, so what it registers is showcase data."""
+    return tenant.DEMO_PREFIX if tenant.is_demo_user(current_user) else "ASSET-"
 
 
 def partition_import_rows(
@@ -143,7 +150,14 @@ async def bulk_import_assets(
     that already succeeded come back as `already_present` rather than duplicating.
     """
     user_id = current_user.get("user_id", "")
-    allowed_site = None if current_user.get("role") == "admin" else (current_user.get("site_id") or "")
+    # The demo role imports only showcase assets, on showcase sites, with `DEMO-` ids.
+    for row in payload.assets:
+        tenant.guard_site(current_user, row.site_id)
+        if row.asset_id:
+            tenant.guard_asset(current_user, row.asset_id)
+    allowed_site = (
+        None if current_user.get("role") in ("admin", "demo") else (current_user.get("site_id") or "")
+    )
     if allowed_site == "":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -165,7 +179,7 @@ async def bulk_import_assets(
     now = datetime.now(UTC).isoformat()
 
     async def _process_creation_row(idx: int, row: Any) -> tuple[bool, int, str, Any]:
-        asset_id = row.asset_id or f"ASSET-{shortuuid.uuid()[:8].upper()}"
+        asset_id = row.asset_id or f"{_id_prefix(current_user)}{shortuuid.uuid()[:8].upper()}"
         try:
             await graph.create_asset_node({
                 "asset_id": asset_id,
@@ -222,7 +236,7 @@ async def bulk_import_assets(
         tasks = []
         for aid, row in chunk:
             tasks.append(
-                es.index(index="kairos_assets", id=aid, document={
+                es.index(index=tenant.store_for("kairos_assets", demo=tenant.is_demo_id(aid)), id=aid, document={
                     "asset_id": aid,
                     "tag_number": row.tag_number,
                     "name": row.name,
@@ -284,7 +298,9 @@ async def create_asset(
     Uses MERGE in Neo4j so duplicate registrations are idempotent.
     """
     site_scope(current_user, payload.site_id)  # a non-admin may only register assets on their own site
-    asset_id = payload.asset_id or f"ASSET-{shortuuid.uuid()[:8].upper()}"
+    tenant.guard_site(current_user, payload.site_id)
+    asset_id = payload.asset_id or f"{_id_prefix(current_user)}{shortuuid.uuid()[:8].upper()}"
+    tenant.guard_asset(current_user, asset_id)
     now = datetime.now(UTC).isoformat()
     # Who confirmed the identity comes from the session, never from the request body — the body
     # field is client-supplied, so trusting it let any engineer or admin record the confirmation as
@@ -348,7 +364,7 @@ async def create_asset(
     # Index into ES kairos_assets for exact-match search (tag numbers, names)
     try:
         await es.index(
-            index="kairos_assets",
+            index=tenant.store_for("kairos_assets", demo=tenant.is_demo_id(asset_id)),
             id=asset_id,
             document={
                 "asset_id": asset_id,
@@ -451,6 +467,7 @@ async def list_assets(
         equipment_class=equipment_class,
         skip=offset,
         limit=limit,
+        hide_demo=tenant.hides_demo(current_user),
     )
     assets = result["assets"]
     counts = await _issue_counts(supabase, [a["asset_id"] for a in assets if a.get("asset_id")])
@@ -479,17 +496,21 @@ async def asset_coverage(
     Read-only and model-free — no OCR/NER/embedding call, so it spends no provider quota.
     """
     svc = CoverageService(driver, settings.NEO4J_DATABASE, supabase)
-    items = await svc.asset_coverage()
+    hide_demo = tenant.hides_demo(current_user)
+    items = await svc.asset_coverage(hide_demo)
     site = site_scope(current_user, None)
     if site:
         # The coverage rows carry no site, so keep the ones whose asset is on the caller's site.
         # ponytail: one capped page of the site's asset ids; push the site into the Cypher in
         # CoverageService when a site can hold more than this many assets.
         site_ids = {
-            a["asset_id"] for a in (await GraphService(driver).list_assets(site_id=site, limit=_SITE_ASSET_CAP))["assets"]
+            a["asset_id"]
+            for a in (
+                await GraphService(driver).list_assets(site_id=site, limit=_SITE_ASSET_CAP, hide_demo=hide_demo)
+            )["assets"]
         }
         items = [i for i in items if i["asset_id"] in site_ids]
-    return {"items": items, "total": len(items), "excluded_test_assets": await svc.excluded_test_assets()}
+    return {"items": items, "total": len(items), "excluded_test_assets": await svc.excluded_test_assets(hide_demo)}
 
 
 @router.get("/provisional", summary="Assets awaiting human identity confirmation (Layer 1)")
@@ -506,6 +527,7 @@ async def list_provisional_assets(current_user: CurrentUserDep, supabase: Supaba
     site = site_scope(current_user, None)
     if site:
         query = query.eq("site_id", site)
+    query = tenant.scope_site(query, current_user)
     result = await asyncio.to_thread(lambda: query.order("created_at", desc=True).limit(100).execute())
     items = result.data or []
     return {"items": items, "total": len(items)}
@@ -516,12 +538,12 @@ async def list_pending_aliases(current_user: CurrentUserDep, supabase: SupabaseD
     """Alias candidates the NER pipeline proposed and no human has confirmed or rejected."""
     site = site_scope(current_user, None)
     result = await asyncio.to_thread(
-        lambda: supabase.table("asset_alias_map")
-        .select("alias, canonical_asset_id, confidence, alias_source, created_at")
-        .eq("confirmed", False)
-        .order("confidence", desc=True)
-        .limit(100)
-        .execute()
+        lambda: tenant.scope(
+            supabase.table("asset_alias_map")
+            .select("alias, canonical_asset_id, confidence, alias_source, created_at")
+            .eq("confirmed", False),
+            current_user, "canonical_asset_id",
+        ).order("confidence", desc=True).limit(100).execute()
     )
     items = result.data or []
     if site and items:
@@ -552,6 +574,7 @@ async def reject_asset_alias(
     withdrawing one is a different decision than turning down a proposal. The row is removed (it is an
     extraction guess, not vault evidence) and the rejection is audited.
     """
+    tenant.guard_asset(current_user, asset_id)
     await scoped_asset(GraphService(driver), asset_id, current_user)
     existing = await asyncio.to_thread(
         lambda: supabase.table("asset_alias_map")
@@ -698,6 +721,7 @@ async def confirm_asset_alias(
 
     Idempotent: re-confirming an already-confirmed alias is a no-op, not an error.
     """
+    tenant.guard_asset(current_user, asset_id)
     await scoped_asset(GraphService(driver), asset_id, current_user)
     existing = await asyncio.to_thread(
         lambda: supabase.table("asset_alias_map")
@@ -771,6 +795,101 @@ async def get_asset_ot_coverage(
     """
     await scoped_asset(GraphService(driver), asset_id, current_user)
     return await OtCoverageService(supabase).asset_coverage(asset_id)
+
+
+def _edge_view(edge_id: str, source: str, target: str, label: str, edge: dict | None = None) -> dict:
+    """A graph edge for the UI. `structural` edges (position in the hierarchy, an event on the asset) are
+    not knowledge facts: they carry no authority or validity window, only that two things are related."""
+    e = edge or {}
+    return {
+        "id": edge_id, "source": source, "target": target, "label": label, "structural": edge is None,
+        "authority_level": int(e.get("authority_level", 5)), "verification_status": str(e.get("verification_status", "verified")),
+        "valid_from": str(e.get("valid_from", "2020-01-01T00:00:00")), "valid_to": str(e.get("valid_to", "9999-12-31T23:59:59")),
+        "document_id": str(e.get("document_id", "")), "confidence": float(e.get("confidence", 1.0)),
+    }
+
+
+@router.get("/{asset_id}/graph", summary="The asset and its surroundings, two hops out, for the graph view")
+async def get_asset_graph(
+    asset_id: str,
+    current_user: CurrentUserDep,
+    driver: Neo4jDep,
+    supabase: SupabaseDep,
+    as_of: str | None = Query(None, description="ISO8601 timestamp: the documents valid at that moment"),
+) -> dict:
+    """Nodes and edges around an asset: its place in the hierarchy, the documents about it, the people and
+    organisations those documents mention, the other assets they cover, and its latest events. Capped per
+    kind (see `GraphService.get_asset_neighbourhood`). Accepts a tag alias like `/knowledge` does; documents
+    that are test artifacts are left out and counted."""
+    graph = GraphService(driver)
+    canonical = await resolve_canonical_asset_id(asset_id, graph, supabase)
+    if not canonical:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+    await scoped_asset(graph, canonical, current_user)
+    as_of_dt: datetime | None = None
+    if as_of:
+        try:
+            as_of_dt = datetime.fromisoformat(as_of)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid as_of format: '{as_of}'. Use ISO8601.")
+    hood = await graph.get_asset_neighbourhood(canonical, hide_demo=tenant.hides_demo(current_user), as_of=as_of_dt)
+    if not hood:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
+
+    doc_ids = [d["document_id"] for d, _ in hood["documents"]]
+    rows = await document_rows(supabase, doc_ids) if doc_ids else []
+    names = {r["document_id"]: r["file_name"] for r in rows if r.get("file_name")}
+    artifacts = partition_test_artifacts(rows)
+    documents = [(d, r) for d, r in hood["documents"] if d["document_id"] not in artifacts]
+    shown_docs = {d["document_id"] for d, _ in documents}
+
+    nodes: dict[str, dict] = {}
+
+    def node(node_id: str, kind: str, label: str, props: dict) -> None:
+        nodes.setdefault(node_id, {"id": node_id, "kind": kind, "label": label, "properties": props})
+
+    def asset_label(a: dict) -> str:
+        return a.get("tag_number") or a.get("name") or a["asset_id"]
+
+    edges: list[dict] = []
+    centre = hood["asset"]
+    node(canonical, "Asset", asset_label(centre), centre)
+    if hood["parent"]:
+        p = hood["parent"]
+        node(p["asset_id"], "Asset", asset_label(p), p)
+        edges.append(_edge_view(f"parent-{p['asset_id']}", p["asset_id"], canonical, "PARENT_OF"))
+    for c in hood["children"]:
+        node(c["asset_id"], "Asset", asset_label(c), c)
+        edges.append(_edge_view(f"child-{c['asset_id']}", canonical, c["asset_id"], "PARENT_OF"))
+    for d, r in documents:
+        did = d["document_id"]
+        name = names.get(did) or d.get("title") or did
+        node(did, "Document", name.rsplit(".", 1)[0], {**d, "title": name})
+        edges.append(_edge_view(f"doc-{did}", canonical, did, r.get("relationship_type", "DOCUMENTED_BY"), r))
+    id_of = {"Person": "person_id", "Organisation": "org_id"}
+    for doc, x, kind, r in hood["mentions"]:
+        if doc not in shown_docs:
+            continue
+        xid = x.get(id_of[kind], "")
+        node(xid, kind, x.get("name", xid), x)
+        edges.append(_edge_view(f"m-{doc}-{xid}", doc, xid, r.get("relationship_type", "MENTIONS"), r))
+    for doc, o, r in hood["related"]:
+        if doc not in shown_docs:
+            continue
+        node(o["asset_id"], "Asset", asset_label(o), o)
+        edges.append(_edge_view(f"rel-{o['asset_id']}-{doc}", o["asset_id"], doc, r.get("relationship_type", "DOCUMENTED_BY"), r))
+    for e in hood["events"]:
+        eid = e["event_id"]
+        node(eid, "Event", str(e.get("event_type", "event")).replace("_", " "), e)
+        edges.append(_edge_view(f"ev-{eid}", canonical, eid, "OCCURRED_ON"))
+
+    # A document that names the same person twice (re-ingested, or two mentions) yields two edges with one
+    # id; the view draws one line, and a duplicate id would be a duplicate React key.
+    edges = list({e["id"]: e for e in edges}.values())
+    return {
+        "asset_id": canonical, "requested_id": asset_id, "resolved_from_alias": canonical != asset_id,
+        "as_of": as_of or "now", "nodes": list(nodes.values()), "edges": edges, "excluded_test_documents": len(hood["documents"]) - len(documents),
+    }
 
 
 @router.get("/{asset_id}/knowledge", summary="Get all knowledge graph facts for an asset")

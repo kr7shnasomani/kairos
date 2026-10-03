@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dde09c79-4ee5-5ca2-9c01-a2ac0b68221b",
+    "site_id": "SITE_DEMO",
+    "state": "normal",
+    "set_by": "Prakash Menon",
+    "set_at": "2026-07-05T14:16:35.377098+00:00",
+    "expires_at": "2026-08-02T14:16:35.377098+00:00"
+  },
+  {
+    "id": "813cb2d3-903a-5c0c-aed1-1f0504e76ca2",
+    "site_id": "SITE_DEMO",
+    "state": "turnaround",
+    "set_by": "Prakash Menon",
+    "set_at": "2026-08-02T14:16:35.377098+00:00",
+    "expires_at": "2026-08-16T14:16:35.377098+00:00"
+  },
+  {
+    "id": "391ef290-6193-5939-a10a-07d3acd9752e",
+    "site_id": "SITE_DEMO",
+    "state": "normal",
+    "set_by": "Prakash Menon",
+    "set_at": "2026-08-16T14:16:35.377098+00:00",
+    "expires_at": null
+  },
+  {
+    "id": "f43efaf1-b97b-5e0a-90a4-0f16565be9de",
+    "site_id": "SITE_DEMO_B",
+    "state": "normal",
+    "set_by": "Prakash Menon",
+    "set_at": "2026-07-05T14:16:35.377098+00:00",
+    "expires_at": "2026-08-31T14:16:35.377098+00:00"
+  },
+  {
+    "id": "4b58c834-d4d4-5353-bc60-d501e1abf32e",
+    "site_id": "SITE_DEMO_B",
+    "state": "shutdown",
+    "set_by": "Prakash Menon",
+    "set_at": "2026-08-31T14:16:35.377098+00:00",
+    "expires_at": "2026-09-02T14:16:35.377098+00:00"
+  },
+  {
+    "id": "5b67298d-b961-5165-936a-ca47cdc51d3d",
+    "site_id": "SITE_DEMO_B",
+    "state": "normal",
+    "set_by": "Prakash Menon",
+    "set_at": "2026-09-02T14:16:35.377098+00:00",
+    "expires_at": null
+  }
+]

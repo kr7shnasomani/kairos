@@ -131,9 +131,8 @@ export default function GovernancePage() {
   return (
     <div data-testid="governance-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Governance"
         title="Governance"
-        lede="Where contradictions surface, unverified inputs are gated, and human authority decides what becomes canonical truth."
+        lede="The control room for what the system is allowed to believe. Contradicting sources, unverified field inputs and changes to engineering values wait here for a person's decision, and nothing becomes canonical without one."
       />
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-caption text-muted">

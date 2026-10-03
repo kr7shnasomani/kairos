@@ -2,7 +2,6 @@
 
 // Reviewer decision for a document the OCR gate held. Human-only (reliability/admin, like quarantine
 // promotion): the reviewer opens the original scan, then releases it for extraction or rejects it.
-import { DemoGate } from "@/components/demo-gate";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Modal } from "@/components/ui";
@@ -57,12 +56,12 @@ export function OcrReviewActions({ documentId }: { documentId: string }) {
 
   return (
     <>
-      <DemoGate>
+      <>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="primary" onClick={() => { setOpen("release"); setError(null); }}>Release for extraction</Button>
           <Button onClick={() => { setOpen("reject"); setError(null); }}>Reject scan</Button>
         </div>
-      </DemoGate>
+      </>
       {open && (
         <Modal title={COPY[open].title} onClose={() => !busy && setOpen(null)}>
           <p className="text-body text-muted">{COPY[open].body}</p>

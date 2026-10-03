@@ -37,7 +37,7 @@ export function formatContent(raw: string): string {
       // fallback
       return JSON.stringify(parsed).replace(/["{}]/g, " ").trim();
     }
-  } catch (e) {
+  } catch {
     // Ignore parse errors, just return raw
   }
   return raw;

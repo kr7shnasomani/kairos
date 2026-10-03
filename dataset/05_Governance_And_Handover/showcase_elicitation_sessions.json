@@ -1,0 +1,68 @@
+[
+  {
+    "session_id": "a0690f36-8ad7-5950-9812-8d9f4192db78",
+    "work_order_id": "WO-DEMO-0194",
+    "asset_id": "DEMO-P-1101A",
+    "questions": [
+      "What was the barrier fluid pot level before the seal failed?",
+      "How long had the pump run below minimum flow?",
+      "Was the seal flush plan checked after the last overhaul?"
+    ],
+    "status": "questions_ready",
+    "triggered_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-24T14:16:35.377098+00:00",
+    "updated_at": "2026-09-25T14:16:35.377098+00:00"
+  },
+  {
+    "session_id": "d6690bd4-e26e-56f9-a8d6-b055ddf704ff",
+    "work_order_id": "WO-DEMO-0177",
+    "asset_id": "DEMO-K-2101A",
+    "questions": [
+      "Did the vibration trend change after the oil filter change?",
+      "Where on the frame is the vibration highest?"
+    ],
+    "status": "completed",
+    "triggered_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-25T14:16:35.377098+00:00",
+    "updated_at": "2026-09-26T14:16:35.377098+00:00"
+  },
+  {
+    "session_id": "50471262-44c8-510a-87db-cbad0c2aa7ea",
+    "work_order_id": "WO-DEMO-0167",
+    "asset_id": "DEMO-P-3101B",
+    "questions": [
+      "Was the alignment checked hot after the overhaul?",
+      "How does the bearing temperature compare with the sister pump?"
+    ],
+    "status": "completed",
+    "triggered_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-26T14:16:35.377098+00:00",
+    "updated_at": "2026-09-27T14:16:35.377098+00:00"
+  },
+  {
+    "session_id": "be48a180-11bb-5de9-9bf2-aae9a58f2e97",
+    "work_order_id": "WO-DEMO-0219",
+    "asset_id": "DEMO-FV-1103",
+    "questions": [
+      "How often is the valve stroked by hand?",
+      "Did tightening the packing change the deadband?"
+    ],
+    "status": "questions_ready",
+    "triggered_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-27T14:16:35.377098+00:00",
+    "updated_at": "2026-09-28T14:16:35.377098+00:00"
+  },
+  {
+    "session_id": "7d4ebca0-df27-55d4-b051-59f09d5a91a1",
+    "work_order_id": "WO-DEMO-0153",
+    "asset_id": "DEMO-P-6101C",
+    "questions": [
+      "Was the bearing replaced with the revision in the bulletin?",
+      "What was the oil condition at the last sample?"
+    ],
+    "status": "questions_ready",
+    "triggered_by": "Dr. Sunita Rao",
+    "created_at": "2026-09-28T14:16:35.377098+00:00",
+    "updated_at": "2026-09-29T14:16:35.377098+00:00"
+  }
+]

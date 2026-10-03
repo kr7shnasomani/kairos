@@ -96,8 +96,7 @@ export default function QuarantinePage() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Governance"
-        title="Review queue"
+        title="Review Queue"
         lede="Unverified field inputs awaiting human review. Promotion to the canonical graph is a one-way gate: nothing is auto-promoted, ever."
       />
 

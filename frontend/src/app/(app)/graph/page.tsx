@@ -9,16 +9,15 @@ import { useFetch } from "@/lib/use-fetch";
 import { cn, nowMs } from "@/lib/utils";
 import { GraphLegend, validityEvents } from "./_components/legend";
 
-// EQ-101 first — it's a canonical asset with live knowledge edges. P-101 is a tag alias; the
-// endpoint resolves it but it currently carries no edges, so it renders an empty graph rather
-// than an error. Kept as a pick, not the default.
-const EXAMPLE_ASSETS = ["EQ-101", "V-247", "P-101"];
+// Assets whose surroundings are worth opening: a crude feed pump with a long failure history, a
+// recycle compressor, a storage tank, and the original plant's two reference assets.
+const EXAMPLE_ASSETS = ["DEMO-P-1101A", "DEMO-K-2101A", "DEMO-T-6101", "EQ-101", "V-247"];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function GraphPage() {
-  const [assetId, setAssetId] = useState("EQ-101");
-  const [inputValue, setInputValue] = useState("EQ-101");
+  const [assetId, setAssetId] = useState(EXAMPLE_ASSETS[0]);
+  const [inputValue, setInputValue] = useState(EXAMPLE_ASSETS[0]);
   const [asOf, setAsOf] = useState("");
 
   // Was a bare `.then()` with no `.catch()`. `getKnowledgeGraph` throws on failure (live-only
@@ -40,10 +39,12 @@ export default function GraphPage() {
   }
 
   const today = new Date(nowMs()).toISOString().split("T")[0];
+  // The validity list is for knowledge facts the asset itself holds; hierarchy and events have no window.
+  const facts = graphData?.edges.filter((e) => !e.structural && e.source === graphData.asset_id) ?? [];
 
   return (
     <div data-testid="graph-workspace" className="mx-auto max-w-[1400px]">
-      <PageHeader className="mb-6" eyebrow="Analyze" title="Temporal asset graph" lede="Investigate the evidence, events, and governed relationships surrounding an asset at any point in time." />
+      <PageHeader className="mb-6" title="Temporal Asset Graph" lede="See an asset in its surroundings: the unit it belongs to, its documents, the people and organisations they name, other equipment that shares them, and recent events. Pick a date to see what was known at that moment." />
 
       <section data-testid="graph-summary" className="grid overflow-hidden rounded-xl border border-line bg-surface shadow-sm sm:grid-cols-3">
         <div className="border-b border-line p-4 sm:border-b-0 sm:border-r">
@@ -176,29 +177,25 @@ export default function GraphPage() {
         </div>
       </section>
 
-      <div data-testid="graph-layout" className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="min-w-0">
-          <KnowledgeGraph assetId={assetId} asOf={asOf || undefined} height={560} />
-          <p className="mt-2 text-label text-muted">Select a node or relationship to inspect its properties and evidence.</p>
-        </div>
+      <div data-testid="graph-layout" className="mt-4 min-w-0">
+        <KnowledgeGraph assetId={assetId} asOf={asOf || undefined} height={640} />
+        <p className="mt-2 text-label text-muted">Select a node or relationship to inspect its properties and evidence. Scroll to zoom and drag to pan; Fit, Rearrange and Full screen are in the corner.</p>
 
-        {/* Height-matched to the 560px graph canvas; validity list scrolls internally
-            so the panel never grows taller than the graph. */}
-        <aside data-testid="graph-context" className="flex flex-col gap-4 lg:sticky lg:top-6 lg:h-[560px] lg:self-start">
-          <section className="shrink-0 rounded-xl border border-line bg-surface p-4 shadow-sm">
+        <aside data-testid="graph-context" className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <section className="rounded-xl border border-line bg-surface p-4 shadow-sm">
             <p className="text-micro font-bold uppercase tracking-[0.1em] text-muted">Authority &amp; verification</p>
             <div className="mt-3"><GraphLegend /></div>
           </section>
-          <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-line bg-surface p-4 shadow-sm">
+          <section className="flex min-h-0 flex-col rounded-xl border border-line bg-surface p-4 shadow-sm">
             <div className="flex shrink-0 items-center justify-between">
               <p className="text-micro font-bold uppercase tracking-[0.1em] text-muted">Validity windows</p>
-              {graphData?.edges.length ? <span className="tabular text-label text-muted">{graphData.edges.length}</span> : null}
+              {facts.length ? <span className="tabular text-label text-muted">{facts.length}</span> : null}
             </div>
             {/* overflow-x-hidden: `overflow-y-auto` alone leaves overflow-x computed as `auto`,
-                which draws a stray horizontal scrollbar. Same fix as management/signals-feed.tsx. */}
-            <div className="mt-3 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
-              {graphData?.edges.length
-                ? <Timeline events={validityEvents(graphData.edges, (id) => graphData.nodes.find((n) => n.id === id)?.label)} />
+                which draws a stray horizontal scrollbar. Same fix as overview/_components/signals-feed.tsx. */}
+            <div className="mt-3 max-h-80 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
+              {graphData && facts.length
+                ? <Timeline events={validityEvents(facts, (id) => graphData.nodes.find((n) => n.id === id)?.label)} />
                 : <p className="text-label text-muted">Relationship windows appear when graph data is available.</p>}
             </div>
           </section>

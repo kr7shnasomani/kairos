@@ -14,9 +14,9 @@ history and caveats, see:
 |---|---|---|
 | Layer smoke checks | 13/13 pass | `verify_layers.py` |
 | Retrieval (fact reaches context) | 46/46 (100%) | `run_benchmark.py` |
-| Query answer quality | 41/46 (89.1%), VALID | `run_benchmark.py` |
+| Query answer quality | 43/46 (93.5%), VALID (2026-10-03, Nemotron 3 Ultra; 41/46 on Nemotron 3 Super, 2026-09-13) | `run_benchmark.py` |
 | Provenance — all responses, incl. refusals | 46/46 (100%) | `run_benchmark.py` |
-| Provenance — correct answers only | 41/41 (100%) | `run_benchmark.py` |
+| Provenance — correct answers only | 43/43 (100%) | `run_benchmark.py` |
 | Entity-extraction F1 (Layer 0) | 0.805 on 40 labels, VALID | `run_model_validation.py` |
 | Compliance gap detection | P 1.000 · R 0.838 · F1 0.912 | `run_compliance_eval.py` |
 | Retrieval reach by arm | exact 33/37 (89.2%) · semantic 35/37 (94.6%) · hybrid 35/37 (94.6%) | `run_retrieval_baseline.py` |
@@ -52,9 +52,50 @@ history and caveats, see:
 
 ## 2. `run_benchmark.py` — domain-expert Q&A
 
-**Current — 2026-09-13, 46 questions, checkpoint `run_20260913_nemotron_46q.jsonl`** (synthesis on NIM
-`nvidia/nemotron-3-super-120b-a12b`; clean reload with chunked NER, linked-document search scope and the
-NIM 503 retry; question set widened 37 → 46 the same day):
+**Current — 2026-10-03, 46 questions, checkpoint `run_20261003_ultra.jsonl`** (synthesis on NIM
+`nvidia/nemotron-3-ultra-550b-a55b`, which replaced `nemotron-3-super-120b-a12b` after NVIDIA ended its
+life on 2026-10-03 09:00 UTC; run against the live API, same 46 questions as the 2026-09-13 run):
+
+```
+Retrieval (fact reaches context):    46/46 (100%)  95% CI [92–100%]
+Answer quality (correct/total):      43/46 (93.5%) 95% CI [82–98%]
+Answer provenance (sourced/correct): 46/46 (100%) all responses · 43/43 correct answers
+Synthesis latency:                   p50 5473 ms · p95 10503 ms · avg 5477 ms
+Provider mix:                        nim 39 · refused 6 · openrouter 1
+Run validity:                        VALID — 39/46 answered by the pinned Nemotron model
+```
+
+By category (retrieval · answer · provenance):
+```
+    aggregation            2/2 · 2/2 · 2/2
+    alias-resolution       3/3 · 2/3 · 3/3
+    blast-radius           2/2 · 2/2 · 2/2
+    causal                 3/3 · 3/3 · 3/3
+    counterfactual         2/2 · 2/2 · 2/2
+    current-fact           6/6 · 6/6 · 6/6
+    mdm                    2/2 · 2/2 · 2/2
+    personnel              5/5 · 3/5 · 5/5
+    regulatory             3/3 · 3/3 · 3/3
+    safety-isolation       3/3 · 3/3 · 3/3
+    supersession           2/2 · 2/2 · 2/2
+    temporal               4/4 · 4/4 · 4/4
+    temporal-history       2/2 · 2/2 · 2/2
+    temporal-supersession  2/2 · 2/2 · 2/2
+    traceability           5/5 · 5/5 · 5/5
+  KG linkage (assets):     10/11 assets linked (90%) · 150 edges (11 verified)
+  KG linkage (documents):  18/20 (90%) · 0 quarantined by design · 2 unexplained · 0 dangling
+```
+
+Misses: Q20 (alias-resolution), Q31 and Q41 (personnel). All three retrieved the fact (`retr=1`) and were
+answered by the pinned model: synthesis gaps, not retrieval gaps. One answer (1 of 46) came from OpenRouter
+after NIM returned 503 twice; that is under the 10% the validity rule allows. This is a different model
+from the 2026-09-13 run, so 43/46 against 41/46 is a model change as much as a result; latency is higher
+(p50 5.5 s against 1.5 s) because Ultra is a much larger model. The document linkage reads 18 of 20 against
+19 of 21 because the live vault holds one document fewer than on 2026-09-13.
+
+**Prior — 2026-09-13 (Nemotron 3 Super), 46 questions, checkpoint `run_20260913_nemotron_46q.jsonl`**
+(synthesis on NIM `nvidia/nemotron-3-super-120b-a12b`; clean reload with chunked NER, linked-document
+search scope and the NIM 503 retry; question set widened 37 → 46 the same day):
 
 ```
 Retrieval (fact reaches context):    46/46 (100%)  95% CI [92–100%]

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { KnowledgeGraph } from "./knowledge-graph";
+import { KnowledgeGraph, buildRFNodes } from "./knowledge-graph";
 
 const mocks = vi.hoisted(() => ({ getKnowledgeGraph: vi.fn(), getOtCoverage: vi.fn() }));
 
@@ -37,6 +37,9 @@ vi.mock("@xyflow/react", async () => {
     ),
     Background: () => null,
     Controls: () => null,
+    Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    useReactFlow: () => ({ fitView: vi.fn() }),
+    useNodesInitialized: () => true,
     Handle: () => null,
     Position: { Top: "top", Bottom: "bottom" },
     useNodesState: (initial: unknown[]) => {
@@ -94,5 +97,54 @@ describe("KnowledgeGraph", () => {
     render(<KnowledgeGraph assetId="P-101" />);
 
     expect((await screen.findByText("No sensor coverage")).parentElement).toHaveClass("top-4", "left-4");
+  });
+});
+
+describe("buildRFNodes layout", () => {
+  const edge = (id: string, source: string, target: string) => ({
+    id, source, target, label: "X", authority_level: 3, verification_status: "verified" as const,
+    valid_from: "2025-01-01T00:00:00Z", valid_to: "9999-12-31T23:59:59Z", document_id: "", confidence: 1,
+  });
+  const node = (id: string, kind: string) => ({ id, label: id, kind, properties: {} });
+  const docs = Array.from({ length: 12 }, (_, i) => node(`D${i}`, "Document"));
+  const graph = {
+    asset_id: "A", as_of: "now", excluded_test_documents: 0,
+    nodes: [node("A", "Asset"), node("U", "Asset"), ...docs, node("P1", "Person"), node("O1", "Organisation"), node("A2", "Asset")],
+    edges: [
+      edge("u", "U", "A"),
+      ...docs.map((d) => edge(`d-${d.id}`, "A", d.id)),
+      edge("p1a", "D0", "P1"), edge("p1b", "D1", "P1"), edge("o1", "D6", "O1"), edge("a2", "A2", "D6"),
+    ],
+  };
+  const pos = (nodes: ReturnType<typeof buildRFNodes>, id: string) => nodes.find((n) => n.id === id)!.position;
+
+  // Each card is 132 by 50; the layout is built on those numbers.
+  const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) < 132 && Math.abs(a.y - b.y) < 50;
+  // Distance from the centre in the ellipse's own units (the rings are wider than tall).
+  const reach = (nodes: ReturnType<typeof buildRFNodes>, id: string) => Math.hypot((pos(nodes, id).x + 66) / 1.75, pos(nodes, id).y + 25);
+
+  it("puts the asset in the centre, what it touches on an inner ring and what only those reach on an outer one", () => {
+    const nodes = buildRFNodes(graph);
+    expect(pos(nodes, "A")).toEqual({ x: -66, y: -25 });
+    for (const inner of ["D0", "D7", "U"]) expect(reach(nodes, "P1")).toBeGreaterThan(reach(nodes, inner) + 50);
+  });
+
+  it("never lets two cards overlap, however many documents an asset has", () => {
+    const many = Array.from({ length: 30 }, (_, i) => node(`M${i}`, "Document"));
+    const big = { ...graph, nodes: [...graph.nodes, ...many], edges: [...graph.edges, ...many.map((d) => edge(`m-${d.id}`, "A", d.id))] };
+    for (const g of [graph, big]) {
+      const nodes = buildRFNodes(g);
+      for (const a of nodes) for (const b of nodes) {
+        if (a.id < b.id) expect(overlaps(a.position, b.position), `${a.id} overlaps ${b.id}`).toBe(false);
+      }
+    }
+  });
+
+  it("places a person shared by two documents between them", () => {
+    const nodes = buildRFNodes(graph);
+    const angle = (id: string) => Math.atan2(pos(nodes, id).y, pos(nodes, id).x);
+    const [lo, hi] = [angle("D0"), angle("D1")].sort((x, y) => x - y);
+    expect(angle("P1")).toBeGreaterThanOrEqual(lo - 0.05);
+    expect(angle("P1")).toBeLessThanOrEqual(hi + 0.05);
   });
 });

@@ -118,5 +118,5 @@ describe("ModelGatePage", () => {
 
     await waitFor(() => expect(screen.getByText(/Showing 1–25 of 10000/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
-  });
+  }, 20_000); // 10k rows rendered into jsdom: slow when the whole suite runs in parallel
 });

@@ -14,9 +14,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI, HTTPException
-from fastapi.testclient import TestClient
-
 from api import dependencies as deps
 from api.config import Settings
 from api.middleware.opa import action_for
@@ -38,6 +35,8 @@ from api.routers import (
 from api.routers import (
     governance as governance_router,
 )
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 ENGINEER = {"user_id": "eng-1", "role": "engineer", "site_id": "SITE_001", "email": "eng@x.test"}
 FIELD = {"user_id": "fw-1", "role": "field_worker", "site_id": "SITE_001", "email": "fw@x.test"}
@@ -57,6 +56,12 @@ class FakeQuery:
 
     def __init__(self, db: "FakeSupabase", table: str):
         self.db, self.table_name, self.ops = db, table, []
+
+    @property
+    def not_(self):
+        """`query.not_.like(...)`: negation is a property in postgrest-py, so it must not be a call."""
+        self.ops.append(("not_", (), {}))
+        return self
 
     def __getattr__(self, name):
         def call(*args, **kwargs):
@@ -825,29 +830,28 @@ def test_ratelimit_exemption_cannot_be_forged_through_the_host_header(monkeypatc
 # =============================================================================
 
 _DEMO_USER = {"user_id": "demo-1", "role": "demo", "site_id": "SITE_001", "email": "demo@kairos.local"}
-# (method, path, may the demo token reach it)
+# (method, path). Policy is the coarse layer: it lets the demo role reach every write route that the
+# API fence then narrows to showcase rows (`test_tenant_isolation.py` covers the fence and the guards).
 _DEMO_ROUTES = [
-    ("GET", "/search/", True), ("POST", "/search/synthesize", True), ("POST", "/search/synthesize/stream", True),
-    ("POST", "/search/rca-pack", True), ("POST", "/search/feedback", True),
-    ("GET", "/briefs/", True), ("GET", "/assets/", True), ("GET", "/documents/", True),
-    ("GET", "/compliance/dashboard", True), ("GET", "/audit-log/", True), ("GET", "/events/", True),
-    ("GET", "/governance/model-gate/history", True), ("GET", "/elicitation/offboarding", True),
-    # everything that writes, ingests, approves or closes
-    ("POST", "/documents/ingest", False), ("POST", "/documents/D-1/supersede", False),
-    ("POST", "/documents/D-1/ocr-review/reject", False), ("POST", "/assets/", False),
-    ("POST", "/assets/bulk", False), ("POST", "/assets/EQ-1/aliases/x/confirm", False),
-    ("POST", "/events/work-order", False), ("POST", "/events/plant-state", False),
-    ("POST", "/events/deviation-flag", False), ("POST", "/events/abc/ack", False),
-    ("POST", "/briefs/B-1/ack", False), ("POST", "/briefs/B-1/countersign", False),
-    ("POST", "/briefs/B-1/feedback", False), ("POST", "/governance/quarantine/Q-1/promote", False),
-    ("POST", "/governance/conflicts/C-1/resolve", False), ("POST", "/governance/moc/M-1/approve", False),
-    ("POST", "/governance/model-gate/run", False), ("POST", "/annotations/", False),
-    ("POST", "/elicitation/offboarding", False), ("POST", "/elicitation/W-1/responses", False),
+    ("GET", "/search/"), ("POST", "/search/synthesize"), ("POST", "/search/synthesize/stream"),
+    ("POST", "/search/rca-pack"), ("POST", "/search/feedback"),
+    ("GET", "/briefs/"), ("GET", "/assets/"), ("GET", "/documents/"),
+    ("GET", "/compliance/dashboard"), ("GET", "/audit-log/"), ("GET", "/events/"),
+    ("GET", "/governance/model-gate/history"), ("GET", "/elicitation/offboarding"),
+    ("POST", "/documents/ingest"), ("POST", "/documents/D-1/supersede"),
+    ("POST", "/documents/D-1/ocr-review/reject"), ("POST", "/assets/"),
+    ("POST", "/assets/bulk"), ("POST", "/assets/EQ-1/aliases/x/confirm"),
+    ("POST", "/events/work-order"), ("POST", "/events/plant-state"),
+    ("POST", "/events/deviation-flag"), ("POST", "/events/abc/ack"),
+    ("POST", "/briefs/B-1/ack"), ("POST", "/briefs/B-1/countersign"),
+    ("POST", "/briefs/B-1/feedback"), ("POST", "/governance/quarantine/Q-1/promote"),
+    ("POST", "/governance/conflicts/C-1/resolve"), ("POST", "/governance/moc/M-1/approve"),
+    ("POST", "/annotations/"), ("POST", "/elicitation/offboarding"), ("POST", "/elicitation/W-1/responses"),
 ]
 
 
 @pytest.mark.skipif(not REGO.exists(), reason="infra/ is not mounted in this container")
-def test_a_demo_token_reads_everything_and_writes_only_the_safe_list(monkeypatch):
+def test_a_demo_token_reads_everything_and_the_policy_admits_the_showcase_writes(monkeypatch):
     from api.middleware.opa import OPAMiddleware
 
     text = REGO.read_text()
@@ -865,21 +869,13 @@ def test_a_demo_token_reads_everything_and_writes_only_the_safe_list(monkeypatch
     monkeypatch.setattr(OPAMiddleware, "_ask_opa", fake_opa)
 
     app = FastAPI()
-    for method, path, _ in _DEMO_ROUTES:
+    for method, path in _DEMO_ROUTES:
         app.add_api_route(path, lambda: {"reached": True}, methods=[method])
     app.add_middleware(OPAMiddleware, opa_url="http://opa.invalid", settings=None, debug=False)
     client = TestClient(app)
 
-    for method, path, may in _DEMO_ROUTES:
-        status = client.request(method, path).status_code
-        assert status == (200 if may else 403), (method, path, status)
-
-    # a write route added next year and never mentioned anywhere is still refused (deny by default)
-    app2 = FastAPI()
-    app2.add_api_route("/brand/new", lambda: {"reached": True}, methods=["POST", "PUT", "DELETE"])
-    app2.add_middleware(OPAMiddleware, opa_url="http://opa.invalid", settings=None, debug=False)
-    c2 = TestClient(app2)
-    assert [c2.request(m, "/brand/new").status_code for m in ("POST", "PUT", "DELETE")] == [403] * 3
+    for method, path in _DEMO_ROUTES:
+        assert client.request(method, path).status_code == 200, (method, path)
 
 
 def test_the_demo_user_resolves_from_app_metadata_with_the_demo_role(monkeypatch):

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query
 
 from api.config import settings
 from api.dependencies import CurrentUserDep, Neo4jDep, SupabaseDep, site_scope
+from api.services import tenant
 from api.services.corpus import REAL_ASSET_CYPHER, document_rows, excluded_test_asset_count
 
 router = APIRouter()
@@ -66,6 +67,7 @@ WHERE ($framework IS NULL OR reg.framework = $framework)
 MATCH (a:Asset)
 {_APPLICABILITY}
   AND {REAL_ASSET_CYPHER}
+  AND {tenant.DEMO_VISIBLE_CYPHER}
   AND ($asset_id IS NULL OR a.asset_id = $asset_id)
   AND ($site_id IS NULL OR a.site_id = $site_id)
 CALL {{
@@ -102,6 +104,7 @@ MATCH (reg:Concept {{type: 'Regulation'}})
 MATCH (a:Asset)
 {_APPLICABILITY}
   AND {REAL_ASSET_CYPHER}
+  AND {tenant.DEMO_VISIBLE_CYPHER}
   AND ($site_id IS NULL OR a.site_id = $site_id)
 CALL {{
   WITH reg, a
@@ -129,6 +132,7 @@ WHERE (reg.applies_to_equipment_class IS NULL
     OR a.equipment_class CONTAINS reg.applies_to_equipment_class
     OR reg.applies_to_equipment_class CONTAINS a.equipment_class)
   AND {REAL_ASSET_CYPHER}
+  AND {tenant.DEMO_VISIBLE_CYPHER}
   AND ($site_id IS NULL OR a.site_id = $site_id)
 OPTIONAL MATCH (a)-[r:KNOWLEDGE_EDGE]->(d:Document)
 WHERE (r.valid_to IS NULL OR datetime(r.valid_to) > datetime())
@@ -207,9 +211,10 @@ async def list_compliance_gaps(
             asset_id=asset_id,
             site_id=scope,
             limit=limit,
+            hide_demo=tenant.hides_demo(current_user),
         )
         rows = [dict(r) async for r in result]
-        excluded = await excluded_test_asset_count(session, scope)
+        excluded = await excluded_test_asset_count(session, scope, tenant.hides_demo(current_user))
 
     items = [
         {**r, "severity": _severity(r["authority_level"])}
@@ -243,9 +248,9 @@ async def compliance_dashboard(
     """
     site_id = site_scope(current_user, site_id)
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
-        result = await session.run(_DASHBOARD_CYPHER, site_id=site_id)
+        result = await session.run(_DASHBOARD_CYPHER, site_id=site_id, hide_demo=tenant.hides_demo(current_user))
         rows = [dict(r) async for r in result]
-        excluded = await excluded_test_asset_count(session, site_id)
+        excluded = await excluded_test_asset_count(session, site_id, tenant.hides_demo(current_user))
 
     totals = {"critical": 0, "major": 0, "minor": 0}
     unverified_totals = {"critical": 0, "major": 0, "minor": 0}
@@ -299,9 +304,12 @@ async def generate_audit_pack(
     """
     site_id = site_scope(current_user, None)  # evidence from assets on other sites is not shown
     async with driver.session(database=settings.NEO4J_DATABASE) as session:
-        result = await session.run(_AUDIT_CYPHER, framework=framework, clauses=clauses, site_id=site_id)
+        result = await session.run(
+            _AUDIT_CYPHER, framework=framework, clauses=clauses, site_id=site_id,
+            hide_demo=tenant.hides_demo(current_user),
+        )
         rows = [dict(r) async for r in result]
-        excluded = await excluded_test_asset_count(session, site_id)
+        excluded = await excluded_test_asset_count(session, site_id, tenant.hides_demo(current_user))
     for r in rows:
         r["evidence"] = _dedupe_evidence(r.get("evidence") or [])
 

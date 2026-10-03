@@ -8,9 +8,8 @@ export default async function BriefsPage() {
   return (
     <div className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Proactive delivery"
         title="Briefs"
-        lede="Knowledge delivered at the moment of action, before you had to ask."
+        lede="Knowledge pushed to you at the moment you need it, before you think to ask: permits that need a signature, alarms, and work orders with the manual, bulletin and history behind them. Routine briefs are paced so you are never flooded."
       />
 
       <div className="mt-6">

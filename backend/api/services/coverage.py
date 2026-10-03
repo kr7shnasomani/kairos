@@ -15,6 +15,7 @@ from typing import Any
 import structlog
 
 from api.services.corpus import REAL_ASSET_CYPHER, excluded_test_asset_count
+from api.services.tenant import DEMO_VISIBLE_CYPHER
 
 log = structlog.get_logger(__name__)
 
@@ -32,13 +33,13 @@ class CoverageService:
         self._database = database
         self._supabase = supabase
 
-    async def asset_coverage(self) -> list[dict[str, Any]]:
+    async def asset_coverage(self, hide_demo: bool = True) -> list[dict[str, Any]]:
         """
         One row per registered asset. Counts are DISTINCT by `edge_id`: the graph can hold several
         physical relationships sharing one logical edge, and counting those raw would overstate
         coverage for exactly the assets that were re-ingested most.
         """
-        rows = await self._graph_counts()
+        rows = await self._graph_counts(hide_demo)
         docs = self._count("document_asset_links", "asset_id")
         quarantine = self._count("quarantine_items", "asset_id", eq=("review_status", "pending"))
 
@@ -59,16 +60,19 @@ class CoverageService:
             })
         return out
 
-    async def excluded_test_assets(self) -> int:
+    async def excluded_test_assets(self, hide_demo: bool = True) -> int:
         """Test assets the coverage matrix leaves out, reported beside it."""
         async with self._driver.session(database=self._database) as session:
-            return await excluded_test_asset_count(session)
+            return await excluded_test_asset_count(session, hide_demo=hide_demo)
 
-    async def _graph_counts(self) -> list[dict[str, Any]]:
+    async def _graph_counts(self, hide_demo: bool = True) -> list[dict[str, Any]]:
         # collect(DISTINCT k.edge_id) would lose the properties needed for the authority/verified
         # splits, so collect the relationships and de-duplicate on edge_id in the projection.
         cypher = f"""
-        MATCH (a:Asset) WHERE {REAL_ASSET_CYPHER}
+        MATCH (a:Asset) WHERE {REAL_ASSET_CYPHER} AND {DEMO_VISIBLE_CYPHER}
+          // A process unit is a grouping, not equipment: it has no manual to be missing, so it
+          // would only ever read as a blind spot. The catch-all placeholder is a unit too.
+          AND coalesce(a.equipment_class, '') <> 'process_unit'
         OPTIONAL MATCH (a)-[k:KNOWLEDGE_EDGE]-()
         WITH a, [x IN collect(DISTINCT k) WHERE x IS NOT NULL] AS ks
         RETURN a.asset_id           AS asset_id,
@@ -81,7 +85,7 @@ class CoverageService:
         ORDER BY a.asset_id
         """
         async with self._driver.session(database=self._database) as session:
-            result = await session.run(cypher, auth=AUTHORITATIVE_LEVEL)
+            result = await session.run(cypher, auth=AUTHORITATIVE_LEVEL, hide_demo=hide_demo)
             return await result.data()
 
     def _count(self, table: str, column: str, eq: tuple[str, str] | None = None) -> dict[str, int]:

@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Brief, BriefPriority, BriefsResponse } from "@/lib/types";
 import { cn, priorityMeta, relativeTime } from "@/lib/utils";
 import { BriefCard } from "./brief-card";
+import { Icon } from "./icon";
 import { EmptyState, FilterTabs } from "./ui";
 
 // PTW-critical first, then by priority order per EEMUA-191.
@@ -14,50 +15,62 @@ type FilterKey = "all" | "unacknowledged" | "critical";
 function GovernorBanner({ response }: { response: BriefsResponse }) {
   const gov = response.governor_state;
   const pct = Math.min(100, Math.round((gov.push_count_last_hour / gov.ceiling) * 100));
-  const suppressed = gov.state === "suppressed";
+  const atCeiling = gov.state === "suppressed";
+  const held = response.suppressed_held ?? [];
 
-  if (!suppressed && response.suppressed_count === 0) {
+  if (!atCeiling && response.suppressed_count === 0) {
     return null;
   }
 
+  const queued = response.suppressed_count;
   return (
-    <div className="rounded-xl border border-[color-mix(in_srgb,var(--danger)_35%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] px-4 py-3">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-body font-semibold text-danger">
-            {response.suppressed_count} brief{response.suppressed_count !== 1 ? "s" : ""} held — governor suppressed
+    <section aria-label="Brief delivery governor" className="rounded-xl border border-line bg-surface">
+      <div className="flex items-center gap-5 px-4 py-3.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-body font-semibold text-ink">
+            {queued > 0
+              ? `${queued} routine brief${queued !== 1 ? "s" : ""} queued`
+              : "Delivery paused until the hour rolls over"}
           </p>
-          <p className="mt-0.5 text-caption text-muted">
-            {gov.push_count_last_hour}/{gov.ceiling} pushes this hour
-            {response.next_delivery_allowed_at && (
-              <>, next delivery {relativeTime(response.next_delivery_allowed_at)}</>
-            )}
+          <p className="mt-0.5 text-caption text-pretty text-muted">
+            The EEMUA 191 governor sends each operator at most {gov.ceiling} pushes an hour, so routine briefs wait their
+            turn. Permits and safety briefs are never held.
+            {response.next_delivery_allowed_at && <> Next delivery {relativeTime(response.next_delivery_allowed_at)}.</>}
           </p>
         </div>
-        <span className="tabular text-display font-semibold text-danger">
-          {gov.push_count_last_hour}<span className="text-sm text-muted">/{gov.ceiling}</span>
-        </span>
-      </div>
-      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-line">
-        <div className="h-full bg-danger" style={{ width: `${pct}%` }} />
+        <div className="w-28 shrink-0 text-right">
+          <p className={cn("tabular text-title font-semibold", atCeiling ? "text-danger" : "text-ink")}>
+            {gov.push_count_last_hour}<span className="text-body font-normal text-muted">/{gov.ceiling}</span>
+          </p>
+          <p className="text-micro uppercase tracking-[0.1em] text-muted">pushes this hour</p>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-line">
+            <div className={cn("h-full", atCeiling ? "bg-danger" : "bg-accent")} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
       </div>
 
-      {/* What is being held, not just how many. A bare count cannot answer "does the held
-          brief concern my asset", which is the only question that decides whether to act. */}
-      {response.suppressed_held && response.suppressed_held.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-line pt-2.5">
-          {response.suppressed_held.map((b) => (
-            <li key={b.brief_id} className="flex items-baseline justify-between gap-3 text-caption">
-              <span className="min-w-0 flex-1 truncate text-muted">
-                <span className="font-medium text-fg">{b.priority}</span>
-                {b.asset_id ? <>, {b.asset_id}</> : null}, {b.headline}
-              </span>
-              <span className="shrink-0 text-muted">{relativeTime(b.delivered_at)}</span>
-            </li>
-          ))}
-        </ul>
+      {/* What is waiting, not just how many: a bare count cannot answer "does it concern my asset", which
+          decides whether to act. Closed by default so a long queue never pushes the real briefs off screen. */}
+      {held.length > 0 && (
+        <details className="group border-t border-line">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-caption font-medium text-muted transition-colors hover:text-ink">
+            <Icon name="caret-right" size={12} className="transition-transform group-open:rotate-90" />
+            Show the queued briefs
+          </summary>
+          <ul className="space-y-1.5 px-4 pb-3">
+            {held.map((b) => (
+              <li key={b.brief_id} className="flex items-baseline justify-between gap-3 text-caption">
+                <span className="min-w-0 flex-1 truncate text-muted">
+                  <span className="font-medium text-ink">{b.headline}</span>
+                  {b.asset_id ? <>, {b.asset_id}</> : null}
+                </span>
+                <span className="tabular shrink-0 text-muted">{relativeTime(b.delivered_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
-    </div>
+    </section>
   );
 }
 

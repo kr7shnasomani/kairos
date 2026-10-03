@@ -1,0 +1,17 @@
+Veridian Petrochemicals
+Bharuch Complex
+
+Document no: SHIFTLOG-CDU-WEEK-3   Revision: A
+Title: Shift log, CDU, week commencing 22 August
+Owner: Meera Pillai
+Issued: 22 August 2026
+
+Primary equipment: P-1102A, Reflux pump A
+
+Shift lead: Meera Pillai
+
+06:10 Took over from the previous shift. P-1102A running normally, discharge pressure steady.
+09:40 Walk-round of the CDU unit. Slight oil mist near the drive end of P-1102A; reported to the technician.
+11:25 Radio check with the control room. Alarm acknowledged on the CDU panel.
+14:05 Handover meeting with the process engineer. Open work orders reviewed.
+15:50 Housekeeping complete, permits closed. Handed over to the next shift lead.

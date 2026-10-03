@@ -19,7 +19,7 @@ const DEMO_ENABLED = Boolean(DEMO_EMAIL && DEMO_PASSWORD);
 
 function workspacePath(role?: string) {
   if (role === "demo") return roleHome("demo");
-  return role === "field_worker" ? "/briefs" : "/management";
+  return role === "field_worker" ? "/briefs" : "/overview";
 }
 
 export default function LoginPage() {

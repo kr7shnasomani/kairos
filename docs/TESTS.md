@@ -22,7 +22,7 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
 you will reset, never on the dataset you are about to demo or benchmark.
 
-### Tier 1 — service-free (844 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (956 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push. The container run is **786 passed and 3 skipped** (2026-10-01): the Docker test image mounts only `./backend`, `./tests` and `./db`, so the checks in `test_sec_infra.py` that read `infra/`, `docker-compose*.yml` and `.github/` skip there (they run on a full checkout, and in CI, which has the whole repo).
 
@@ -35,10 +35,10 @@ attribution_evidence,authz_boundary,brief_paging,asset_bulk_import,asset_counts,
 quarantine_item_id,purge_safety,synthesis_stream,graph_query_policy,event_reorder,supply_chain,\
 form_extraction,cross_functional,offboarding_session_id,corpus_filter,alias_expansion,\
 ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit_evidence,\
-document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm,cr_fixes}.py
+document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm,cr_fixes,tenant_isolation,showcase_dataset}.py
 ```
 
-All **52** files, **844 tests** (counted 2026-10-02; matches the 52 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
+All **54** files, **956 tests** (counted 2026-10-03; matches the 54 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
 
 **Security pass, 2026-10-01: the five `test_sec_*.py` files.** Each is named for the review group it covers; all run against in-memory fakes, with nothing written to any store. Finding ids (H1, M4, ...) are the 2026-09-30 security review's, listed one per line in `implementation/status.md` § Accepted risks and deploy checklist.
 
@@ -70,6 +70,19 @@ mixed UTC offsets by instant, and reads a naive timestamp as UTC.
 `test_supabase_http.py` — Supabase REST reads survive a dropped pooled HTTP/2 connection: a GET/HEAD that hits a
 dead connection is retried once, a second failure still raises, a write is never replayed, and every PostgREST
 session in the process goes through the retry transport.
+`test_tenant_isolation.py` — showcase data stays out of real accounts (`services/tenant.py`): the shape of every
+PostgREST, Cypher and search filter (a nullable column keeps its NULL rows, wildcards are `*`), a registry of the
+list and aggregate reads that must be scoped, the demo write fence and its route registry (every allowed route is
+real, every guarded route calls a guard, the closed set is pinned), the by-id read fence (a real account gets 404 on a showcase record, every by-id GET route names a parameter the fence understands), the target guards, the demo role's role mapping,
+the hourly demo budget, statistics a showcase action must not feed, and the `_demo` stores never being created at
+startup.
+`test_showcase_dataset.py` — the showcase plant (`scripts/showcase/`, `scripts/load_showcase.py`): the six-folder dataset (written, read back, and bound to load time exactly as a fresh build would be, the loader never rebuilding it), size, unique
+`DEMO-` ids, parents before children, no golden name or tag reused, every document names its asset and every
+conflict is stated by both of its sources, every direct row carries a marker, ids are deterministic and dates move
+with the anchor, every state the governance pages show exists, the permit waiting for a second signature, recurring
+failures and cross-system clock drift, live events valid for the real API, the loader's `--apply` gate and its
+real-mode count check, the redate shift (whole days, full rows, loader ids only) and the reset (state only, never the
+vault, never an unfiltered delete).
 `test_redate_demo.py` — the demo re-date shift (`scripts/redate_demo.py`): only events the loader created from
 the dataset move (a live or QA event newer than the story neither anchors nor moves), the newest lands on
 "yesterday", spacing and time of day are kept, payload and Neo4j timestamps keep their source offset, and a
@@ -173,7 +186,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 844 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 956 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud
@@ -197,7 +210,7 @@ gh secret set GROQ_API_KEY
 > Token Factory → NIM → OpenRouter → Gemini cascade, and elicitation calls the LLM. Gemini's free tier is a few hundred requests/day and
 > is shared with the benchmark harnesses, so a busy day of pushes exhausts it; once it 429s,
 > synthesis silently returns no answer and *measured answer quality collapses* (observed:
-> 24/25 → 13/25). Tier-1 gives 844 service-free tests with **zero** provider calls, which is the
+> 24/25 → 13/25). Tier-1 gives 956 service-free tests with **zero** provider calls, which is the
 > signal CI should be providing. Enable tier 2 only for a deliberate pre-release run, against
 > a throwaway Supabase project.
 
@@ -267,7 +280,7 @@ tests/                        ← project root (NOT inside backend/)
 pytest.ini                    ← project root
 ```
 
-Suite size: **1,085 tests collected** across 67 files for the full suite at `pytest tests/ --collect-only` on 2026-10-02 (844 are service-free, the rest need the stack). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
+Suite size: **1,197 tests collected** across 69 files for the full suite at `pytest tests/ --collect-only` on 2026-10-03 (956 are service-free, the rest need the stack). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
 to get one, and do not quote 412 as a pass figure for the present tree. **1 known transient flake**
 (`test_briefs.py::test_attribution_worker_queues_recheck` — a work-order POST occasionally 500s under
 concurrent load; passes deterministically in isolation).

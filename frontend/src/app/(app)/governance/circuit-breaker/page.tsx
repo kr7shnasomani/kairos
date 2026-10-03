@@ -55,7 +55,7 @@ export default function CircuitBreakerPage() {
         Governance
       </Link>
 
-      <PageHeader className="mt-4" eyebrow="Governance" title="Circuit Breaker" lede="Statistical process control gates that halt ingestion for an asset class when z-score anomalies exceed threshold. Halted classes require admin override or human-verified resolution." />
+      <PageHeader className="mt-4" title="Circuit Breaker" lede="Statistical process control gates that halt ingestion for an asset class when z-score anomalies exceed threshold. Halted classes require admin override or human-verified resolution." />
       {state.status === "error" && (
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--danger)_30%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_5%,var(--surface))] p-4 text-body text-ink">
           Couldn&rsquo;t load circuit-breaker state.

@@ -71,6 +71,33 @@ interviews in one upsert, with the retirement date put back if that fails. `APPL
 stores; no benchmark question pins an event date (checked 2026-09-27), but re-run the benchmark after the
 first apply.
 
+## The showcase plant (the demo login's data)
+
+A second, fictional plant (Veridian Petrochemicals: a 119-asset complex and a 38-asset tank farm, about 470 documents (about 70 written by hand,
+three generated records per piece of equipment, and a dated failure history card for each of the eight recurring failures), 90 days of about 700 events, ten knowledge conflicts, a full governance queue, off-boarding programmes) that the one-click demo login works.
+It lives in the same stores as this dataset, marked by `DEMO-` ids and showcase sites, and every login sees it
+(`SHOWCASE_VISIBLE_TO_ALL=true`; false hides it from everyone but the demo role). The benchmark graders never count it, but
+retrieval for a benchmark run should be measured with the switch off. Nothing in it is shared with the golden dataset (no tag, person, vendor or part
+number), because the graph merges those by text. Design and decisions: `docs/implementation/demo-data.md`.
+
+```bash
+make load-showcase                  # dry run: the plan, an audit of every row's marker, what is already loaded
+make load-showcase APPLY=1          # writes the current stores (needs SHOWCASE_CONFIRM=load-showcase-into-current-stores)
+make generate-showcase              # rewrite the showcase_* files in dataset/ from the generator (touches no store, no golden file)
+make redate-showcase                # keep it current: shift its dates so the newest event is yesterday
+make reset-showcase                 # undo what visitors changed (state only, never the vault)
+```
+
+The data is files in this dataset, beside the golden ones in the same folders, every data file named `showcase_*` (`00_Reference`, `01_Structured_Backbone`,
+`02_Document_Corpus`, `03_Multiformat_Variants`, `04_Events_And_Quarantine`, plus `05_Governance_And_Handover` for briefs, MoC and
+off-boarding). The loader, redate and reset read only those files; `make generate-showcase` is how they are (re)written, and its
+README (`dataset/00_Reference/SHOWCASE_README.md`) lists what is where. The golden files are never written, and the golden loader names its files one by one, so it never reads these.
+
+Dates in the files are as at a snapshot anchor and are moved to the load time on read, so it never goes stale: `redate-showcase` (or `SHOWCASE_AUTO_REDATE=true`)
+moves the loader's own rows forward, and a visitor's rows are never touched. The load takes the demo account's real
+id for the briefs addressed to it, runs the documents through the real pipeline, and asserts the real-mode counts are
+identical before and after.
+
 ## Using it as a benchmark
 
 Because `00_KAIROS_CANON.md` fixes every fact, it is the answer key for the Problem Statement's evaluation

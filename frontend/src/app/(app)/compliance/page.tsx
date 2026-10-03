@@ -123,9 +123,8 @@ export default function CompliancePage() {
   return (
     <div data-testid="compliance-workspace" className="mx-auto max-w-[1400px]">
       <PageHeader
-        eyebrow="Assure"
         title="Compliance"
-        lede="High-recall gap detection: every asset + regulation without a verified procedure is flagged."
+        lede="Every asset is checked against the regulatory clauses that apply to it, and a gap is raised wherever no verified document of the required type is linked. Use it to see where evidence is missing before an audit does."
         actions={<>
           {lastScan && lastScan !== "realtime" && <span className="text-caption text-muted">Last scan {fmtRelTime(lastScan)}</span>}
         </>}

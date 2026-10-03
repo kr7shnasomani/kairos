@@ -41,9 +41,9 @@ other way round means cutting under pressure, which is when people cut the wrong
 
 ## 2. Pre-flight — before you walk up
 
-**Synthesis speed is no longer the main risk.** On the current run (2026-09-13, Nemotron 3 Super) a
-Copilot answer is **p50 1.5 s, p95 9.8 s, avg 3.1 s** — down from p50 32 s / p95 66 s on the 17-Aug
-run. Root-cause packs are still slow. Still **pre-ask every model-backed screen** and leave it on its
+**Synthesis speed is no longer the main risk.** On the current run (2026-10-03, Nemotron 3 Ultra) a
+Copilot answer is **p50 5.5 s, p95 10.5 s, avg 5.5 s** — down from p50 32 s / p95 66 s on the 17-Aug
+run (it was p50 1.5 s on the smaller Nemotron 3 Super, which NVIDIA retired on 3 Oct). Root-cause packs are still slow. Still **pre-ask every model-backed screen** and leave it on its
 tab — a spinner on stage costs nothing to avoid. But a live question during Q&A is now cheap, which is
 why the offer at the top of [§9](#9-qa-bank) is worth making.
 
@@ -61,9 +61,9 @@ why the offer at the top of [§9](#9-qa-bank) is worth making.
 
 ### Already resolved — quote the current number
 
-The headline answer-quality number is **41 out of 46 (89.1%), VALID** — re-run 2026-09-13 on Nemotron 3
-Super over the 46-question set (widened from 37 that day), after NVIDIA retired Llama 3.1 70B (which
-scored 36/37 on the older set on 2026-08-24). The August jump came after
+The headline answer-quality number is **43 out of 46 (93.5%), VALID** — re-run 2026-10-03 on Nemotron 3
+Ultra over the 46-question set, after NVIDIA retired Nemotron 3 Super (41/46 on 2026-09-13) and, before
+it, Llama 3.1 70B (36/37 on the older set on 2026-08-24). A different model each time, so say so. The August jump came after
 fixing a real bug (`/search` wasn't filtering test-artifact noise out of retrieval results before
 ranking; see `benchmark/RESULTS.md` §2 and `status.md`'s Pending entry for the full root cause).
 Retrieval moved 32/37 → 37/37 (100%) in the same run. The one remaining miss (Q02, causal) retrieved
@@ -82,7 +82,7 @@ anything.
 | `/rca` **Generate** button | ~90 s of dead air. Tab 7 is pre-generated |
 | `/governance/model-gate` **Run** button | **~12-minute** background job, **27 extractions** (the old "~2.5 min / ~15 calls" figure came from a run where nearly every call failed fast on a 429 — `e2e-sweep.md` row 27) |
 | Any file in `benchmark/` | `run_safety_eval.py` burns provider quota and then reports `INVALID` |
-| `/management/cross-site` | Deliberate empty state. Correct, but not a demo screen |
+| `/overview/cross-site` | Deliberate empty state. Correct, but not a demo screen |
 | `/system-health` model probes | They spend quota. Off by default for a reason |
 
 ---
@@ -553,8 +553,8 @@ Have these bookmarked. Do **not** open them unprompted.
 | `/events` | "What triggers a brief?" |
 | `/audit` | "Is any of this auditable?" — **1,419** logged actions (live count 2026-08-25; it grows with every run, so check it or say "over a thousand") |
 | `/governance/model-gate` | "Show me the numbers inside the product" — recorded gate runs. **Do not press Run**: ~12-minute background job, 27 extractions. The in-app benchmark and architecture pages were removed 2026-09-22; for the full numbers use `benchmark/RESULTS.md` and `ARCHITECTURE.md` |
-| `/management` | "What does a plant manager see?" |
-| `/management/coverage` | "Which assets have no knowledge attached?" |
+| `/overview` | "What does a plant manager see?" |
+| `/overview/coverage` | "Which assets have no knowledge attached?" |
 | `/governance` · `/governance/conflicts` | "What happens when two documents disagree?" |
 | `/governance/moc` | "How many changes are waiting on a signature?" — the queue behind the Beat 8 screen |
 
@@ -563,11 +563,11 @@ Have these bookmarked. Do **not** open them unprompted.
 | Route | Why not |
 |---|---|
 | `/system-health` | Admin-only, and the model probes spend provider quota |
-| `/management/cross-site` | An honest "no data — this is a single-site deployment" state. Correct, but it looks like a bug to someone who does not know that |
+| `/overview/cross-site` | An honest "no data — this is a single-site deployment" state. Correct, but it looks like a bug to someone who does not know that |
 | `/governance/sla` · `/governance/circuit-breaker` | Real, but they need a paragraph of setup each to make sense. Q&A material |
 | `/compliance/nonconformance` | Beat 9 already makes the compliance point |
 | `/documents/compare` · `/assets/bootstrap` · `/projects` · `/settings` | Real, but no story beat needs them |
-| `/events/<id>` · `/management/plant-state` | Same |
+| `/events/<id>` · `/overview/plant-state` | Same |
 | `/field/deviation` · `/field/elicitation/<id>` · `/field/voice/<id>` | Beat 10 covers field capture. Three field screens is one too many |
 | `/offboarding` · `/offboarding/<id>` | The knowledge-cliff answer is already spoken in Beat 10. Opening it costs 30 s you do not have |
 
@@ -594,7 +594,7 @@ are easy to say by accident when you are nervous.
 | "It supports Hindi and Hinglish" | "Handwritten notes and blurry scans." Multilingual is deferred, not shipped |
 | "Memory is flat under load" | "No sign of a leak over a 60-minute run." That is the harness verdict, not a claim about memory |
 | "Hybrid search beats vector search" | "Hybrid matches the best single method, and adds authority ranking and a fallback if one store is down" |
-| "We're 89% accurate" *(said alone)* | **Superseded.** The current run is **41 of 46 (89.1%), VALID**, re-run 2026-09-13 on Nemotron 3 Super over a larger 46-question set. The 17-Aug 89% was 33 of 37, on an older model and the smaller set. Quote the new one and say when it was run |
+| "We're 89% accurate" *(said alone)* | **Superseded.** The current run is **43 of 46 (93.5%), VALID**, re-run 2026-10-03 on Nemotron 3 Ultra over a larger 46-question set (41 of 46 on Nemotron 3 Super on 2026-09-13). The 17-Aug 89% was 33 of 37, on an older model and the smaller set. Quote the new one and say when it was run |
 | "All four misses were safe refusals" | **Do not say this at all.** It was written down once and checked wrong on 23 August. Three of the four were never even eligible to be refused |
 | "The model gate blocks bad models" | "It scores them and reports. Blocking ships turned off, on purpose" |
 | "Multi-site" | Single site. This is an MVP boundary, not a bug |
@@ -622,8 +622,8 @@ are easy to say by accident when you are nervous.
 |---|---|
 | **"How is this different from ChatGPT over our documents?"** | A chatbot gives you text. We give you text plus where it came from, ranked by authority, and we refuse on safety questions when the evidence is thin. And our retrieval and citation scores are graded by fixed rules, not by another model. |
 | **"Is the data real?"** | It is authored, on purpose — 32 files modelling a petrochemical complex, with a canon file as the answer key. No historian, no EAM connection. It is written on our landing page, not hidden. That is the boundary of this MVP. |
-| **"Why is answer quality 89%, not higher?"** | Because the question set grew from 37 to 46 on 2026-09-13, and every grounded new question was kept after scoring — including the two the model then missed. The current figure is **41 of 46 (89.1%), VALID**, on Nemotron 3 Super, with retrieval at 46/46 and provenance at 46/46. An earlier jump, from the 17-Aug 89% (33 of 37), came from a real bug our own harness caught: `/search` was not filtering test-artifact noise out of results before ranking. Both runs are published in `benchmark/RESULTS.md` §2 — we did not delete the bad one. The five misses (Q02, Q09, Q24, Q41, Q46) all retrieved the fact, so they are synthesis gaps, not retrieval gaps. |
-| **"How fast is an answer?"** | **1.5 seconds at the median** on the current run (2026-09-13, Nemotron 3 Super), 9.8 s at p95 and 3.1 s average, with a 60-second cap. It was 32 s on the 17-Aug run, on Llama 3.1 70B. A shorter cap would give a prettier number that is actually measuring the fallback model, not the one we ship. |
+| **"Why is answer quality 93%, not higher?"** | Because the question set grew from 37 to 46 on 2026-09-13, and every grounded new question was kept after scoring — including the ones the model then missed. The current figure is **43 of 46 (93.5%), VALID**, on Nemotron 3 Ultra, with retrieval at 46/46 and provenance at 46/46. The earlier 41 of 46 was on Nemotron 3 Super, which NVIDIA retired on 3 Oct, so the two are different models. An earlier jump, from the 17-Aug 89% (33 of 37), came from a real bug our own harness caught: `/search` was not filtering test-artifact noise out of results before ranking. Both runs are published in `benchmark/RESULTS.md` §2 — we did not delete the bad one. The three misses (Q20, Q31, Q41) all retrieved the fact, so they are synthesis gaps, not retrieval gaps. |
+| **"How fast is an answer?"** | **5.5 seconds at the median** on the current run (2026-10-03, Nemotron 3 Ultra), 10.5 s at p95 and 5.5 s average, with a 60-second cap. The smaller Nemotron 3 Super that NVIDIA retired was 1.5 s at the median; Ultra is a much larger model. It was 32 s on the 17-Aug run, on Llama 3.1 70B. A shorter cap would give a prettier number that is actually measuring the fallback model, not the one we ship. |
 | **"What stops someone poisoning the knowledge base?"** | Four things. Anything extracted below 0.7 confidence lands in **quarantine** and cannot reach the graph until a human promotes it — the gate is one-way, nothing auto-promotes. Safety limits need a signed Management of Change. The vault never deletes, so the original always survives. And every promotion is written to the audit log. |
 | **"How do you know your own retrieval works?"** | Because our own baseline harness caught it failing. It measured vector search at **0 out of 37** one day — that is how we found a filter on an unindexed field silently erroring, which had quietly degraded the whole system to keyword search only. No unit test caught that. The benchmark did. |
 | **"Does it scale?"** | 2,275 requests with 0% errors, and the knee at 50 concurrent users. A 60-minute soak on cloud stores with no leak signal and 0.11% errors across 37,842 requests. What that does **not** prove is a ten-thousand-asset plant, and we say so on the page. |
@@ -662,7 +662,7 @@ Use this to check yourself, and to answer *"did you actually build all of it?"*
 | What they will assess | Where it lives |
 |---|---|
 | Entity extraction accuracy across document types | F1 **0.805** on 40 labels, run marked `VALID`, zero fallbacks. Plus `run_ocr_gate.py`, which scores OCR recall per document type against the clean sibling document |
-| Query answer quality on domain-expert questions | **41/46 (89.1%)**, VALID, across 15 categories, graded by fixed rules — current, re-run 2026-09-13 on Nemotron 3 Super |
+| Query answer quality on domain-expert questions | **43/46 (93.5%)**, VALID, across 15 categories, graded by fixed rules — current, re-run 2026-10-03 on Nemotron 3 Ultra |
 | Knowledge graph linkage completeness | **18/21 (85%) active vault documents linked**, document-centric. `run_kg_completeness.py` classifies the unlinked remainder instead of leaving a bare percentage — 1 correctly quarantined (Layer 6), 2 correctly held for review by the span-confidence gate, 0 dangling provenance |
 | Time to answer vs traditional search | Beat 5 tells the story. **If pushed for the number, give the reframe before the figure — never the figure alone.** Our harness models a searcher who *already knows what to ask*, on a 20-document corpus where BM25 hits the fact at rank 1.35. That is the one case this product is not built for. On that basis the modelled saving is **9.5%**, and we publish it rather than inflate it. The saving this system exists for is in **Beat 4**, where nobody searched at all, and **Beat 5**, where the answer spanned three systems and normally takes a week. Neither is inside that 9.5%, and no benchmark we have measures them |
 | Compliance gap detection accuracy | **Precision 1.000 · recall 0.838 · F1 0.912**, zero false alarms — Beat 9. **Scope it when you say it:** measured against 52 clause×asset pairs over the **10 canon assets**. The registry now holds **55** assets and the live dashboard shows **233 findings**, so the figure describes the benchmark scope, not the screen |

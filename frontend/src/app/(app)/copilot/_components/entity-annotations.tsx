@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { ExtractedEntity } from "@/lib/copilot";
 import { createAnnotation } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { DemoGate } from "@/components/demo-gate";
 
 const ENTITY_TYPES = [
   "Asset", "Equipment", "Part", "Substance", "Parameter",
@@ -44,7 +43,7 @@ export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] })
   if (visible.length === 0) return null;
 
   return (
-    <DemoGate>
+    <>
     <div>
       <p className="mb-2 text-micro font-bold uppercase tracking-[0.1em] text-muted">
         Extracted entities
@@ -161,6 +160,6 @@ export function EntityAnnotations({ entities }: { entities: ExtractedEntity[] })
         })}
       </div>
     </div>
-    </DemoGate>
+    </>
   );
 }

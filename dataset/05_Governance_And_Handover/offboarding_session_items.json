@@ -1,0 +1,206 @@
+[
+  {
+    "id": "24cdcb7e-7b64-565b-8035-0e35dde8f2be",
+    "session_id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "session_number": 1,
+    "equipment_family": "PUMP",
+    "focus_failure_modes": [],
+    "status": "completed",
+    "questions": [
+      "Which pump assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about pump failures that is not written down anywhere?",
+      "Which recurring pump problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-09-10T14:07:35.667928+00:00",
+    "completed_at": "2026-09-10T16:07:35.667928+00:00"
+  },
+  {
+    "id": "78483d3c-e7ca-5cd0-b1f0-ccd3736a6f08",
+    "session_id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "session_number": 2,
+    "equipment_family": "SEAL",
+    "focus_failure_modes": [],
+    "status": "completed",
+    "questions": [
+      "Which seal assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about seal failures that is not written down anywhere?",
+      "Which recurring seal problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-09-17T14:07:35.667928+00:00",
+    "completed_at": "2026-09-17T16:07:35.667928+00:00"
+  },
+  {
+    "id": "26244399-c648-5bc3-a61a-38789887d88a",
+    "session_id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "session_number": 3,
+    "equipment_family": "COMPRESSOR",
+    "focus_failure_modes": [],
+    "status": "completed",
+    "questions": [
+      "Which compressor assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about compressor failures that is not written down anywhere?",
+      "Which recurring compressor problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-09-24T14:07:35.667928+00:00",
+    "completed_at": "2026-09-24T16:07:35.667928+00:00"
+  },
+  {
+    "id": "4a14dede-c2c1-51ea-ad81-d6d79ad737df",
+    "session_id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "session_number": 4,
+    "equipment_family": "INSTRUMENT",
+    "focus_failure_modes": [],
+    "status": "questions_ready",
+    "questions": [
+      "Which instrument assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about instrument failures that is not written down anywhere?",
+      "Which recurring instrument problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-10-01T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "41eaeace-9558-5b22-9a1e-96be78acea3a",
+    "session_id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "session_number": 5,
+    "equipment_family": "HEAT EXCHANGER",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-08T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "0618e5a2-c538-5dee-8b13-689bb9de9115",
+    "session_id": "c9df99a6-4dcf-58e8-984d-ef051c8fec5c",
+    "session_number": 6,
+    "equipment_family": "VALVE",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-15T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "5b9dd03a-e949-5184-b7e1-ebbf8182b380",
+    "session_id": "2406d71e-d558-5f17-97cd-6387f3017954",
+    "session_number": 1,
+    "equipment_family": "HEATER",
+    "focus_failure_modes": [],
+    "status": "completed",
+    "questions": [
+      "Which heater assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about heater failures that is not written down anywhere?",
+      "Which recurring heater problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-09-21T14:07:35.667928+00:00",
+    "completed_at": "2026-09-21T16:07:35.667928+00:00"
+  },
+  {
+    "id": "f7ecb185-95d7-5b31-a179-f9d0664c7969",
+    "session_id": "2406d71e-d558-5f17-97cd-6387f3017954",
+    "session_number": 2,
+    "equipment_family": "HEAT EXCHANGER",
+    "focus_failure_modes": [],
+    "status": "questions_ready",
+    "questions": [
+      "Which heat exchanger assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about heat exchanger failures that is not written down anywhere?",
+      "Which recurring heat exchanger problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-10-01T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "7ef7557e-cf1b-5723-9494-4fbbb61bdcdb",
+    "session_id": "2406d71e-d558-5f17-97cd-6387f3017954",
+    "session_number": 3,
+    "equipment_family": "VESSEL",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-11T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "e37d7a8d-10a2-55d0-8872-56af852fda1f",
+    "session_id": "2406d71e-d558-5f17-97cd-6387f3017954",
+    "session_number": 4,
+    "equipment_family": "VALVE",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-21T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "efdaadd5-0ee7-50e4-ad67-949caadd2070",
+    "session_id": "2406d71e-d558-5f17-97cd-6387f3017954",
+    "session_number": 5,
+    "equipment_family": "PUMP",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-31T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "9613bcef-e8da-5fd2-8ce6-6db38eea09db",
+    "session_id": "b49eec65-5b2c-505a-81d4-85072ddc5256",
+    "session_number": 1,
+    "equipment_family": "COMPRESSOR",
+    "focus_failure_modes": [],
+    "status": "questions_ready",
+    "questions": [
+      "Which compressor assets in the plant are the most sensitive to operating outside their design window, and how do you tell?",
+      "What did you learn about compressor failures that is not written down anywhere?",
+      "Which recurring compressor problem would you hand over first, and why?"
+    ],
+    "scheduled_for": "2026-10-01T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "377feb0b-770d-5449-adc8-5a39803848f9",
+    "session_id": "b49eec65-5b2c-505a-81d4-85072ddc5256",
+    "session_number": 2,
+    "equipment_family": "INSTRUMENT",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-13T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "adcbc719-f5f9-5f31-9fc2-681573ff5041",
+    "session_id": "b49eec65-5b2c-505a-81d4-85072ddc5256",
+    "session_number": 3,
+    "equipment_family": "CONTROL VALVE",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-10-25T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "3ff1fef3-851a-5ba7-be3b-9ec407890c7e",
+    "session_id": "b49eec65-5b2c-505a-81d4-85072ddc5256",
+    "session_number": 4,
+    "equipment_family": "TRANSMITTER",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-11-06T14:07:35.667928+00:00",
+    "completed_at": null
+  },
+  {
+    "id": "fe3ef613-f395-5814-9c35-74d47426950a",
+    "session_id": "b49eec65-5b2c-505a-81d4-85072ddc5256",
+    "session_number": 5,
+    "equipment_family": "PUMP",
+    "focus_failure_modes": [],
+    "status": "pending",
+    "questions": [],
+    "scheduled_for": "2026-11-18T14:07:35.667928+00:00",
+    "completed_at": null
+  }
+]

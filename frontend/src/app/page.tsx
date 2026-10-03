@@ -33,6 +33,7 @@ const navLinks = [
   ["Evals", "#evidence"],
   ["Provenance", "#provenance"],
   ["FAQ", "#faq"],
+  ["Docs", "/docs"],
 ] as const;
 
 /**
@@ -294,7 +295,7 @@ type EvalBar = {
 const evalBars: EvalBar[] = [
   { label: "Retrieval", note: "The fact reaches the model", value: 100, display: "100%", badge: "46/46", sub: "graded by fixed rules", hero: false },
   { label: "Provenance", note: "Sources cited", value: 100, display: "100%", badge: "46/46", sub: "every answer cited", hero: true },
-  { label: "Answer quality", note: "One valid run", value: 89, display: "89%", badge: "41/46", sub: "95% confidence: 77 to 95", hero: false },
+  { label: "Answer quality", note: "One valid run", value: 93, display: "93%", badge: "43/46", sub: "95% confidence: 82 to 98", hero: false },
 ];
 
 // The five harnesses beyond the Q&A grading, all from benchmark/RESULTS.md.
@@ -316,9 +317,9 @@ const evalSuites: {
     // Document-centric (run_kg_completeness.py), not the raw asset count —
     // that query has no test-artifact filter, see status.md.
     name: "Knowledge graph linkage",
-    headline: "18 / 21",
+    headline: "18 / 20",
     headlineNote: "Active vault documents with a verified knowledge edge",
-    rows: [["Documents linked", "85%"], ["Dangling provenance", "0"], ["Alias resolution", "2/2"], ["MDM identity", "2/2"]],
+    rows: [["Documents linked", "90%"], ["Dangling provenance", "0"], ["Alias resolution", "2/2"], ["MDM identity", "2/2"]],
   },
   {
     name: "Proactive briefs · Layer 8",
@@ -363,14 +364,14 @@ const evalSuites: {
     rows: [["Memory slope", "+8.6 MB/h"], ["Connections", "+4.2/h"], ["Errors", "0.11% of 37,842"], ["Idle recovery", "4 / 4 endpoints"]],
   },
   {
-    // Every row here is the same 2026-09-13 run the chart above reports, taken
+    // Every row here is the same 2026-10-03 run the chart above reports, taken
     // from one `run_benchmark.py` output. Quoting the percentiles from one run
     // beside another run's provider mix is the mistake this card is arranged to
     // prevent — figures from earlier sweeps had drifted into the docs.
     name: "Synthesis latency",
-    headline: "p50 1.5 s",
-    headlineNote: "Nemotron 3 Super on NVIDIA NIM at the 60 second cap, quoted with its slowest cases",
-    rows: [["p95", "9.8 s"], ["Mean", "3.1 s"], ["Graded questions", "46"], ["Answered by", "nim 40 · refused 6"]],
+    headline: "p50 5.5 s",
+    headlineNote: "Nemotron 3 Ultra on NVIDIA NIM at the 60 second cap, quoted with its slowest cases",
+    rows: [["p95", "10.5 s"], ["Mean", "5.5 s"], ["Graded questions", "46"], ["Answered by", "nim 39 · refused 6 · openrouter 1"]],
   },
 ];
 
@@ -470,7 +471,7 @@ const faqGroups = [
     name: "Evidence",
     items: [
       ["How was it evaluated?", "Forty-six questions written by domain experts across fifteen categories, graded by fixed rules. Retrieval, answer quality and sourcing are scored separately, and a refusal counts as correct when refusing was the right call."],
-      ["Why quote a confidence interval for answer quality?", "Because 41 out of 46 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 77 to 95 percent. Retrieval and sourcing are graded by fixed rules and stay at 46 out of 46. Every run is also checked for validity, and we never quote a run that a fallback model answered."],
+      ["Why quote a confidence interval for answer quality?", "Because 43 out of 46 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 82 to 98 percent. Retrieval and sourcing are graded by fixed rules and stay at 46 out of 46. Every run is also checked for validity, and we never quote a run in which more than a tenth of the answers came from a fallback model."],
       ["What do these numbers not cover?", "Four things, and we would rather name them. The soak test ran for one hour, so it says nothing about days. The validation set is small: 40 labels in total and only 3 for ORGANIZATION, so quote a per-type score with the number of labels behind it. Fifty virtual users against a demo-sized dataset is not evidence that the system handles a 10,000-asset plant. And hybrid retrieval reaches 35 of 37, which is exactly what semantic search alone reaches, so we report it as matching the best single method rather than beating it."],
       ["Is any of this running against a real plant?", "No. Every figure is measured against a golden dataset we wrote ourselves, and Kairos is not connected to any live plant. That is the intended limit of this MVP. We would rather say so than let a number imply otherwise."],
       ["Can we see the failures too?", "Yes. The test harness, the question set and every raw run are in the repository, including the runs where the answer was wrong."],
@@ -1869,11 +1870,12 @@ export default function Home() {
               ))}
             </div>
             <p className="mt-8 max-w-2xl text-[13px] leading-5 text-(--lp-dark-muted)">
-              One run, and every answer came from the pinned Nemotron 3 Super model on NVIDIA NIM —
-              none from a fallback model. Six safety-critical questions were refused because no
-              authoritative source covers them, and a correct refusal is graded as correct. All five
-              misses retrieved the right evidence — the gap is in how the answer is written, not in
-              what the system found.
+              One run: 39 answers came from the pinned Nemotron 3 Ultra model on NVIDIA NIM and one
+              from a fallback provider after NIM returned errors, which is inside the validity
+              limit for a run. Six safety-critical questions were refused because no authoritative source
+              covers them, and a correct refusal is graded as correct. All three misses retrieved
+              the right evidence — the gap is in how the answer is written, not in what the system
+              found.
             </p>
           </div>
 
@@ -2012,18 +2014,15 @@ export default function Home() {
             </h2>
             <p className="mt-6 max-w-md text-[15px] leading-6 text-(--lp-dark-muted)">
               The things people ask before they trust a system with a safety case. Still curious?
-              Read the source, or open the workspace and try it yourself.
+              Read the documentation, or open the workspace and try it yourself.
             </p>
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noreferrer noopener"
+            <Link
+              href="/docs"
               className="mt-6 inline-flex items-center gap-2.5 border border-(--lp-dark-line) px-4 py-2.5 text-[14px] text-white transition-colors duration-150 hover:border-(--lp-accent)"
             >
-              <GithubIcon />
-              Read the source
+              Read documentation
               <span aria-hidden="true" className="text-(--lp-accent)">›</span>
-            </a>
+            </Link>
           </div>
 
           <div data-reveal className="mt-12 grid gap-10 lg:grid-cols-[0.8fr_1.4fr]">

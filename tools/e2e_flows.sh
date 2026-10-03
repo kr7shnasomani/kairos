@@ -98,15 +98,15 @@ done
 
 echo "== 1. Pages and role routing"
 signin admin "$ADMIN"
-for route in /management /briefs /copilot /assets /assets/EQ-101 /assets/register /assets/bootstrap /events /rca /graph /compliance \
+for route in /overview /briefs /copilot /assets /assets/EQ-101 /assets/register /assets/bootstrap /events /rca /graph /compliance \
              /compliance/audit-pack /governance /governance/quarantine /governance/conflicts /governance/moc \
              /governance/model-gate /governance/timestamp-drift /governance/push-volume-gate \
-             /management/cross-site /audit /documents /documents/compare /offboarding /system-health; do
+             /overview/cross-site /audit /documents /documents/compare /offboarding /system-health; do
   visit "$route" "$route"
 done
 signin field_worker "$FIELD"
 for route in /briefs /field/deviation /field/voice; do visit "$route" "$route"; done
-visit /management /briefs      # staff surfaces redirect field workers to their inbox
+visit /overview /briefs      # staff surfaces redirect field workers to their inbox
 visit /governance /briefs
 signin compliance "$COMPLIANCE"
 visit /compliance /compliance

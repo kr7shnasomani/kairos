@@ -1,0 +1,17 @@
+Veridian Petrochemicals
+Bharuch Complex
+
+Document no: SHIFTLOG-HDT-WEEK-2   Revision: A
+Title: Shift log, HDT, week commencing 15 August
+Owner: Arvind Nair
+Issued: 15 August 2026
+
+Primary equipment: K-2101A, Recycle gas compressor A
+
+Shift lead: Arvind Nair
+
+06:10 Took over from the previous shift. K-2101A running normally, discharge pressure steady.
+09:40 Walk-round of the HDT unit. Slight oil mist near the drive end of K-2101A; reported to the technician.
+11:25 Radio check with the control room. Alarm acknowledged on the HDT panel.
+14:05 Handover meeting with the process engineer. Open work orders reviewed.
+15:50 Housekeeping complete, permits closed. Handed over to the next shift lead.

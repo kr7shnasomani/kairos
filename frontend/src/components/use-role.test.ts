@@ -2,19 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ getMe: vi.fn() }));
 
-import { ADMIN_VIEW_ROLES, PROMOTE_ROLES, READ_ONLY_ROLES, roleHome, routeAllowed, visibleTo } from "./use-role";
+import { ADMIN_VIEW_ROLES, PROMOTE_ROLES, roleHome, routeAllowed, visibleTo } from "./use-role";
 
 describe("demo role", () => {
-  it("is the read-only demo identity and lands on the Copilot", () => {
-    expect(READ_ONLY_ROLES).toContain("demo");
-    expect(roleHome("demo")).toBe("/copilot");
+  it("is the demo identity and lands on the overview", () => {
+    expect(roleHome("demo")).toBe("/overview");
   });
 
   it.each([
     "/copilot", "/briefs", "/assets", "/assets/register", "/assets/bootstrap", "/documents", "/documents/ingest",
     "/compliance", "/graph", "/settings", "/audit", "/offboarding", "/offboarding/S-1", "/governance",
-    "/governance/model-gate", "/events", "/rca", "/projects", "/management", "/management/plant-state",
-    "/management/coverage", "/system-health", "/field/voice", "/field/deviation",
+    "/governance/model-gate", "/events", "/rca", "/projects", "/overview", "/overview/plant-state",
+    "/overview/coverage", "/system-health", "/field/voice", "/field/deviation",
   ])("sees %s, like an admin", (path) => {
     expect(routeAllowed(path, "demo")).toBe(true);
     expect(routeAllowed(path, "admin")).toBe(true);

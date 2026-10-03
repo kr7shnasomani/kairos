@@ -9,6 +9,7 @@ import structlog
 from elasticsearch import AsyncElasticsearch
 
 from api.config import Settings
+from api.services import tenant
 
 log = structlog.get_logger(__name__)
 
@@ -23,9 +24,24 @@ class SearchEngineService:
     - Regulatory clause references (OISD-117 Clause 4.2.1)
     """
 
-    def __init__(self, client: AsyncElasticsearch, settings: Settings):
+    def __init__(self, client: AsyncElasticsearch, settings: Settings, include_demo: bool = False):
         self.client = client
         self.settings = settings
+        # True only for the demo role (and for work on a showcase asset): searches also cover the
+        # `_demo` sibling indices. Real callers never query them.
+        self.include_demo = include_demo
+
+    async def ensure_demo_indices(self) -> None:
+        """Creates the showcase sibling indices. Called by the loader and before a showcase write,
+        never from `ensure_indices`, so a deploy creates nothing for the showcase."""
+        for base, mapping in (
+            (self.settings.ELASTICSEARCH_INDEX_ASSETS, self._asset_mapping()),
+            (self.settings.ELASTICSEARCH_INDEX_DOCUMENTS, self._document_mapping()),
+        ):
+            name = tenant.demo_store(base)
+            if not await self.client.indices.exists(index=name):
+                await self.client.indices.create(index=name, body=mapping)
+                log.info("elasticsearch.index_created", index=name)
 
     async def ensure_indices(self) -> None:
         """Creates ES indices with mappings if they don't exist."""
@@ -59,7 +75,10 @@ class SearchEngineService:
         they "never appear in default query results as if they were current". Time-travel callers
         pass True, because a document active at the as-of date is a correct hit for that date.
         """
-        indices = index or f"{self.settings.ELASTICSEARCH_INDEX_DOCUMENTS},{self.settings.ELASTICSEARCH_INDEX_ASSETS}"
+        names = [self.settings.ELASTICSEARCH_INDEX_DOCUMENTS, self.settings.ELASTICSEARCH_INDEX_ASSETS]
+        if self.include_demo:
+            names += [tenant.demo_store(n) for n in names]
+        indices = index or ",".join(names)
 
         must_clauses: list[Any] = [
             {
@@ -98,7 +117,8 @@ class SearchEngineService:
         }
 
         try:
-            response = await self.client.search(index=indices, body=body)
+            # ignore_unavailable: the showcase indices do not exist until the showcase is loaded.
+            response = await self.client.search(index=indices, body=body, ignore_unavailable=True)
             hits = response["hits"]["hits"]
             return [
                 {

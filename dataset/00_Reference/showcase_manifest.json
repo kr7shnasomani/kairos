@@ -1,0 +1,20 @@
+{
+  "anchor": "2026-10-03T14:16:35.377098+00:00",
+  "demo_user_placeholder": "00000000-0000-0000-0000-00000000de40",
+  "counts": {
+    "documents": 476,
+    "assets": 158,
+    "operational_events": 699,
+    "briefs": 29,
+    "brief_feedback": 4,
+    "knowledge_conflicts": 10,
+    "moc_items": 5,
+    "quarantine_items": 25,
+    "elicitation_sessions": 5,
+    "offboarding_sessions": 3,
+    "offboarding_session_items": 16,
+    "plant_operating_states": 6,
+    "asset_alias_map": 349,
+    "live_events": 9
+  }
+}

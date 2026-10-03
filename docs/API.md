@@ -205,7 +205,7 @@ Opt-in liveness probe for a **rate-limited model provider**. Makes the smallest 
 
 **Response `200`:**
 ```json
-{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-super-120b-a12b", "served_model": "nvidia/nemotron-3-super-120b-a12b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
+{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-ultra-550b-a55b", "served_model": "nvidia/nemotron-3-ultra-550b-a55b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
 ```
 
 For a synthesis tier the probe sends the tier's own provider-specific body keys (Nemotron's thinking-off flag), so a provider that rejects them fails here rather than on every real answer. `served_model` is the model the provider says it ran; `model_mismatch` is `null` when it matches the pin (casing ignored) and a record otherwise. Both are `null` for Jina and Groq.
@@ -408,7 +408,7 @@ hidden as `excluded_test_assets`.
 
 ### `GET /assets/coverage`
 
-Knowledge-coverage matrix across **all** assets — what backs the `/management/coverage` heatmap.
+Knowledge-coverage matrix across **all** assets — what backs the `/overview/coverage` heatmap.
 Per asset: facts held, how many are authoritative, how many are human-verified, linked documents
 and pending quarantine items.
 
@@ -457,7 +457,7 @@ Get a single asset by its canonical ID. Enriched with 3-parallel live counts.
 }
 ```
 
-`open_work_orders_count`, `compliance_gap_count`, and `last_inspection_date` are fetched in parallel. Each is `null` when its lookup fails (never a `0` that reads as a clean record); `last_inspection_date` is also `null` when no inspection-complete event exists. **`404`** if not found.
+`open_work_orders_count`, `compliance_gap_count`, and `last_inspection_date` are fetched in parallel. Each is `null` when its lookup fails (never a `0` that reads as a clean record); `last_inspection_date` is the newest `INSPECTION_RECORD` edge, else the newest `inspection_complete` Event node, and `null` when neither exists. **`404`** if not found.
 
 ---
 
@@ -528,6 +528,22 @@ Get the parent–child asset hierarchy (up to 10 levels deep via Neo4j `PARENT_O
 ---
 
 | `GET` | `/assets/coverage` | Knowledge-coverage matrix across all assets — facts, authoritative facts, verified facts, linked documents, pending quarantine. Read-only and model-free (spends no provider quota). Declared **above** `/{asset_id}` so the literal path is not swallowed by the path parameter. |
+### `GET /assets/{asset_id}/graph`
+
+The asset and its surroundings, two hops out, as `nodes` and `edges` for the graph page. Accepts a canonical id or an alias, like `/knowledge`.
+
+**Auth required:** Yes. **Query:** `as_of` (ISO8601, default now) limits the documents to those valid at that moment.
+
+What it returns, each kind capped so a hub asset cannot return hundreds of nodes: the unit above the asset and the instruments below it (`PARENT_OF`), up to 12 documents (best authority, newest first), the people and organisations those documents mention (the 8 mentioned by the most of them), the other assets that the same documents cover (up to 8, joining the documents into a network), and the latest 6 events (`OCCURRED_ON`). Edges are marked `structural: true` for the hierarchy and events, which are not knowledge facts and carry no authority or validity window. Test-artifact documents are left out and counted in `excluded_test_documents`.
+
+```json
+{ "asset_id": "DEMO-P-1101A", "as_of": "now", "excluded_test_documents": 0,
+  "nodes": [{ "id": "DOC-WQJHXNN63FD4", "kind": "Document", "label": "HFS-SB-2026-05-minimum-flow", "properties": {} }],
+  "edges": [{ "id": "doc-DOC-WQJHXNN63FD4", "source": "DEMO-P-1101A", "target": "DOC-WQJHXNN63FD4", "label": "DOCUMENTED_BY",
+              "structural": false, "authority_level": 3, "verification_status": "unverified",
+              "valid_from": "2026-09-01T00:00:00", "valid_to": "9999-12-31T23:59:59", "document_id": "DOC-WQJHXNN63FD4", "confidence": 0.95 }] }
+```
+
 ### `GET /assets/{asset_id}/knowledge`
 
 Get all temporal graph facts linked to this asset from Neo4j. Accepts a **canonical id or a confirmed tag alias** — `P-101` resolves to `EQ-101` via `asset_alias_map` (`resolve_canonical_asset_id`); the response echoes `requested_id` and `resolved_from_alias`. Facts are **deduped by `edge_id`** (the graph can hold physical duplicate relationships).
@@ -1165,7 +1181,7 @@ leave the line out.
 
 `uncertainty` carries the model's own statement of what it could not establish; `rate_limited` is
 `true` only when **every** provider tier returned HTTP 429 (see above). `model` names the provider tier
-that actually answered — `nim` (Nemotron 3 Super 120B), `openrouter` (Llama 3.1 70B) or `gemini` — and
+that actually answered — `nim` (Nemotron 3 Ultra 550B), `openrouter` (Llama 3.1 70B) or `gemini` — and
 `served_model`, when present, is the exact model id the provider reported.
 
 **`pending_moc` — the change-under-review warning.** Non-empty when an asset cited in the answer has

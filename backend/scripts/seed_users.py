@@ -6,8 +6,8 @@ Run inside the API container:
 
 Passwords come from the environment (`.env`, which is gitignored), one variable per role:
 KAIROS_SEED_PASSWORD_ADMIN, _ENGINEER, _FIELD_WORKER, _RELIABILITY, _COMPLIANCE, _DEMO.
-The demo user is the public one-click login: read-only (`demo` role in kairos.rego), and its password
-is public by design (NEXT_PUBLIC_DEMO_PASSWORD on the frontend), so never reuse it for another account.
+The demo user is the public one-click login: it works the showcase plant (`demo` role, site SITE_DEMO,
+writes fenced to showcase rows), and its password is public by design (NEXT_PUBLIC_DEMO_PASSWORD on the frontend), so never reuse it for another account.
 The script refuses to run if any is missing, so a password is never invented or committed.
 
 role and site_id go in `app_metadata`, which only the service role can write. `user_metadata` is
@@ -64,12 +64,12 @@ TEST_USERS = [
         "app_metadata": {"role": "compliance", "site_id": "SITE_001", "name": "Compliance Auditor"},
         "user_metadata": {"name": "Compliance Auditor"},
     },
-    # The login page's "Explore the live demo" button. Read-only by policy: the `demo` role has an
-    # explicit allow list in kairos.rego and no write, ingest, ack or audit access.
+    # The login page's "Explore the live demo" button. It works the showcase plant (site SITE_DEMO): the
+    # `demo` role reads every site but may write only to showcase rows (api/services/tenant.py).
     {
         "email": "demo@kairos.local",
         "password_env": "KAIROS_SEED_PASSWORD_DEMO",
-        "app_metadata": {"role": "demo", "site_id": "SITE_001", "name": "Demo Visitor"},
+        "app_metadata": {"role": "demo", "site_id": "SITE_DEMO", "name": "Demo Visitor"},
         "user_metadata": {"name": "Demo Visitor"},
     },
 ]
