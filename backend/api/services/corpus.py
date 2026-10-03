@@ -34,7 +34,7 @@ from collections.abc import Collection, Iterable
 
 import structlog
 
-from api.services.tenant import DEMO_VISIBLE_CYPHER
+from api.services.tenant import DEMO_VISIBLE_CYPHER, SITE_PIN_CYPHER
 
 log = structlog.get_logger(__name__)
 
@@ -75,7 +75,7 @@ REAL_ASSET_CYPHER = (
 )
 _TEST_ASSET_COUNT_CYPHER = (
     f"MATCH (a:Asset) WHERE NOT {REAL_ASSET_CYPHER} AND {DEMO_VISIBLE_CYPHER} "
-    "AND ($site_id IS NULL OR a.site_id = $site_id) RETURN count(a) AS n"
+    f"AND {SITE_PIN_CYPHER} RETURN count(a) AS n"
 )
 
 

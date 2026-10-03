@@ -978,7 +978,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `INTERNAL_API_KEY` | `kairos-internal-dev-key` | Service-to-service auth token |
 | `DEMO_LLM_ACTIONS_PER_HOUR` | `120` | Hourly ceiling, shared by every demo login, on the demo role's model-backed actions (Copilot, RCA, ingest, event briefs, voice). A real account is never counted; a Redis outage fails open |
 | `SHOWCASE_AUTO_REDATE` | `false` | When true the API shifts the showcase plant's dates forward about once a day (`scripts/showcase/redate.py`); time columns of the loader's own rows only |
-| `SHOWCASE_VISIBLE_TO_ALL` | `true` | Every login reads the showcase plant as well as the real one, and a site-pinned role reads across sites. False: only the demo role sees it and real accounts see real data alone. The demo role writes only to showcase rows either way (`services/tenant.py`) |
+| `SHOWCASE_VISIBLE_TO_ALL` | `true` | Every login reads the showcase plant as well as the real one, and a site-pinned role reads its own site plus the showcase sites (never another real site, and a write never widens). False: only the demo role sees it and real accounts see real data alone. The demo role writes only to showcase rows either way (`services/tenant.py`) |
 | `MOC_WEBHOOK_SECRET` | `None` | HMAC secret for `POST /governance/moc/webhook`. Unset is accepted only in development; **boot refuses without it outside development** |
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP cap, enforced whenever `APP_ENV` is not `development` (0 = off) |
 | `MAX_UPLOAD_MB` | `25` | Reject document and voice-note uploads larger than this (Caddy caps the raw body at 30 MB) |

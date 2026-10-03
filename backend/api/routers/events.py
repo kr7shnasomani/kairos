@@ -124,7 +124,7 @@ async def _canonical_asset(asset_id: str | None, driver, supabase, current_user:
     site = site_scope(current_user, None) if current_user else None
     if site is not None:
         node = await GraphService(driver).get_asset(canonical)
-        if node and node.get("site_id") != site:
+        if node and not tenant.on_visible_site(current_user, node.get("site_id"), site):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' is not registered.")
     tenant.guard_asset(current_user, canonical)  # a demo report must name a showcase asset
     return canonical
@@ -173,7 +173,7 @@ async def ingest_work_order(
     Canonical deduplication: same asset + event_type within 10-min window → deduplicated.
     Persists to operational_events, publishes to Redis Stream for brief assembly.
     """
-    site_scope(current_user, payload.site_id)  # a non-admin may only report for their own site
+    site_scope(current_user, payload.site_id, write=True)  # a non-admin may only report for their own site
     tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
@@ -326,7 +326,7 @@ async def ingest_ptw(
     alone: they go to other recipients. Publishes to PTW stream AND directly to BRIEFS stream
     with priority=critical to bypass the EEMUA 191 governor.
     """
-    site_scope(current_user, payload.site_id)
+    site_scope(current_user, payload.site_id, write=True)
     tenant.guard_site(current_user, payload.site_id)
     payload.asset_ids = [await _canonical_asset(a, driver, supabase, current_user) for a in payload.asset_ids]
     bus = EventBusService(redis, settings)
@@ -396,7 +396,7 @@ async def ingest_shift_handover(
     es: ElasticsearchDep,
 ) -> dict:
     """Triggers a shift handover brief for the incoming crew."""
-    site_scope(current_user, payload.site_id)
+    site_scope(current_user, payload.site_id, write=True)
     tenant.guard_site(current_user, payload.site_id)
     bus = EventBusService(redis, settings)
 
@@ -467,7 +467,7 @@ async def ingest_alarm(
     driver: Neo4jDep,
 ) -> dict:
     """Received when an operator acknowledges a DCS process alarm."""
-    site_scope(current_user, payload.site_id)
+    site_scope(current_user, payload.site_id, write=True)
     tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
@@ -705,7 +705,7 @@ async def set_plant_state(
     Sets or updates the plant operating state for a site.
     turnaround/shutdown/emergency suppresses all non-critical briefs for that site.
     """
-    site_scope(current_user, payload.site_id)  # an engineer may only set their own site's state
+    site_scope(current_user, payload.site_id, write=True)  # an engineer may only set their own site's state
     tenant.guard_site(current_user, payload.site_id)
     now_iso = datetime.now(UTC).isoformat()
     set_by = current_user.get("user_id", "unknown")
@@ -757,7 +757,7 @@ async def ingest_tag_out(
     Receives an equipment tag-out event. Deduplicates, publishes to TAG_OUT stream,
     inserts into operational_events, triggers delayed brief assembly.
     """
-    site_scope(current_user, payload.site_id)
+    site_scope(current_user, payload.site_id, write=True)
     tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
     bus = EventBusService(redis, settings)
@@ -842,7 +842,7 @@ async def ingest_inspection_complete(
     """
     from api.services.graph import GraphService
 
-    site_scope(current_user, payload.site_id)
+    site_scope(current_user, payload.site_id, write=True)
     tenant.guard_site(current_user, payload.site_id)
     payload.asset_id = await _canonical_asset(payload.asset_id, driver, supabase, current_user)
 
@@ -1029,8 +1029,7 @@ async def list_events(
         )
         if event_type:
             query = query.eq("event_type", event_type)
-        if site:
-            query = query.eq("site_id", site)
+        query = tenant.pin_site(query, current_user, site)
         query = tenant.scope_site(query, current_user)
         return query.range(offset, offset + limit - 1).execute()
 
@@ -1060,7 +1059,7 @@ async def get_event(
         .execute()
     )
     site = site_scope(current_user, None)
-    if not result.data or (site and result.data[0].get("site_id") != site):
+    if not result.data or not tenant.on_visible_site(current_user, result.data[0].get("site_id"), site):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
 
     event = result.data[0]
@@ -1107,7 +1106,7 @@ async def acknowledge_event(
         .limit(1)
         .execute()
     )
-    if not event.data or (site and event.data[0].get("site_id") != site):
+    if not event.data or not tenant.on_visible_site(current_user, event.data[0].get("site_id"), site):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
     if not tenant.has_role(current_user, *_INGEST_ROLES):
         brief = await asyncio.to_thread(

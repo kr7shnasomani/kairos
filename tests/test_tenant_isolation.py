@@ -96,7 +96,7 @@ class _User:
 
 
 async def test_real_callers_hide_the_demo_identitys_audit_rows():
-    tenant._demo_ids = (0.0, [])
+    tenant._demo_ids = (float("-inf"), [])
     sb = type("S", (), {"auth": _Auth([_User("d-1", "demo"), _User("a-1", "admin")])})()
     q = await tenant.scope_audit(_Q(), REAL, sb)
     assert ("not_",) in q.ops and ("in_", "performed_by", ["d-1"]) in q.ops
@@ -105,8 +105,18 @@ async def test_real_callers_hide_the_demo_identitys_audit_rows():
     assert (await tenant.scope_audit(_Q(), DEMO, sb)).ops == []
 
 
+async def test_the_first_demo_user_lookup_happens_on_a_freshly_booted_host(monkeypatch):
+    """`time.monotonic()` is uptime: a CI runner or server up for under ten minutes read "fresh" from the start."""
+    import api.services.tenant as t
+
+    monkeypatch.setattr(t.time, "monotonic", lambda: 120.0)
+    tenant._demo_ids = (float("-inf"), [])  # what the module starts with
+    sb = type("S", (), {"auth": _Auth([_User("d-1", "demo")])})()
+    assert await tenant.demo_user_ids(sb) == ["d-1"]
+
+
 async def test_a_failed_demo_user_lookup_never_fails_the_read():
-    tenant._demo_ids = (0.0, [])
+    tenant._demo_ids = (float("-inf"), [])
 
     class _Broken:
         auth = type("B", (), {"admin": type("C", (), {"list_users": staticmethod(lambda: 1 / 0)})()})()
@@ -352,7 +362,7 @@ def test_system_rows_about_showcase_assets_are_marked_for_the_audit_filter():
 
 
 async def test_actor_scope_hides_the_demo_identity_only_from_real_callers():
-    tenant._demo_ids = (0.0, [])
+    tenant._demo_ids = (float("-inf"), [])
     sb = type("S", (), {"auth": _Auth([_User("d-1", "demo")])})()
     q = await tenant.scope_actor(_Q(), REAL, sb, "annotated_by")
     assert q.ops == [("not_",), ("in_", "annotated_by", ["d-1"])]
@@ -680,7 +690,7 @@ def test_with_the_setting_off_only_the_demo_role_reads_the_showcase(monkeypatch)
     assert tenant.hides_demo(REAL) is True and tenant.hides_demo(DEMO) is False
 
 
-def test_a_site_pinned_role_reads_across_sites_only_with_the_setting_on(monkeypatch):
+def test_the_setting_widens_a_site_pinned_role_to_the_showcase_sites_and_no_further(monkeypatch):
     from fastapi import HTTPException
 
     engineer = {"role": "engineer", "site_id": "SITE_001"}
@@ -688,10 +698,55 @@ def test_a_site_pinned_role_reads_across_sites_only_with_the_setting_on(monkeypa
     assert site_scope(engineer, None) == "SITE_001"
     with pytest.raises(HTTPException):
         site_scope(engineer, "SITE_DEMO")
+
     monkeypatch.setattr(tenant, "VISIBLE_TO_ALL", True)
-    assert site_scope(engineer, None) is None and site_scope(engineer, "SITE_DEMO") == "SITE_DEMO"
+    assert site_scope(engineer, None) == "SITE_001"  # still pinned: never "every site"
+    assert site_scope(engineer, "SITE_001") == "SITE_001"
+    assert site_scope(engineer, "SITE_DEMO") == "SITE_DEMO"  # a read may name a showcase site
+    with pytest.raises(HTTPException) as other_real_site:
+        site_scope(engineer, "SITE_002")  # another real site is a 403 whatever the setting says
+    assert other_real_site.value.status_code == 403
     with pytest.raises(HTTPException):
         site_scope({"role": "engineer", "site_id": ""}, None)  # a blank site still means no rows, never all rows
+
+
+def test_a_write_never_widens_with_the_setting(monkeypatch):
+    from fastapi import HTTPException
+
+    engineer = {"role": "engineer", "site_id": "SITE_001"}
+    monkeypatch.setattr(tenant, "VISIBLE_TO_ALL", True)
+    assert site_scope(engineer, "SITE_001", write=True) == "SITE_001"
+    for site in ("SITE_DEMO", "SITE_002"):
+        with pytest.raises(HTTPException):
+            site_scope(engineer, site, write=True)
+
+
+def test_a_pinned_caller_reads_its_own_site_and_the_showcase_but_not_another_real_site(monkeypatch):
+    engineer = {"role": "engineer", "site_id": "SITE_001"}
+    monkeypatch.setattr(tenant, "VISIBLE_TO_ALL", True)
+    assert tenant.on_visible_site(engineer, "SITE_001", "SITE_001")
+    assert tenant.on_visible_site(engineer, "SITE_DEMO_B", "SITE_001")
+    assert not tenant.on_visible_site(engineer, "SITE_002", "SITE_001")
+    assert tenant.on_visible_site(ADMIN, "SITE_002", None)  # None: every site, as for admin
+
+    monkeypatch.setattr(tenant, "VISIBLE_TO_ALL", False)
+    assert not tenant.on_visible_site(engineer, "SITE_DEMO", "SITE_001")
+
+    q = _Q()
+    monkeypatch.setattr(tenant, "VISIBLE_TO_ALL", True)
+    assert "SITE_001" in str(tenant.pin_site(q, engineer, "SITE_001").ops) and "SITE_DEMO" in str(tenant.pin_site(_Q(), engineer, "SITE_001").ops)
+    monkeypatch.setattr(tenant, "VISIBLE_TO_ALL", False)
+    assert "SITE_DEMO" not in str(tenant.pin_site(_Q(), engineer, "SITE_001").ops)
+    assert tenant.pin_site(_Q(), engineer, None).ops == []  # no pin: untouched
+
+
+def test_every_site_filtered_cypher_pins_to_the_site_and_the_showcase():
+    from api.routers import compliance
+    from api.services import corpus
+
+    for cypher in (compliance._GAP_CYPHER, compliance._DASHBOARD_CYPHER, compliance._AUDIT_CYPHER, corpus._TEST_ASSET_COUNT_CYPHER):
+        assert tenant.SITE_PIN_CYPHER in cypher
+        assert "a.site_id = $site_id)" not in cypher  # no bare equality that would hide the showcase or widen past the site
 
 
 async def test_the_read_fence_steps_aside_when_everyone_sees_the_showcase(monkeypatch):

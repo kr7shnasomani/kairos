@@ -85,11 +85,18 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      # `--audit-level=high` on purpose. The frontend tree carries transitive advisories in dev-only
-      # tooling that never reaches a browser; failing the build on those trains people to ignore a
-      # red run, which is worse than not running it. High and critical block.
-      - name: Audit frontend dependencies
+      # `--audit-level=high` on purpose, and `--omit=dev` for what blocks. The frontend tree carries
+      # transitive advisories in dev-only tooling that never reaches a browser (today: braces, via
+      # eslint-config-next, which has no fixed release); failing the build on those trains people to
+      # ignore a red run, which is worse than not running it. High and critical in what ships block;
+      # the dev tooling is reported (same split as frontend.yml).
+      - name: Audit frontend dependencies (shipped, high and critical)
         working-directory: frontend
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Audit frontend dev tooling (report only)
+        working-directory: frontend
+        continue-on-error: true
         run: npm audit --audit-level=high
 
   go:

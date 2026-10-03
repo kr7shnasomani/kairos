@@ -307,6 +307,31 @@ def scope_document_site(query, user: Mapping | None):
 # "expected parameter" instead of silently showing showcase assets to a real account.
 DEMO_VISIBLE_CYPHER = f"($hide_demo = false OR NOT a.asset_id STARTS WITH '{DEMO_PREFIX}')"
 
+# The site pin for a query that binds assets as `a` and takes `$site_id` (None: every site). A caller
+# pinned to a site reads that site, plus the showcase plant when the caller may see it (`$hide_demo`
+# false); it never reads another real site.
+SITE_PIN_CYPHER = (
+    f"($site_id IS NULL OR a.site_id = $site_id OR ($hide_demo = false AND a.asset_id STARTS WITH '{DEMO_PREFIX}'))"
+)
+
+
+def on_visible_site(user: Mapping | None, row_site: str | None, pinned: str | None) -> bool:
+    """Whether a row on `row_site` is readable by a caller whose `site_scope` answer is `pinned`.
+
+    `pinned` None means every site (admin, demo). Otherwise the caller's own site, plus showcase sites
+    for a caller that sees the showcase plant.
+    """
+    return pinned is None or row_site == pinned or (sees_showcase(user) and is_demo_site(row_site))
+
+
+def pin_site(query, user: Mapping | None, pinned: str | None, column: str = "site_id"):
+    """PostgREST twin of `on_visible_site`: narrow `query` to the caller's site (and the showcase sites)."""
+    if not pinned:
+        return query
+    if sees_showcase(user):
+        return query.or_(f"{column}.eq.{pinned},{column}.in.{_SITES_IN}")
+    return query.eq(column, pinned)
+
 
 def present_asset(row: dict) -> dict:
     """The row as the UI should show it: the `DEMO-GENERAL` placeholder asset (it exists only so an item
@@ -369,7 +394,9 @@ def is_demo_document(row: Mapping | None) -> bool:
 # as an SLA escalation of a showcase conflict, that no demo user performed).
 
 _DEMO_IDS_TTL = 600.0
-_demo_ids: tuple[float, list[str]] = (0.0, [])
+# Fetched-at starts at -inf, not 0.0: `time.monotonic()` is the machine's uptime, so on a host booted less
+# than ten minutes ago "now minus 0" is under the TTL and the first call would return the empty list.
+_demo_ids: tuple[float, list[str]] = (float("-inf"), [])
 
 
 async def demo_user_ids(supabase) -> list[str]:

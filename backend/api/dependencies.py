@@ -397,7 +397,7 @@ def require_role(*roles: str):
     return _check
 
 
-def site_scope(current_user: dict, requested: str | None) -> str | None:
+def site_scope(current_user: dict, requested: str | None, *, write: bool = False) -> str | None:
     """Resolve the `site_id` a site-filtered read may actually see.
 
     Tenancy was previously a **client-supplied query parameter**: `GET /assets?site_id=X`
@@ -406,10 +406,12 @@ def site_scope(current_user: dict, requested: str | None) -> str | None:
     verified token, not the request.
 
     - `admin` and `demo` keep the cross-site view (`requested`, or `None` for all sites).
-    - With `SHOWCASE_VISIBLE_TO_ALL`, every role with a site reads across sites too: the showcase plant
-      sits on its own sites, so a role pinned to the real one could not otherwise see it.
     - Everyone else is pinned to their own `site_id`; asking for someone else's is a 403 rather
       than a silent re-scope, so a caller is never told it read one site while reading another.
+    - With `SHOWCASE_VISIBLE_TO_ALL` a READ may also name a showcase site (the plant sits on its own
+      sites), and the callers' filters let showcase rows through (`tenant.on_visible_site`,
+      `tenant.pin_site`, `tenant.SITE_PIN_CYPHER`). Another real site stays a 403, whatever the flag
+      says. A WRITE (`write=True`) never widens: only the caller's own site.
     - An account with no `site_id` gets nothing. Fail closed: a blank site used to mean
       "no filter" — i.e. every site — which is exactly backwards.
 
@@ -426,9 +428,9 @@ def site_scope(current_user: dict, requested: str | None) -> str | None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has no site assigned; ask an administrator to set one.",
         )
-    if tenant.VISIBLE_TO_ALL:
-        return requested
     if requested and requested != own:
+        if not write and tenant.sees_showcase(current_user) and tenant.is_demo_site(requested):
+            return requested
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Not permitted to read site '{requested}'.",

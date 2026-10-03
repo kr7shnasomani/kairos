@@ -69,7 +69,7 @@ MATCH (a:Asset)
   AND {REAL_ASSET_CYPHER}
   AND {tenant.DEMO_VISIBLE_CYPHER}
   AND ($asset_id IS NULL OR a.asset_id = $asset_id)
-  AND ($site_id IS NULL OR a.site_id = $site_id)
+  AND {tenant.SITE_PIN_CYPHER}
 CALL {{
   WITH reg, a
   {_EVIDENCE_MATCH}
@@ -105,7 +105,7 @@ MATCH (a:Asset)
 {_APPLICABILITY}
   AND {REAL_ASSET_CYPHER}
   AND {tenant.DEMO_VISIBLE_CYPHER}
-  AND ($site_id IS NULL OR a.site_id = $site_id)
+  AND {tenant.SITE_PIN_CYPHER}
 CALL {{
   WITH reg, a
   {_EVIDENCE_MATCH}
@@ -133,7 +133,7 @@ WHERE (reg.applies_to_equipment_class IS NULL
     OR reg.applies_to_equipment_class CONTAINS a.equipment_class)
   AND {REAL_ASSET_CYPHER}
   AND {tenant.DEMO_VISIBLE_CYPHER}
-  AND ($site_id IS NULL OR a.site_id = $site_id)
+  AND {tenant.SITE_PIN_CYPHER}
 OPTIONAL MATCH (a)-[r:KNOWLEDGE_EDGE]->(d:Document)
 WHERE (r.valid_to IS NULL OR datetime(r.valid_to) > datetime())
   AND r.verification_status <> 'superseded'

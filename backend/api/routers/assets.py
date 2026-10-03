@@ -61,11 +61,11 @@ async def scoped_asset(graph: GraphService, asset_id: str, current_user: dict) -
 
     One 404 for both, so the response does not reveal that another site holds that id. `site_scope`
     returns None for admin (every site) and the caller's own site otherwise, and fails closed for an
-    account with no site.
+    account with no site. The showcase plant is also readable when the caller may see it.
     """
     asset = await graph.get_asset(asset_id)
     site = site_scope(current_user, None)
-    if not asset or (site is not None and asset.get("site_id") != site):
+    if not asset or not tenant.on_visible_site(current_user, asset.get("site_id"), site):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Asset '{asset_id}' not found")
     return asset
 
@@ -297,7 +297,7 @@ async def create_asset(
     AI-inferred identities are never accepted — confirmed_by_user_id is mandatory.
     Uses MERGE in Neo4j so duplicate registrations are idempotent.
     """
-    site_scope(current_user, payload.site_id)  # a non-admin may only register assets on their own site
+    site_scope(current_user, payload.site_id, write=True)  # a non-admin may only register assets on their own site
     tenant.guard_site(current_user, payload.site_id)
     asset_id = payload.asset_id or f"{_id_prefix(current_user)}{shortuuid.uuid()[:8].upper()}"
     tenant.guard_asset(current_user, asset_id)
@@ -524,9 +524,7 @@ async def list_provisional_assets(current_user: CurrentUserDep, supabase: Supaba
         .select("asset_id, tag_number, name, equipment_class, criticality, site_id, facility_id, eam_source")
         .eq("identity_confirmed", False)
     )
-    site = site_scope(current_user, None)
-    if site:
-        query = query.eq("site_id", site)
+    query = tenant.pin_site(query, current_user, site_scope(current_user, None))
     query = tenant.scope_site(query, current_user)
     result = await asyncio.to_thread(lambda: query.order("created_at", desc=True).limit(100).execute())
     items = result.data or []
@@ -548,12 +546,9 @@ async def list_pending_aliases(current_user: CurrentUserDep, supabase: SupabaseD
     items = result.data or []
     if site and items:
         # The alias map has no site column: keep candidates whose canonical asset is on the caller's site.
+        ids = list({i["canonical_asset_id"] for i in items})
         on_site = await asyncio.to_thread(
-            lambda: supabase.table("assets")
-            .select("asset_id")
-            .eq("site_id", site)
-            .in_("asset_id", list({i["canonical_asset_id"] for i in items}))
-            .execute()
+            lambda: tenant.pin_site(supabase.table("assets").select("asset_id").in_("asset_id", ids), current_user, site).execute()
         )
         allowed = {r["asset_id"] for r in (on_site.data or [])}
         items = [i for i in items if i["canonical_asset_id"] in allowed]

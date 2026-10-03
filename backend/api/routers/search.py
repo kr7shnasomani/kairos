@@ -599,7 +599,7 @@ async def generate_rca_pack(
     # non-admins; `site_scope` already 403s an account that has no site and lets admin through.
     caller_site = site_scope(current_user, None)
     if caller_site is not None and (
-        not asset_result.data or asset_result.data[0].get("site_id") != caller_site
+        not asset_result.data or not tenant.on_visible_site(current_user, asset_result.data[0].get("site_id"), caller_site)
     ):
         raise HTTPException(status_code=404, detail="Asset not found")
 

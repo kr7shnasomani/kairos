@@ -10,7 +10,7 @@ import structlog
 from neo4j import AsyncDriver
 
 from api.services.corpus import REAL_ASSET_CYPHER
-from api.services.tenant import DEMO_VISIBLE_CYPHER
+from api.services.tenant import DEMO_VISIBLE_CYPHER, SITE_PIN_CYPHER
 
 log = structlog.get_logger(__name__)
 
@@ -219,7 +219,7 @@ class GraphService:
         where_clauses = []
         params: dict[str, Any] = {"skip": skip, "limit": limit, "hide_demo": hide_demo}
         if site_id:
-            where_clauses.append("a.site_id = $site_id")
+            where_clauses.append(SITE_PIN_CYPHER)
             params["site_id"] = site_id
         if equipment_class:
             where_clauses.append("a.equipment_class = $equipment_class")
