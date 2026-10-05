@@ -9,13 +9,13 @@
 # =============================================================================
 
 # ---- deps -----------------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ---- dev (local hot-reload) ----------------------------------------------
-FROM node:20-alpine AS dev
+FROM node:26-alpine AS dev
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -24,7 +24,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # ---- builder (production compile) ----------------------------------------
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
@@ -42,7 +42,7 @@ COPY . .
 RUN npm run build
 
 # ---- runner (minimal production image) -----------------------------------
-FROM node:20-alpine AS runner
+FROM node:26-alpine AS runner
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
