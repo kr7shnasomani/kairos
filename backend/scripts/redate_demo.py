@@ -18,7 +18,8 @@ lead). Events created live during a demo or by a QA sweep never match, so they c
 the anchor nor be pushed into the future. Spacing and time of day are kept; a same-day re-run is 0.
 
 Off-boarding programmes are anchored separately (first interview -> yesterday), because their dates
-come from load time, not from the dataset.
+come from load time, not from the dataset. Showcase programmes (a `DEMO-` person) are skipped:
+`redate_showcase.py` owns them, and anchoring them here would flatten their staggered schedules.
 
 Writes, in an order that makes a re-run after any failure safe:
   1. Neo4j `Event.occurred_at` — absolute values computed from Supabase's pre-state, so a repeat
@@ -47,6 +48,7 @@ from neo4j import GraphDatabase
 from supabase import create_client
 
 from api.config import Settings
+from api.services.tenant import is_demo_id
 from scripts.load_demo_dataset import DATASET_DIR, _event_endpoint_and_body
 
 log = structlog.get_logger(__name__)
@@ -109,6 +111,11 @@ def plan_events(rows: list[dict], keys: set[tuple], now: datetime) -> tuple[time
     return delta, changes
 
 
+def golden_sessions(sessions: list[dict]) -> list[dict]:
+    """The off-boarding programmes this script may move: every one that is not a showcase row."""
+    return [s for s in sessions if not is_demo_id(s.get("personnel_id"))]
+
+
 def plan_offboarding(session: dict, items: list[dict], now: datetime) -> tuple[timedelta, str | None, list[dict]]:
     """Return the delta, the new retirement date and the shifted item rows."""
     scheduled = [i for i in items if i.get("scheduled_for")]
@@ -148,7 +155,8 @@ def main() -> None:
                  before=old["occurred_at"], after=new["occurred_at"])
 
     offboarding = []
-    for s in supabase.table("offboarding_sessions").select("id, retirement_date").execute().data or []:
+    sessions = supabase.table("offboarding_sessions").select("id, retirement_date, personnel_id").execute().data or []
+    for s in golden_sessions(sessions):
         items = supabase.table("offboarding_session_items").select("*").eq("session_id", s["id"]).execute().data or []
         off_delta, retirement, new_items = plan_offboarding(s, items, now)
         offboarding.append((s, retirement, new_items))

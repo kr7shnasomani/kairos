@@ -93,6 +93,14 @@ from the 2026-09-13 run, so 43/46 against 41/46 is a model change as much as a r
 (p50 5.5 s against 1.5 s) because Ultra is a much larger model. The document linkage reads 18 of 20 against
 19 of 21 because the live vault holds one document fewer than on 2026-09-13.
 
+**Not quotable: 2026-10-08 re-run, `SUSPECT`.** Run against the local stack with the showcase plant hidden
+(`SHOWCASE_VISIBLE_TO_ALL=false`): 42/46 answers (91%), 46/46 retrieval, 46/46 provenance, answered by
+nim 32, openrouter 8, refused 6. NIM returned 503 for Nemotron Ultra through the run, so 8 of 46 answers
+(17%) came from the fallback model, over the 10% the validity rule allows. Misses: Q08 and Q20
+(alias-resolution), Q37 (current-fact), Q41 (personnel); Q08 was a fallback answer. The 43/46 above stays the
+current figure. What this run does show: with the showcase visible on 2026-10-04 the same harness read 38 to
+39/46, so the showcase sharing the stores accounts for most of that drop. Document linkage 18/20, unchanged.
+
 **Prior — 2026-09-13 (Nemotron 3 Super), 46 questions, checkpoint `run_20260913_nemotron_46q.jsonl`**
 (synthesis on NIM `nvidia/nemotron-3-super-120b-a12b`; clean reload with chunked NER, linked-document
 search scope and the NIM 503 retry; question set widened 37 → 46 the same day):

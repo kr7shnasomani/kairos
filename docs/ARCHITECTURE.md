@@ -518,7 +518,7 @@ Cross-site pattern detection requires knowledge to flow from local data planes t
 
 | What | Tool | Notes |
 |------|------|-------|
-| Cloud LLM synthesis | **NVIDIA NIM** | Nemotron 3 Ultra 550B (`nvidia/nemotron-3-ultra-550b-a55b`; Nemotron 3 Super 120B was retired by NVIDIA on 2026-10-03), OpenAI-compatible API. Cascade: **NIM → OpenRouter → Gemini → Ollama**. The tiers are redundancy across different failure modes (NIM: free, largest token budget; OpenRouter: `llama-3.1-70b`, a different model since NVIDIA retired it as tier 1 in 2026-09; Gemini: fast, different model family). Any fallthrough is a different model, so the benchmark verdict flags it |
+| Cloud LLM synthesis | **NVIDIA NIM** | Nemotron 3 Ultra 550B (`nvidia/nemotron-3-ultra-550b-a55b`; Nemotron 3 Super 120B was retired by NVIDIA on 2026-10-03), OpenAI-compatible API. Cascade: **Nebius Token Factory → NIM → OpenRouter → Gemini → Ollama**, built by `services/model_providers.py`; a tier with no API key is left out, and Token Factory is unkeyed by default, so the working cascade starts at NIM. The tiers are redundancy across different failure modes (NIM: free, largest token budget; OpenRouter: `llama-3.1-70b`, a different model since NVIDIA retired it as tier 1 in 2026-09; Gemini: fast, different model family). Any fallthrough is a different model, so the benchmark verdict flags it |
 | Local LLM fallback | **Ollama** | Qwen2.5 14B — edge/offline synthesis fallback |
 | OCR | **NVIDIA NIM Nemotron-OCR-v2** | Cloud API; PyMuPDF fast path for native digital PDFs |
 | Named entity recognition | **NVIDIA NIM llama-3.2-11b-vision** | JSON-prompted NER; Ollama llama3.1:8b local fallback; regex last resort |

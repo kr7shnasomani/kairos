@@ -98,6 +98,8 @@ snapshots, not fixed constants).
 make load-dataset                       # load the golden corpus (seeds aliases + family history)
 make verify                             # per-layer smoke + latency (13/13)
 make verify ARGS=--full                 # + P&ID-VLM + synthesize checks (hit NIM)
+# Set SHOWCASE_VISIBLE_TO_ALL=false in .env and recreate kairos-backend-api first: the figures are
+# measured on the golden dataset alone, and the showcase plant sharing the stores lowers answer quality.
 make benchmark                          # routing + synthesis + deterministic grading + retrieval + KG
 make benchmark ARGS=--retrieval-only    # fast: retrieval + KG only, no synthesis
 docker exec kairos-backend-api python benchmark/run_benchmark.py --selftest             # grader + stats self-check

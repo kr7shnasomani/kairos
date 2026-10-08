@@ -408,12 +408,11 @@ async def demo_user_ids(supabase) -> list[str]:
     global _demo_ids
     if time.monotonic() - _demo_ids[0] < _DEMO_IDS_TTL:
         return _demo_ids[1]
-    from api.config import get_settings
     from api.dependencies import auth_metadata
 
     try:
         users = await asyncio.to_thread(lambda: supabase.auth.admin.list_users())
-        ids = [u.id for u in users if auth_metadata(u, get_settings()).get("role") == "demo"]
+        ids = [u.id for u in users if auth_metadata(u).get("role") == "demo"]
     except Exception as exc:  # noqa: BLE001 — fail closed: keep the last good list, else hide nothing extra
         log.warning("tenant.demo_users_lookup_failed", error=str(exc))
         return _demo_ids[1]

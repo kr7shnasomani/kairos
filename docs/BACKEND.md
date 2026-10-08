@@ -1169,10 +1169,8 @@ skips them skips the point.
 
 > **Where a role comes from.** `dependencies.resolve_token` reads `role`, `site_id` and `name` from the
 > token user's `app_metadata`, which only the service role can write. It never trusts `user_metadata`
-> (users can edit that). `LEGACY_ROLE_FALLBACK` (default `false`, in `.env.example`) is a temporary
-> bridge: when `true`, an account with no `app_metadata.role` falls back to `user_metadata`, with a
-> warning log. It is not set on the server, and the role migration (`scripts/migrate_roles_to_app_metadata.py`)
-> has been applied, so it can be deleted.
+> (users can edit that). The role migration
+> (`scripts/migrate_roles_to_app_metadata.py`) has been applied to every account.
 
 ### OPA Middleware
 

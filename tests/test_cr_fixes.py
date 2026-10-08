@@ -178,7 +178,9 @@ def _check(per_week: list[int]):
     """Run `check` with `per_week[i]` overrides in week i (0 = current)."""
     from api.services.circuit_breaker import CircuitBreakerService
 
-    rows = [{"created_at": _ago(w * 7 + 1)} for w, n in enumerate(per_week) for _ in range(n)]
+    # `check` reads the real clock, so the rows are dated from it, not from the fixed NOW above.
+    now = datetime.now(UTC)
+    rows = [{"created_at": (now - timedelta(days=w * 7 + 1)).isoformat()} for w, n in enumerate(per_week) for _ in range(n)]
     return asyncio.run(CircuitBreakerService(_Supabase(rows)).check("pump"))
 
 

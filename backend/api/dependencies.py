@@ -203,25 +203,13 @@ def _auth_cache_put(token: str, user: dict, ttl: int) -> None:
     _auth_cache[hashlib.sha256(token.encode()).hexdigest()] = (time.monotonic() + ttl, user)
 
 
-_legacy_warned: set[str] = set()
-
-
-def auth_metadata(user, settings: Settings) -> dict:
+def auth_metadata(user) -> dict:
     """The metadata that carries `role`, `site_id` and `name`: `app_metadata` ONLY.
 
     `user_metadata` is writable by the user themselves (PUT /auth/v1/user), so reading a role from
-    it lets any account make itself admin. The one exception is the TEMPORARY, OFF-by-default
-    `LEGACY_ROLE_FALLBACK` bridge for accounts the migration has not reached yet: it applies only
-    to a user whose `app_metadata` has no `role` key, and never overrides one that does.
+    it lets any account make itself admin.
     """
-    app = dict(user.app_metadata or {})
-    if not settings.LEGACY_ROLE_FALLBACK or "role" in app:
-        return app
-    legacy = user.user_metadata or {}
-    if str(user.id) not in _legacy_warned:
-        _legacy_warned.add(str(user.id))
-        log.warning("auth.legacy_role_fallback", user_id=str(user.id), email=user.email)
-    return {**{k: legacy[k] for k in ("role", "site_id", "name") if k in legacy}, **app}
+    return dict(user.app_metadata or {})
 
 
 async def resolve_token(token: str, settings: Settings) -> dict | None:
@@ -262,7 +250,7 @@ async def resolve_token(token: str, settings: Settings) -> dict | None:
         log.info("auth.token_rejected", error=str(exc))
         return None
 
-    meta = auth_metadata(user, settings)
+    meta = auth_metadata(user)
     user_dict = {
         "user_id": str(user.id),
         "email": user.email,

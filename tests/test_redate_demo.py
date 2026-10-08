@@ -5,7 +5,7 @@ Pure functions over in-memory rows. No stack, no secrets, no network.
 
 from datetime import UTC, datetime
 
-from scripts.redate_demo import golden_keys, plan_events, plan_offboarding
+from scripts.redate_demo import golden_keys, golden_sessions, plan_events, plan_offboarding
 
 NOW = datetime(2026, 9, 27, 9, 0, tzinfo=UTC)
 
@@ -70,3 +70,8 @@ def test_offboarding_first_interview_lands_yesterday():
     _, retirement, new_items = plan_offboarding(session, items, NOW)
     assert retirement == "2026-10-13"
     assert new_items[0]["scheduled_for"].startswith("2026-09-26")
+
+
+def test_showcase_offboarding_programmes_are_left_to_the_showcase_redate():
+    sessions = [{"id": "a", "personnel_id": "EMP-001"}, {"id": "b", "personnel_id": "DEMO-EMP-7"}, {"id": "c"}]
+    assert [s["id"] for s in golden_sessions(sessions)] == ["a", "c"]

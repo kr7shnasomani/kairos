@@ -2,9 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 
 import { Icon } from "@/components/icon";
-// Cross-site pattern detection needs ≥2 facilities on the control plane. This is a
-// single-site deployment, so there is genuinely nothing to correlate — we show an
-// honest "unavailable" state rather than fabricated alerts.
+// Cross-site pattern detection has no backend: nothing correlates one site's failures with
+// another's. We show an honest "unavailable" state rather than fabricated alerts.
 export default function CrossSiteAlertsPage() {
   return (
     <div data-testid="cross-site-workspace" className="mx-auto max-w-[1400px]">
@@ -23,12 +22,12 @@ export default function CrossSiteAlertsPage() {
         <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-surface-2 text-muted">
           <Icon name="graph" size={22} />
         </div>
-        <h2 className="mt-4 text-title font-semibold text-ink">No cross-site data in this deployment</h2>
+        <h2 className="mt-4 text-title font-semibold text-ink">Cross-site matching is not available yet</h2>
         <p className="mx-auto mt-2 max-w-xl text-body leading-relaxed text-muted">
           Cross-site pattern detection compares telemetry, inspection cadences, and failure histories across
-          multiple facilities. This is a single-site deployment, so there is nothing to correlate yet. When a
-          second site is connected to the control plane, matched precursors will appear here — each attributed to
-          its originating site.
+          facilities. Kairos does not correlate sites yet, so no alerts are shown here. Each site&apos;s assets,
+          documents and briefs are on their own pages, and matched precursors will appear here, each attributed
+          to its originating site, once matching is built.
         </p>
       </div>
     </div>

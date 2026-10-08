@@ -74,7 +74,7 @@ section "Settings (local vs server, resolved with code defaults)"
 if remote true 2>/dev/null; then
   srv=$(remote 'cat ~/kairos/.env' 2>/dev/null); loc=$(cat .env)
   for k in KAIROS_PHASE MODEL_GATE_ENFORCE TIMESTAMP_DRIFT_ENFORCE TIMESTAMP_DRIFT_TOLERANCE_MINUTES PLANT_STATE_DEFAULT \
-           MAX_UPLOAD_MB AUTH_CACHE_TTL_SECONDS DEDUP_WINDOW_MINUTES LATE_ARRIVAL_WINDOW_MINUTES LEGACY_ROLE_FALLBACK \
+           MAX_UPLOAD_MB AUTH_CACHE_TTL_SECONDS DEDUP_WINDOW_MINUTES LATE_ARRIVAL_WINDOW_MINUTES \
            NVIDIA_NIM_DISABLE_THINKING NVIDIA_NIM_NER_TIMEOUT NVIDIA_NIM_TIMEOUT; do
     a=$(effective "$k" "$loc"); b=$(effective "$k" "$srv")
     [ "$a" = "$b" ] || row "$k" DRIFT "local '$a' vs server '$b'"
@@ -82,7 +82,7 @@ if remote true 2>/dev/null; then
   req="MOC_WEBHOOK_SECRET CONNECTOR_SHARED_SECRET INTERNAL_API_KEY APP_ENV SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY NEO4J_URI QDRANT_URL CORS_ORIGINS"
   for k in $req; do printf '%s\n' "$srv" | grep -qE "^$k=" || row "server .env $k" DRIFT "missing"; done
   printf '%s\n' "$srv" | grep -qE '^APP_ENV=production' && row "server APP_ENV" OK "production" || row "server APP_ENV" DRIFT "not production"
-  row "setting flags" OK "checked $(echo KAIROS_PHASE MODEL_GATE_ENFORCE TIMESTAMP_DRIFT_ENFORCE TIMESTAMP_DRIFT_TOLERANCE_MINUTES PLANT_STATE_DEFAULT MAX_UPLOAD_MB AUTH_CACHE_TTL_SECONDS DEDUP_WINDOW_MINUTES LATE_ARRIVAL_WINDOW_MINUTES LEGACY_ROLE_FALLBACK NVIDIA_NIM_DISABLE_THINKING NVIDIA_NIM_NER_TIMEOUT NVIDIA_NIM_TIMEOUT | wc -w | tr -d ' ') flags"
+  row "setting flags" OK "checked $(echo KAIROS_PHASE MODEL_GATE_ENFORCE TIMESTAMP_DRIFT_ENFORCE TIMESTAMP_DRIFT_TOLERANCE_MINUTES PLANT_STATE_DEFAULT MAX_UPLOAD_MB AUTH_CACHE_TTL_SECONDS DEDUP_WINDOW_MINUTES LATE_ARRIVAL_WINDOW_MINUTES NVIDIA_NIM_DISABLE_THINKING NVIDIA_NIM_NER_TIMEOUT NVIDIA_NIM_TIMEOUT | wc -w | tr -d ' ') flags"
 fi
 miss=$(comm -23 <(grep -oE '^[A-Z][A-Z0-9_]+=' .env.example | tr -d '=' | sort) <(grep -oE '^[A-Z][A-Z0-9_]+=' .env | tr -d '=' | sort) | tr '\n' ' ')
 [ -z "$miss" ] && row "local .env vs .env.example" OK "same names" || row "local .env vs .env.example" DRIFT "missing locally: $miss"
