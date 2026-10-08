@@ -159,7 +159,7 @@ conflicts, quarantine, events as admin) and they must be identical.
 | 4 | `make redate-showcase`, `SHOWCASE_AUTO_REDATE`, `make reset-showcase` | no | **Done** |
 | 5 | Tests for every piece, docs pass, offline suite, frontend suite | no | **Done** (954 backend, 353 frontend) |
 | 6 | Load the showcase into the current stores through the local backend, verify locally | **yes** | **Done 2026-10-03.** Real-mode counts unchanged; isolation, search, by-id reads, actions and the golden linkage figure checked (status.md P19) |
-| 7 | Deploy the backend to EC2 (the live API has none of the isolation code yet), then commit and push (the frontend deploys from the push) | deploy | Waiting for your go-ahead |
+| 7 | Deploy the backend to EC2 (the live API has none of the isolation code yet), then commit and push (the frontend deploys from the push) | deploy | **Done.** Committed and pushed 2026-10-04; backend redeployed to EC2 and the frontend rebuilt on Vercel from the push on 2026-10-09 (`make sync-check`: server code identical to the tree) |
 
 What the load does, in order: creates the `_demo` Qdrant collection and Elasticsearch indices (the only place that
 does), posts the assets as the demo account (parents first), writes the aliases the pipeline resolves tags through,
