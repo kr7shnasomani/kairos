@@ -8,6 +8,12 @@
 #   For an actual per-push dependency check, see .github/workflows/deps-audit.yml, which runs
 #   pip-audit / npm audit / govulncheck on every push and PR to main.
 #
+# GROUPS HOLD MINOR AND PATCH ONLY (2026-10-09):
+#   Each group used to take every update, so one breaking major (the Elasticsearch 9 client against
+#   an 8.13 server, vitest 5 needing Node 22) made the whole group PR fail and blocked the safe bumps
+#   in it for weeks. A group is now minor + patch, which should stay green and mergeable; a major
+#   arrives as its own PR and is a decision, not a chore.
+#
 # WHY NEW PRs MAY NOT APPEAR EVEN THOUGH IT IS RUNNING:
 #   Every ecosystem below groups all patterns into ONE PR. While that group PR is open, Dependabot
 #   REBASES it in place rather than opening another — so a working setup looks idle from the PR
@@ -25,6 +31,7 @@ updates:
     groups:
       python:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # --- npm (Next.js frontend) ---
   - package-ecosystem: "npm"
@@ -37,6 +44,7 @@ updates:
     groups:
       npm:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # --- Go modules (OT connector) ---
   - package-ecosystem: "gomod"
@@ -49,6 +57,7 @@ updates:
     groups:
       go:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # --- Docker base images (one per Dockerfile) ---
   - package-ecosystem: "docker"
@@ -61,9 +70,15 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    ignore:
+      # The frontend image stays on the Node 20 LTS line (CI and Vercel run 20 too). Moving the
+      # runtime is a decision made in all three places at once, not a base-image bump.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     groups:
       docker:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # --- GitHub Actions (all workflows) ---
   - package-ecosystem: "github-actions"
@@ -76,3 +91,4 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]

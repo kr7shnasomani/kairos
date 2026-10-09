@@ -259,6 +259,7 @@ DEMO_GUARDED = frozenset({
     ("POST", "/events/plant-state"),
     ("POST", "/events/{event_id}/ack"),
     ("POST", "/documents/ingest"),
+    ("POST", "/documents/{document_id}/extract-form"),
     ("POST", "/documents/{document_id}/ocr-review/release"),
     ("POST", "/documents/{document_id}/ocr-review/reject"),
     ("POST", "/documents/{document_id}/topology/verify"),

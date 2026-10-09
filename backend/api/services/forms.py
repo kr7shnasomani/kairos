@@ -19,10 +19,17 @@ WHY `field_observation` AND NOT A NEW `input_type`
   (a documented pitfall). A form field IS a field observation, so the existing value is honest and
   no migration is needed. The form provenance lives in `session_context` instead.
 
-ponytail: deterministic `label: value` and checkbox parsing, no model call. It handles typed and
-OCR'd forms, which is what the corpus has. True layout-aware parsing (cell geometry, multi-column
-tables, ruled boxes) needs a vision model and is the upgrade path — add it when a real form defeats
-this, not before.
+LAYOUT
+  A digital form is a ruled table, and its text comes out of a PDF as "label" on one line and
+  "value" on the next, which a line parser cannot pair. `parse_form_tables` reads the table cells
+  instead (PyMuPDF `find_tables`, already a dependency): a cell that stacks a label over its value,
+  and an item/result grid under a header row. Measured on the two corpus forms it lifts recall from
+  2 and 1 fields to 13 and 9, and drops the one junk row the line parser produced.
+
+ponytail: deterministic, no model call. This covers digital PDFs, which is what the corpus has. A
+SCANNED form has no table objects to find, so it still gets the line parser over its OCR text; cell
+geometry from pixels needs a vision model and is the upgrade path. Add it when a scanned form
+defeats this, not before.
 """
 
 import re
@@ -80,6 +87,73 @@ def parse_form_fields(text: str) -> list[dict[str, Any]]:
             if len(value) <= 120:
                 out.append({"label": label, "value": value, "kind": "field"})
     return out
+
+
+_MAX_LABEL, _MAX_VALUE = 60, 120
+
+
+def _clean(cell: str | None) -> str:
+    return (cell or "").strip()
+
+
+def parse_form_tables(tables: list[list[list[str | None]]]) -> list[dict[str, Any]]:
+    """Field→value pairs from a form's table cells (one list of rows per table).
+
+    Two layouts, both from real corpus forms:
+      * a cell stacking a label over its value: ``"Asset Tag\nXV-203"``;
+      * an item/result grid: a header row (``Checklist Item | Result``) then one row per item.
+    Anything else is left alone. The same bounds as the line parser apply: a long "label" or a long
+    "value" is prose, not a field.
+    """
+    out: list[dict[str, Any]] = []
+    for rows in tables:
+        in_grid = False
+        for row in rows:
+            cells = [c for c in map(_clean, row) if c]
+            if len(cells) == 2 and "\n" not in cells[0]:
+                # First such row is the grid's header; the rows after it are item / result.
+                if in_grid:
+                    _add(out, cells[0], cells[1])
+                in_grid = True
+                continue
+            for cell in cells:
+                label, _, value = cell.partition("\n")
+                if value:
+                    _add(out, label, value)
+    return out
+
+
+def _add(out: list[dict[str, Any]], label: str, value: str) -> None:
+    label, value = label.strip().rstrip(":"), " ".join(value.split())
+    if label and value and len(label) <= _MAX_LABEL and len(value) <= _MAX_VALUE:
+        out.append({"label": label, "value": value, "kind": "field"})
+
+
+def combine_fields(table_fields: list[dict[str, Any]], line_fields: list[dict[str, Any]],
+                 tables: list[list[list[str | None]]]) -> list[dict[str, Any]]:
+    """Table fields first, then the line-parsed fields that are not already inside a table cell.
+
+    A line the line parser matched inside a cell is a fragment of that cell (it read
+    ``Satisfactory - minor surface`` as a field), so the table's reading of it wins.
+    """
+    cell_text = " ".join(" ".join(_clean(c).split()) for rows in tables for row in rows for c in row).casefold()
+    seen = {f["label"].casefold() for f in table_fields}
+    extra = [
+        f for f in line_fields
+        if f["label"].casefold() not in seen and not (cell_text and str(f["value"]).casefold() in cell_text)
+    ]
+    return table_fields + extra
+
+
+def extract_tables(pdf_bytes: bytes) -> list[list[list[str | None]]]:
+    """The cell text of every table in a digital PDF. Empty for a scan or an unreadable file."""
+    import fitz  # lazy: the Celery worker imports this module per task
+
+    try:
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            return [t.extract() for page in doc for t in page.find_tables().tables]
+    except Exception:  # noqa: BLE001 — a PDF the library cannot read falls back to the line parser
+        return []
 
 
 def quarantine_items_for(

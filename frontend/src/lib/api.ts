@@ -50,6 +50,7 @@ import type {
   GraphEdgeData,
   KnowledgeGraphData,
   AssetCoverage,
+  CrossSitePatterns,
 } from "./types";
 import { type CopilotAnswer } from "./copilot";
 import { criticalityMeta } from "./utils";
@@ -1227,6 +1228,12 @@ export function releaseHeldDocument(documentId: string, note?: string): Promise<
   return postJson(`/documents/${encodeURIComponent(documentId)}/ocr-review/release`, { note: note || null });
 }
 
+/** Send a form's fields to the review queue (engineer/reliability/admin). Deterministic server-side, no
+ *  model call. `no_fields` and `no_text` are honest outcomes, not errors; a repeat is HTTP 409. */
+export function extractFormFields(documentId: string): Promise<{ status: "quarantined" | "no_fields" | "no_text"; fields: number }> {
+  return postJson(`/documents/${encodeURIComponent(documentId)}/extract-form`, {});
+}
+
 export function rejectHeldDocument(documentId: string, note?: string): Promise<{ status: string }> {
   return postJson(`/documents/${encodeURIComponent(documentId)}/ocr-review/reject`, { note: note || null });
 }
@@ -1815,6 +1822,23 @@ export async function getKnowledgeGraph(
   };
 }
 
+
+// --- Cross-site failure patterns (GET /assets/cross-site-patterns) ---
+/** Failure families that repeat on one equipment class across sites. Read-only and model-free
+ *  server-side; the server already orders shared patterns ahead of advisories. */
+export async function getCrossSitePatterns(): Promise<Fetched<CrossSitePatterns>> {
+  const data = await getJson<CrossSitePatterns>("/assets/cross-site-patterns", 8000);
+  return {
+    data: {
+      patterns: data.patterns ?? [],
+      sites: data.sites ?? [],
+      window_days: data.window_days,
+      min_events: data.min_events,
+      truncated: Boolean(data.truncated),
+    },
+    source: "live",
+  };
+}
 
 // --- Knowledge coverage (GET /assets/coverage) ---
 /** Per-asset coverage for the heatmap. Read-only and model-free server-side, so this is cheap to

@@ -217,6 +217,7 @@ MUST_SCOPE = [
     ("routers/elicitation.py", "list_offboarding_programmes"),
     ("routers/assets.py", "list_assets"),
     ("routers/assets.py", "asset_coverage"),
+    ("routers/assets.py", "cross_site_patterns"),
     ("routers/assets.py", "list_provisional_assets"),
     ("routers/assets.py", "list_pending_aliases"),
     ("routers/documents.py", "list_documents"),

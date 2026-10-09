@@ -29,7 +29,7 @@ All services run as Docker containers. Start with `make dev` (or `docker compose
 | `kairos-celery-worker` | Python 3.12 (local build) | — | Celery workers (ingestion, extraction, attribution, elicitation, transcription, validation) |
 | `kairos-temporal-activity-worker` | Python 3.12 (local build) | — | Temporal activity worker (document pipeline) |
 | `kairos-elicitation-worker` | Python 3.12 (local build) | — | Temporal worker (elicitation workflows) |
-| `kairos-backend-go` | Go 1.25 (local build) | `8090` | OT historian + EAM connector. Go was bumped 1.22 → 1.25 because `golang.org/x/crypto` 0.52 (4 CRITICAL advisories) requires it. |
+| `kairos-backend-go` | Go 1.26 (local build) | `8090` | OT historian + EAM connector. Go is at 1.26 because the `net/http` advisories GO-2026-6611 to 6617 are fixed only from go1.26.9 (it went 1.22 → 1.25 earlier for `golang.org/x/crypto` 0.52). |
 | `kairos-neo4j` | neo4j:5.20-community | `7474`, `7687` | Temporal knowledge graph — **CLOUD (Neo4j Aura) by default**; local container is profile-gated (`--profile local-stores`) |
 | `kairos-qdrant` | qdrant:v1.9.4 | `6333`, `6334` | Vector store — **CLOUD (Qdrant Cloud) by default**; local container is profile-gated |
 | `kairos-elasticsearch` | elasticsearch:8.13.4 | `9200` | Full-text search (local container) |
@@ -273,7 +273,7 @@ docker exec kairos-backend-api python scripts/seed_regulations.py
 # Run tests — full suite (needs the stack up; use local stores, never cloud)
 docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120
 
-# Run the service-free tests with NO stack running at all (953 tests, 54 files, no secrets, no network).
+# Run the service-free tests with NO stack running at all (969 tests, 55 files, no secrets, no network).
 # This is what CI's tier-1 `unit` job runs. Re-measured 2026-09-15. The list must match AGENTS.md,
 # docs/TESTS.md and .github/workflows/tests.yml.
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \

@@ -4,7 +4,7 @@ Manages canonical asset identities, alias resolution, and the asset hierarchy.
 """
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import shortuuid
@@ -24,6 +24,7 @@ from api.models.asset import AssetBulkImport, AssetCreate
 from api.services import tenant
 from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.coverage import CoverageService
+from api.services.cross_site import MIN_EVENTS, WINDOW_DAYS, find_patterns
 from api.services.graph import GraphService
 from api.services.ot_coverage import OtCoverageService
 
@@ -511,6 +512,53 @@ async def asset_coverage(
         }
         items = [i for i in items if i["asset_id"] in site_ids]
     return {"items": items, "total": len(items), "excluded_test_assets": await svc.excluded_test_assets(hide_demo)}
+
+
+# ponytail: one page of the newest work orders. PostgREST returns at most 1000 rows a request, so a
+# busier fleet needs paging (or a SQL aggregate); `truncated` tells the reader when that day comes.
+_CROSS_SITE_WORK_ORDER_CAP = 1000
+
+
+@router.get("/cross-site-patterns", summary="Failure patterns that repeat across sites")
+async def cross_site_patterns(
+    supabase: SupabaseDep,
+    current_user: dict = Depends(require_role("engineer", "reliability", "admin")),
+) -> dict:
+    """
+    The same failure family on the same equipment class at more than one site, or recurring at one
+    site while a sister site runs the same class. Counts and codes only, so nothing personal crosses
+    a site boundary. Read-only and model-free.
+
+    A caller sees the sites its token covers: every site for `admin` and `demo`, otherwise its own
+    site (plus the showcase sites while they are visible). With one site there is nothing to compare,
+    and the answer is an empty list with `sites` saying so.
+    """
+    site = site_scope(current_user, None)
+    cutoff = (datetime.now(UTC) - timedelta(days=WINDOW_DAYS)).isoformat()
+    assets_q = tenant.pin_site(supabase.table("assets").select("asset_id, equipment_class, site_id"), current_user, site)
+    assets_q = tenant.scope_site(assets_q, current_user)
+    events_q = (
+        supabase.table("operational_events")
+        .select("asset_id, occurred_at, payload")
+        .eq("event_type", "work_order_created")
+        .gte("occurred_at", cutoff)
+    )
+    events_q = tenant.scope_site(tenant.pin_site(events_q, current_user, site), current_user)
+    assets, events = await asyncio.gather(
+        asyncio.to_thread(lambda: assets_q.limit(_SITE_ASSET_CAP).execute()),
+        asyncio.to_thread(lambda: events_q.order("occurred_at", desc=True).limit(_CROSS_SITE_WORK_ORDER_CAP).execute()),
+    )
+    asset_rows, event_rows = assets.data or [], events.data or []
+    patterns = find_patterns(event_rows, asset_rows)
+    return {
+        "patterns": patterns,
+        "total": len(patterns),
+        "sites": sorted({a["site_id"] for a in asset_rows if a.get("site_id")}),
+        "window_days": WINDOW_DAYS,
+        "min_events": MIN_EVENTS,
+        "work_orders_considered": len(event_rows),
+        "truncated": len(event_rows) >= _CROSS_SITE_WORK_ORDER_CAP,
+    }
 
 
 @router.get("/provisional", summary="Assets awaiting human identity confirmation (Layer 1)")

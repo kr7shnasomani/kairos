@@ -56,7 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Run Ruff (Python Linter)
-        uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3.6.1
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4.1.0
         with:
           src: "./backend"
           # Pinned deliberately. Unpinned, this job took whatever ruff was newest and its
@@ -74,15 +74,16 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          # Must match backend/connectors/go.mod (bumped to 1.25 by golang.org/x/crypto 0.52.0).
-          go-version: '1.25'
+          # Must match backend/connectors/go.mod (1.26 since 2026-10: the net/http advisories
+          # GO-2026-6611 to 6617 are fixed only from go1.26.9).
+          go-version: '1.26'
           cache-dependency-path: backend/connectors/go.sum
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          # golangci-lint v2 is required to typecheck Go 1.25 sources; v1.59 could not,
-          # producing spurious "undefined: <pkg>" typecheck errors on every import.
-          version: v2.5.0
+          # The linter must be built with at least the Go version it typechecks; an older one
+          # produces spurious "undefined: <pkg>" typecheck errors on every import.
+          version: v2.14.0
           working-directory: backend/connectors
 
   docker-lint:

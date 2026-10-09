@@ -792,6 +792,32 @@ export interface KnowledgeGraphData {
 
 /** One row of the knowledge-coverage matrix (`GET /assets/coverage`). Counts are DISTINCT by
  *  `edge_id` server-side, so a re-ingested asset does not look better covered than it is. */
+/** One site's share of a cross-site pattern (GET /assets/cross-site-patterns). Counts only. */
+export interface CrossSitePatternSite {
+  site_id: string;
+  events: number;
+  assets_affected: number;
+  assets_in_class: number;
+  last_seen: string | null;
+}
+
+/** "shared": seen at two or more sites. "advisory": one site has it, a sister site runs the class. */
+export interface CrossSitePattern {
+  equipment_class: string;
+  failure_family: string;
+  kind: "shared" | "advisory";
+  total_events: number;
+  sites: CrossSitePatternSite[];
+}
+
+export interface CrossSitePatterns {
+  patterns: CrossSitePattern[];
+  sites: string[];
+  window_days: number;
+  min_events: number;
+  truncated: boolean;
+}
+
 export interface AssetCoverage {
   asset_id: string;
   name: string;

@@ -654,6 +654,54 @@ async def _audit(supabase, action: str, document_id: str, user_id: str, details:
         log.warning("document.ocr_review_audit_failed", document_id=document_id, action=action, error=str(exc))
 
 
+@router.post("/{document_id}/extract-form", summary="Send a form's fields to the review queue")
+async def extract_form_fields(
+    document_id: str,
+    supabase: SupabaseDep,
+    current_user: dict = Depends(require_role("engineer", "reliability", "admin")),
+) -> dict:
+    """
+    Read a form or checklist's fields (table cells and `label: value` lines) into quarantine items.
+
+    Run only when a person asks, never on ingest: one checklist is about a dozen review items, and a
+    queue that fills by itself teaches reviewers to approve without looking. The fields go to
+    quarantine and nowhere else (`services/forms.py`). A second request for the same document is a
+    409, because the first one's items are already in the queue. Deterministic, no model call.
+    """
+    await tenant.guard_row(supabase, current_user, "documents", document_id)
+    doc_result = await asyncio.to_thread(
+        lambda: supabase.table("documents").select("document_id, access_tags").eq("document_id", document_id).limit(1).execute()
+    )
+    if not doc_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found")
+    existing, link_result = await asyncio.gather(
+        asyncio.to_thread(
+            lambda: supabase.table("quarantine_items").select("item_id", count="exact")
+            .eq("session_context->>source", "form_extraction")
+            .eq("session_context->>document_id", document_id).limit(1).execute()
+        ),
+        asyncio.to_thread(
+            lambda: supabase.table("document_asset_links").select("asset_id").eq("document_id", document_id).limit(1).execute()
+        ),
+    )
+    if existing.count:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This document's form fields are already in the review queue ({existing.count} items).",
+        )
+    asset_id = link_result.data[0]["asset_id"] if link_result.data else None
+    if not asset_id and tenant.is_demo_document(doc_result.data[0]):
+        asset_id = tenant.DEMO_GENERAL_ASSET  # a NULL asset means real, so a showcase item always carries one
+
+    from workers.extraction import extract_form  # lazy: pulls in the worker's client imports
+
+    user_id = current_user.get("user_id", "unknown")
+    result = await extract_form(document_id, asset_id, submitted_by=user_id)
+    await _audit(supabase, "form_fields_extracted", document_id, user_id, {"fields": result["fields"], "status": result["status"]})
+    log.info("document.form_fields_extracted", document_id=document_id, fields=result["fields"], status=result["status"])
+    return result
+
+
 @router.post("/{document_id}/ocr-review/release", summary="Release a document held by the OCR gate")
 async def release_held_document(
     document_id: str,

@@ -5,6 +5,7 @@ import { getDocument, getDocumentStatus, isForbidden, isNotFound } from "@/lib/a
 import { authorityLabel, relativeTime, triggerLabel } from "@/lib/utils";
 import { AuthorityBadge, SourceChip, StatusBadge, Timeline, type TimelineEvent, PageHeader } from "@/components/ui";
 import { BlastRadiusPanel, SupersedeAction } from "@/components/lazy";
+import { ExtractFormAction } from "./extract-form-action";
 import { ExtractionPanel } from "./extraction-panel";
 import { OcrReviewActions } from "./ocr-review-actions";
 import { OpenArtifactButton } from "./open-artifact";
@@ -207,6 +208,8 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           </section>
 
           <RedactedExport documentId={d.document_id} />
+
+          {d.mime_type === "application/pdf" && <ExtractFormAction documentId={d.document_id} />}
 
       {/* Supersede action (engineer/admin, client-side role gate) */}
       <div className="border-t border-line pt-4">

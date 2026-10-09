@@ -117,7 +117,7 @@ frontend/
 | `/compliance/audit-pack` | Audit-evidence pack by clause + human sign-off | Live |
 | `/compliance/nonconformance` | Non-conformances (conflicts + failed inspections + disputes) | Composed from existing endpoints |
 | `/documents` | Document registry, 100 a page (`?page=N`, a pager under the table); the pills count the whole vault | Live |
-| `/documents/[id]` | Document detail + supersede chain + extraction results + PII-redacted export; a document held by the OCR gate says so, and reliability/admin release or reject it there | Live |
+| `/documents/[id]` | Document detail + supersede chain + extraction results + PII-redacted export; a PDF offers **Extract form fields** (engineer, reliability, admin), which sends a form's fields to the review queue; a document held by the OCR gate says so, and reliability/admin release or reject it there | Live |
 | `/documents/[id]/topology` | P&ID topology graph (React Flow) | Live |
 | `/documents/ingest` | Upload → pipeline-status timeline | Live (role-gated engineer/admin) |
 | `/documents/compare` | Side-by-side version / metadata diff | Live |
@@ -130,7 +130,7 @@ frontend/
 | `/events/[id]` | Event detail + ack + correlation; work-order events link to knowledge capture and a voice note | Live |
 | `/offboarding` · `/offboarding/[sessionId]` | Retiring-expert knowledge-transfer sessions | Live (role-gated engineer/admin) |
 | `/overview` | Plant overview — KPIs, alerts, system health | Live |
-| `/overview/cross-site` | Cross-site pattern alerts (linked from the overview header) | Honest "cross-site matching is not available yet" state — **no fixture** (see §16) |
+| `/overview/cross-site` | Cross-site pattern alerts (linked from the overview header) | Live: `GET /assets/cross-site-patterns` (failure families repeating on an equipment class across sites); honest "one site, nothing to compare" empty state — **no fixture** |
 | `/overview/plant-state` | Plant operating-state control | Live (admin-gated write) |
 | `/overview/coverage` | Knowledge-coverage matrix (`GET /assets/coverage`) | Live |
 | `/system-health` | Live probes: 11 API surfaces + 5 datastores + OT historian connector registry + opt-in model probes | Live (**admin-only**) |
@@ -396,7 +396,7 @@ source. Fetchers **throw** on failure. The user always sees **real data**, a **l
   hit the throw with no backend).
 - **Custom-client pages** show an inline "unavailable — retry".
 - **`getComplianceGaps`** treats empty live results as valid (no fixture on empty) and uses a 5 s timeout.
-- **`/overview/cross-site`** shows an honest "cross-site matching is not available yet" state (it has no backend).
+- **`/overview/cross-site`** reads `GET /assets/cross-site-patterns` and shows each pattern with every site's work-order count, affected assets and last-seen time; with one site it says there is nothing to compare.
 - **Streamed answer text is provisional, never the answer.** Passing `onDelta` to `synthesize()`
   switches it to the SSE endpoint for progressive render (p95 synthesis is ~65 s, so without it the
   operator watches a spinner for over a minute). The text is held on `Turn.streaming` and rendered
@@ -528,7 +528,7 @@ fails, the page shows a **loading skeleton** then an **error + retry**, never a 
 **system health is fetched separately** on its own `useFetch` so a slow/failed cloud ping (`/health/detailed`
 pings every store, ~2.5s) shows an inline "unavailable" strip instead of blanking the whole page. `/governance`
 hub + `/overview/cross-site` are the only surfaces with no primary data fetch (hub = static links;
-cross-site = honest "not available yet").
+cross-site = live patterns, or "one site, nothing to compare").
 
 Write contracts (resolve/promote/dispute, ingest, sign-off) are role-gated: `field_worker` sees a read-only
 view; action buttons are hidden via `useRole()`. **Quarantine promote** is `reliability`/`admin` only
@@ -689,7 +689,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **369 tests / 84 files**, all passing (2026-10-04; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
+| Test suite | **373 tests / 85 files**, all passing (2026-10-09; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---
@@ -737,7 +737,7 @@ These are deliberate decisions, not open gaps — the UI handles each honestly t
 
 | Item | Decision |
 |------|----------|
-| `/overview/cross-site` live data | Cross-site pattern aggregation is a **roadmap** feature needing multi-site data (the architecture defines layers 0–12; the old "Layer 13" label was wrong and was corrected in the UI too). Nothing correlates sites yet (the showcase plant has two, the golden plant one), so the page shows an honest **"Cross-site matching is not available yet"** empty state — no fabricated alerts. |
+| `/overview/cross-site` live data | **Live since 2026-10-09.** `GET /assets/cross-site-patterns` groups work orders by equipment class and failure family across the sites the caller's token covers. The golden plant is one site, so patterns come from the two showcase sites (and the golden assets appear as the exposed sister site); with one visible site the page shows an honest "nothing to compare" empty state. Free-text promotion between sites (which needs the PII redaction pass) is still not built: this page moves counts and codes only. |
 | SSR bearer token | Login mirrors the access token into the `kairos-access` cookie in every mode, and every read sends the signed-in user's token (browser: storage; server components: the cookie). Strict mode only decides whether a 401 forces a re-login. The backend dev bypass applies only to a request with no session at all — it used to answer every SSR read, which showed a field worker the dev user's inbox and 404'd their own briefs. |
 | HttpOnly session cookies | **Not possible here.** The frontend (Vercel) and the API (EC2) are on different sites, so a cookie the API sets is not sent on the frontend's cross-site fetches and cannot be read by server components. Tokens stay in `localStorage` and the `kairos-access` mirror cookie, which is why the CSP below matters |
 | Offline app-shell | **Prod-only by design** — the service worker is disabled in dev (it fought HMR). The IndexedDB write-queue (`idb.ts`) works in dev. |

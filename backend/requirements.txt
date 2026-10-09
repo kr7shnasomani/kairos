@@ -15,7 +15,7 @@ httpx==0.27.0
 # --- Config & Validation ---
 pydantic==2.7.4
 pydantic-settings==2.3.4
-python-dotenv==1.2.2
+python-dotenv==1.2.4
 
 # --- Database Clients ---
 neo4j==5.21.0
@@ -31,8 +31,8 @@ celery==5.4.0
 temporalio==1.6.0
 
 # --- HTTP / Async ---
-aiohttp==3.14.3
-anyio==4.14.2
+aiohttp==3.14.4
+anyio==4.15.1
 
 # --- Observability ---
 # OTEL core + instrumentation move as a matched pair (1.x <-> 0.xxbN). Upgrade all six together.
@@ -91,4 +91,4 @@ pytest-timeout==2.4.0
 # Was `setuptools<70.0.0`, an unexplained cap. It was NOT stale: OTEL 0.45b0 imported
 # `pkg_resources`, which setuptools 78+ removed, so lifting it alone crashed `api.main` on import.
 # Safe only now that OTEL is >=0.49b0. Floor covers the advisories needing >=78.1.1 / >=83.0.0.
-setuptools>=83.0.0
+setuptools>=84.0.0

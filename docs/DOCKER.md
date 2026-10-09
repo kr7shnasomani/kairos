@@ -129,7 +129,7 @@ re-login) are build args in the `builder` stage, baked into the bundle, so a cha
 `next.config.ts` also derives the CSP `connect-src` from `NEXT_PUBLIC_API_URL` (see `FRONTEND.md` §15a).
 
 ### `backend/connectors/Dockerfile` — multi-stage, non-root
-`builder` (golang:1.25-alpine — bumped from 1.22 for `x/crypto` 0.52) compiles a static binary,
+`builder` (golang:1.26-alpine — 1.26 for the `net/http` advisories fixed in go1.26.9) compiles a static binary,
 also used for `go run` in dev. `release`
 is a tiny Alpine image with just the binary + `fixtures/`, running as non-root
 `kairos`.
