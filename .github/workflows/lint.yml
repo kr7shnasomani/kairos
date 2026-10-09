@@ -77,6 +77,9 @@ jobs:
           # Must match backend/connectors/go.mod (1.26 since 2026-10: the net/http advisories
           # GO-2026-6611 to 6617 are fixed only from go1.26.9).
           go-version: '1.26'
+          # The runner's cached 1.26.x can lag the patch that carries a fix (1.26.8 was served when
+          # the net/http advisories needed 1.26.9), so always resolve the newest patch.
+          check-latest: true
           cache-dependency-path: backend/connectors/go.sum
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0

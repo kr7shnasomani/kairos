@@ -107,6 +107,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26'
+          # The runner's cached 1.26.x can lag the patch that carries a fix (1.26.8 was served when
+          # the net/http advisories needed 1.26.9), so always resolve the newest patch.
+          check-latest: true
           cache-dependency-path: backend/connectors/go.sum
       # Pinned, not @latest: a govulncheck release can require a newer Go than `go-version` above,
       # and then the install itself fails — a red audit with nothing scanned (v1.8.0 did that on
