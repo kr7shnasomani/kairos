@@ -16,11 +16,11 @@
 #   - numpy + Pillow already live in requirements.txt (kept for image handling).
 # =============================================================================
 
-torch==2.3.1
-torchvision==0.18.1
-ultralytics==8.2.40
+torch==2.14.1
+torchvision==0.29.1
+ultralytics==8.4.173
 layoutparser==0.3.4
-opencv-python-headless==4.9.0.80
-scipy==1.13.1
-scikit-learn==1.5.1
-pandas==2.2.2
+opencv-python-headless==5.0.0.93
+scipy==1.18.1
+scikit-learn==1.9.1
+pandas==3.0.6

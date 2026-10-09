@@ -6,33 +6,33 @@
 # advisories (fixed in starlette 1.3.1). 0.135.1 is the newest fastapi that still accepts the
 # pinned pydantic 2.7.4 (0.135.2 wants >=2.9), and it lets starlette float. The explicit floor
 # below stops a future resolve from sliding back under the fixes.
-fastapi==0.135.1
-starlette>=1.3.1
-uvicorn[standard]==0.30.1
+fastapi==0.142.2
+starlette>=1.7.0
+uvicorn[standard]==0.54.0
 python-multipart==0.0.32
-httpx==0.27.0
+httpx==0.28.1
 
 # --- Config & Validation ---
-pydantic==2.7.4
-pydantic-settings==2.3.4
-python-dotenv==1.2.2
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.4
 
 # --- Database Clients ---
-neo4j==5.21.0
-qdrant-client==1.9.1
-elasticsearch==8.13.1
-redis==5.0.6
-supabase==2.5.3
+neo4j==6.4.0
+qdrant-client==1.19.1
+elasticsearch==9.5.1
+redis==8.1.0
+supabase==2.32.0
 
 # --- Async Task Queue ---
-celery==5.4.0
+celery==5.6.3
 
 # --- Durable Workflows ---
-temporalio==1.6.0
+temporalio==1.34.0
 
 # --- HTTP / Async ---
-aiohttp==3.14.3
-anyio==4.14.2
+aiohttp==3.14.4
+anyio==4.15.1
 
 # --- Observability ---
 # OTEL core + instrumentation move as a matched pair (1.x <-> 0.xxbN). Upgrade all six together.
@@ -42,12 +42,12 @@ anyio==4.14.2
 # removes — so the `setuptools` cap in the Testing section was load-bearing, not stale as
 # previously assumed, and lifting it alone crashed `api.main` on import.
 # 0.49b0 is the first release that dropped `pkg_resources`, which is what unpins setuptools.
-opentelemetry-api==1.28.0
-opentelemetry-sdk==1.28.0
-opentelemetry-exporter-otlp-proto-http==1.28.0
-opentelemetry-instrumentation-fastapi==0.49b0
-opentelemetry-instrumentation-redis==0.49b0
-opentelemetry-instrumentation-httpx==0.49b0
+opentelemetry-api==1.45.0
+opentelemetry-sdk==1.45.0
+opentelemetry-exporter-otlp-proto-http==1.45.0
+opentelemetry-instrumentation-fastapi==0.66b0
+opentelemetry-instrumentation-redis==0.66b0
+opentelemetry-instrumentation-httpx==0.66b0
 
 # Transitive via qdrant-client, pinned explicitly because it is the linchpin of the protobuf
 # constraint. qdrant-client asks only for `grpcio-tools>=1.41.0`, and pip was resolving to 1.62.3,
@@ -55,10 +55,10 @@ opentelemetry-instrumentation-httpx==0.49b0
 # needs protobuf 5. Raising THIS one package moves protobuf to 5.x with qdrant-client and
 # temporalio untouched — temporalio declares `protobuf>=3.20` with no upper bound.
 # Without the pin a future resolve can silently pick an old grpcio-tools and re-break the chain.
-grpcio-tools>=1.66
+grpcio-tools>=1.84.0
 
 # --- PDF Processing ---
-PyMuPDF==1.24.5
+PyMuPDF==1.28.2
 
 # --- Spreadsheet ingestion (.xlsx/.ods: work-order exports, asset registries) ---
 # Pure-python, read-only streaming. Hand-rolling zip+XML would silently mangle date
@@ -78,10 +78,10 @@ openpyxl==3.1.5
 Pillow==12.3.0
 # Not imported by our code: kept pinned because qdrant-client 1.9.1 needs numpy and an unpinned
 # resolve would move it to 2.x, untested against that client.
-numpy==1.26.4
+numpy==2.5.3
 
 # --- Utilities ---
-structlog==24.2.0
+structlog==26.1.0
 shortuuid==1.0.13
 
 # --- Testing ---
@@ -91,4 +91,4 @@ pytest-timeout==2.4.0
 # Was `setuptools<70.0.0`, an unexplained cap. It was NOT stale: OTEL 0.45b0 imported
 # `pkg_resources`, which setuptools 78+ removed, so lifting it alone crashed `api.main` on import.
 # Safe only now that OTEL is >=0.49b0. Floor covers the advisories needing >=78.1.1 / >=83.0.0.
-setuptools>=83.0.0
+setuptools>=84.0.0
