@@ -7,11 +7,11 @@ import { BrandLink } from "./brand-link";
 import { MobileAppHeader } from "./mobile-app-header";
 import { CommandPalette, ShortcutsHelp, type PaletteItem } from "./command-palette";
 import { getMe, logout } from "@/lib/auth";
-import { getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
+import { GOVERNOR_UPDATED, getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
 import { flushQueue } from "@/lib/idb";
 import { getUserInitials } from "@/lib/user-initials";
 import { ADMIN_VIEW_ROLES, routeAllowed, roleHome } from "./use-role";
-import type { Role, User, GovernorEventState, PlantState } from "@/lib/types";
+import type { Role, User, GovernorEventState, GovernorState, PlantState } from "@/lib/types";
 import { capitalize, cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 import { PageSkeleton } from "./skeleton";
@@ -99,6 +99,14 @@ function GovernorPill({ userId }: { userId: string }) {
     getGovernorState().then((r) => { if (alive && r.data) setGov(r.data); });
     return () => { alive = false; };
   }, [userId]);
+  useEffect(() => {
+    const onUpdate = (event: Event) => {
+      const fresh = (event as CustomEvent<GovernorState>).detail;
+      setGov((g) => (g ? { ...g, ...fresh } : g));
+    };
+    window.addEventListener(GOVERNOR_UPDATED, onUpdate);
+    return () => window.removeEventListener(GOVERNOR_UPDATED, onUpdate);
+  }, []);
   if (!gov) return null;
   const suppressed = gov.state === "suppressed";
   return (

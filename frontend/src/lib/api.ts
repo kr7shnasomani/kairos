@@ -1136,6 +1136,10 @@ export function ackEvent(eventId: string, body: { user_id: string; role: string;
   return postJson<{ status: string }>(`/events/${encodeURIComponent(eventId)}/ack`, body);
 }
 
+// Listing briefs records the pushes it delivers, so the Briefs page holds a newer count than the
+// rail's pill; it broadcasts the count under this event name and the pill listens.
+export const GOVERNOR_UPDATED = "kairos:governor-updated";
+
 export async function getGovernorState(): Promise<Fetched<GovernorEventState | null>> {
   const data = await getJson<GovernorEventState>(`/briefs/governor/status`);
   return { data, source: "live" };

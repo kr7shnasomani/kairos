@@ -696,7 +696,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **373 tests / 85 files**, all passing (2026-10-17; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
+| Test suite | **374 tests / 85 files**, all passing (2026-10-17; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---

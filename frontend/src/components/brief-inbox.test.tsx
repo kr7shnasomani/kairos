@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { GOVERNOR_UPDATED } from "@/lib/api";
 import type { BriefsResponse } from "@/lib/types";
 import { BriefInbox } from "./brief-inbox";
 
@@ -100,5 +101,13 @@ describe("governor card", () => {
   it("shows a brief with no asset by its headline alone", () => {
     render(<BriefInbox response={{ ...response, suppressed_count: 1, suppressed_held: [queued] }} />);
     expect(screen.getByText("Show the queued briefs").closest("details")!.textContent).not.toMatch(/DEMO-GENERAL|null/);
+  });
+
+  it("hands its governor count to the rail, which read it before this page recorded the pushes", () => {
+    const seen = vi.fn();
+    window.addEventListener(GOVERNOR_UPDATED, seen);
+    render(<BriefInbox response={response} />);
+    window.removeEventListener(GOVERNOR_UPDATED, seen);
+    expect((seen.mock.calls[0][0] as CustomEvent).detail).toEqual({ push_count_last_hour: 2, ceiling: 8, state: "normal" });
   });
 });

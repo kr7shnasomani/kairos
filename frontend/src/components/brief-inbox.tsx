@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { GOVERNOR_UPDATED } from "@/lib/api";
 import type { Brief, BriefPriority, BriefsResponse } from "@/lib/types";
 import { cn, priorityMeta, relativeTime } from "@/lib/utils";
 import { BriefCard } from "./brief-card";
@@ -77,6 +78,10 @@ function GovernorBanner({ response }: { response: BriefsResponse }) {
 export function BriefInbox({ response }: { response: BriefsResponse }) {
   const { briefs } = response;
   const [filter, setFilter] = useState<FilterKey>("all");
+  const { push_count_last_hour, ceiling, state } = response.governor_state;
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(GOVERNOR_UPDATED, { detail: { push_count_last_hour, ceiling, state } }));
+  }, [push_count_last_hour, ceiling, state]);
   const criticalCount = briefs.filter((brief) => brief.priority === "critical").length;
 
   const filterTabs = [
