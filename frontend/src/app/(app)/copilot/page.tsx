@@ -250,7 +250,7 @@ export default function CopilotPage() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 py-8 sm:px-6">
+            <div className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pt-16 pb-8 sm:px-6">
               {turns.map((t) => (
                 <div key={t.id} className="flex flex-col gap-4">
                   {/* User bubble — right aligned */}

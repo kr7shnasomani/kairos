@@ -37,8 +37,8 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 | Certificate | Let's Encrypt, renewed automatically by Caddy |
 | Code | the working tree of the 9 October 2026 redeploy (cross-site patterns and form extraction; earlier, 2 October: security update, role migration applied, `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` set). `make sync-check` compares it with local, GitHub and Vercel (section 14b) |
 | Running | the 11 services started by `make prod`; memory about 2.1 GiB of 3.7 GiB. Elasticsearch runs the 512 MB heap (`-Xms512m -Xmx512m`) |
-| Account | AWS Free plan, $200 credit ($100 sign-up + $100 in activity credits), about $2.28 a day while running (down from $2.63/day on the old instance type) |
-| Runway | **$167.64** left as of 28 September 2026 ÷ $2.28/day = about 74 days. Credit runs out around **10 December 2026** |
+| Account | AWS Free plan, $300 credit in total ($100 sign-up + $100 in activity credits + $100 promotional credit added in October 2026), about $2.28 a day while running (down from $2.63/day on the old instance type) |
+| Runway | **About $224 left on 17 October 2026** (estimate: $167.64 read on 28 September, minus 19 days × $2.28 = $43.32, plus the $100 promotional credit; confirm on the credits page). ÷ $2.28/day = about 98 days, so the credit lasts to around **23 January 2027** if the server runs throughout. The Free plan still closes 6 months after the account was created, whichever comes first, unless the account is upgraded to the Paid plan (unused credit carries over) |
 
 **The demo button.** The login page's "Explore the live demo" button signs in as `demo@kairos.local`
 (role `demo`: sees everything, every destructive action refused by policy). Its credentials are public by
@@ -111,6 +111,7 @@ instance (below). A month is 730 hours.
 | **Total** | | **$39.09/mo · $1.29/day** | **$68.29/mo · $2.28/day** |
 | Days $100 of credit lasts | | about 78 | about 44 |
 | Days $200 of credit lasts | | about 156 | about 88 |
+| Days $300 of credit lasts | | about 233 | about 132 |
 
 Free-plan instance history: `m7i-flex.large` (8 GiB, $79.93/mo · $2.63/day) until 28 September 2026, then resized
 to `c7i-flex.large` (4 GiB) once the Elasticsearch heap fix below made the smaller box safe — about 15% cheaper.

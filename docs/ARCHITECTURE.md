@@ -759,7 +759,7 @@ clean, so an exhausted quota can never be read as poor answer quality. Every pro
 **Wilson confidence interval**, because 33 of 37 is not a percentage, it is a small sample. And
 **regressions are published, not re-baselined**: the measured time-to-answer advantage fell from 25.6%
 to 9.5% across two runs, and the file records the fall and its two causes rather than quietly restating
-the better figure.
+the better figure (on all 46 questions it reads 19.9% since 2026-10-17).
 
 The binding limit on all of it is corpus size. These figures characterise the golden dataset, not a
 production archive: on a 20-document corpus BM25 already finds the answer at rank 1.35, which caps how

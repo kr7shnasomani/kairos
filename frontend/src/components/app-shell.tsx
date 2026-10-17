@@ -336,6 +336,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => { alive = false; };
   }, [user]);
 
+  // The menu-button drawer is a modal too, so Escape closes it like the sheet below.
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileDrawerOpen]);
+
   // Focus trap for the mobile "More" nav sheet; focus returns to its trigger on close.
   useEffect(() => {
     if (!moreOpen) return;
@@ -475,7 +485,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {mobileDrawerOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <button className="absolute inset-0 animate-[overlay-in_150ms_ease-out] bg-[var(--scrim)]" aria-label="Close menu" onClick={() => setMobileDrawerOpen(false)} />
           <div className="sidebar-scope absolute inset-y-0 left-0 w-[316px] max-w-[86vw] overflow-y-auto border-r border-line outline-none animate-[drawer-in_250ms_ease-out]">
             <SidebarContent onNavigate={() => setMobileDrawerOpen(false)} role={role} user={user} />
@@ -485,7 +495,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile "More" nav sheet — full grouped nav, same dark rail palette */}
       {moreOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <button
             className="absolute inset-0 animate-[overlay-in_150ms_ease-out] bg-[var(--scrim)]"
             aria-label="Close menu"

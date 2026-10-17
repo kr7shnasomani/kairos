@@ -120,7 +120,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
               {isPtw ? <span title="Permit to work: a second person must countersign before the job starts">Permit to work</span> : p.label}
             </span>
           )}
-          <span className="text-label text-muted">· {triggerLabel(brief.trigger_event_type)}</span>
+          <span className="text-label text-muted">{triggerLabel(brief.trigger_event_type)}</span>
           <span className="tabular ml-auto text-label text-muted">{relativeTime(brief.delivered_at)}</span>
         </div>
         <PageHeader compact className="mt-1" title={brief.headline} />

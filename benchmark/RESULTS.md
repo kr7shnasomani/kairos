@@ -14,14 +14,14 @@ history and caveats, see:
 |---|---|---|
 | Layer smoke checks | 13/13 pass | `verify_layers.py` |
 | Retrieval (fact reaches context) | 46/46 (100%) | `run_benchmark.py` |
-| Query answer quality | 43/46 (93.5%), VALID (2026-10-03, Nemotron 3 Ultra; 41/46 on Nemotron 3 Super, 2026-09-13) | `run_benchmark.py` |
+| Query answer quality | 40/46 (87.0%), VALID (2026-10-17, Nemotron 3 Super, golden plant with the showcase hidden; 38/46 on the live API with the showcase visible) | `run_benchmark.py` |
 | Provenance — all responses, incl. refusals | 46/46 (100%) | `run_benchmark.py` |
-| Provenance — correct answers only | 43/43 (100%) | `run_benchmark.py` |
+| Provenance — correct answers only | 40/40 (100%) | `run_benchmark.py` |
 | Entity-extraction F1 (Layer 0) | 0.805 on 40 labels, VALID | `run_model_validation.py` |
 | Compliance gap detection | P 1.000 · R 0.838 · F1 0.912 | `run_compliance_eval.py` |
 | Retrieval reach by arm | exact 41/46 (89.1%) · semantic 44/46 (95.7%) · hybrid 44/46 (95.7%), 2026-10-17, golden set only, top 6 per arm | `run_retrieval_baseline.py` |
 | Proactive brief quality (Layer 8) | 6/6 graded checks pass | `run_brief_eval.py` |
-| Adversarial safety | 0 unsafe answers / 15 questions, VALID | `run_safety_eval.py` |
+| Adversarial safety | 0 unsafe answers / 15 questions (14 refusals), VALID, 2026-10-17 on Nemotron 3 Super | `run_safety_eval.py` |
 | Concurrency | 2275 requests · 0% errors · knee at 50 VU | `run_load_test.py` |
 | Soak — memory / connection leakage | PASS, no leak signal | `run_soak_test.py` |
 | OCR accuracy on paired images | 2/4 scoreable — handwriting mean recall 0.333 (Layer 3 limitation); 2 correctly in review, not indexed | `run_ocr_gate.py` |
@@ -52,7 +52,35 @@ history and caveats, see:
 
 ## 2. `run_benchmark.py` — domain-expert Q&A
 
-**Current — 2026-10-03, 46 questions, checkpoint `run_20261003_ultra.jsonl`** (synthesis on NIM
+**Current — 2026-10-17, 46 questions, Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b` on NIM, back
+since Ultra stopped answering, `status.md` P31). Two runs the same afternoon, both `VALID`:
+
+*Golden plant only* (local API on the same cloud stores, `SHOWCASE_VISIBLE_TO_ALL=false` for the run, then
+restored). This is the like-for-like successor of every earlier figure, all measured before the showcase
+plant was loaded, so it is the one quoted:
+
+```
+Retrieval (fact reaches context):    46/46 (100%)  95% CI [92–100%]
+Answer quality (correct/total):      40/46 (87.0%) 95% CI [74–94%]
+Answer provenance (sourced):         46/46 (100%) all responses · 40/40 correct answers
+Synthesis latency:                   p50 2591 ms · p95 5300 ms · avg 2821 ms
+Provider mix:                        nim 40 · refused 6
+Run validity:                        VALID — 40/46 answered by the pinned Nemotron model
+```
+
+Misses: Q02 (causal), Q09 (aggregation), Q20 (alias-resolution), Q27 (temporal), Q41 (personnel), Q46
+(regulatory). All six retrieved the fact: synthesis gaps, not retrieval gaps.
+
+*Live API as deployed* (showcase visible, which is how the public demo runs): **38/46 (82.6%)**, 95% CI
+[69–91%], retrieval 46/46, provenance 46/46, p50 3056 ms · p95 36537 ms · avg 6960 ms, nim 39 · refused 5 ·
+openrouter 2, `VALID`. Misses: Q02, Q08, Q09, Q16, Q20, Q27, Q41, Q46. The showcase's 476 documents share
+the search indexes, so they compete for the six evidence slots on golden questions (the 2026-10-04 run read
+38 to 39/46 the same way); the long p95 is the two OpenRouter fallbacks after NIM timeouts.
+
+Against the 2026-10-03 43/46 on Ultra: a different model, and Ultra no longer answers, so it cannot be
+reproduced. Against 41/46 on Super (2026-09-13): one fewer, on a vault that has changed since.
+
+**Prior — 2026-10-03, 46 questions, checkpoint `run_20261003_ultra.jsonl`** (synthesis on NIM
 `nvidia/nemotron-3-ultra-550b-a55b`, which replaced `nemotron-3-super-120b-a12b` after NVIDIA ended its
 life on 2026-10-03 09:00 UTC; run against the live API, same 46 questions as the 2026-09-13 run):
 
@@ -97,8 +125,8 @@ from the 2026-09-13 run, so 43/46 against 41/46 is a model change as much as a r
 (`SHOWCASE_VISIBLE_TO_ALL=false`): 42/46 answers (91%), 46/46 retrieval, 46/46 provenance, answered by
 nim 32, openrouter 8, refused 6. NIM returned 503 for Nemotron Ultra through the run, so 8 of 46 answers
 (17%) came from the fallback model, over the 10% the validity rule allows. Misses: Q08 and Q20
-(alias-resolution), Q37 (current-fact), Q41 (personnel); Q08 was a fallback answer. The 43/46 above stays the
-current figure. What this run does show: with the showcase visible on 2026-10-04 the same harness read 38 to
+(alias-resolution), Q37 (current-fact), Q41 (personnel); Q08 was a fallback answer. The 43/46 above was the
+current figure until the 2026-10-17 runs. What this run does show: with the showcase visible on 2026-10-04 the same harness read 38 to
 39/46, so the showcase sharing the stores accounts for most of that drop. Document linkage 18/20, unchanged.
 
 **Prior — 2026-09-13 (Nemotron 3 Super), 46 questions, checkpoint `run_20260913_nemotron_46q.jsonl`**
@@ -287,23 +315,36 @@ By category (retrieval · answer · provenance):
 
 ## 5. `run_time_to_answer.py` — time-to-answer vs BM25 keyword search
 
-```
-  Questions: 37   assumption: 120s to read one document
+**Current — 2026-10-17, all 46 questions, local API on Nemotron 3 Super** (same cloud stores as live;
+the harness authenticates with the internal service key, which only the server's own `.env` holds for
+live). **Modelled, not measured:** every input is measured except `SECONDS_PER_DOCUMENT = 120`, the time
+an engineer takes to open a document and judge it (`status.md` P33).
 
-  MACHINE TIME
-    BM25-only mean:                 34.8 ms
-    Kairos retrieve+synth:       26749.0 ms
+```
+  Questions: 46   assumption: 120s to read one document
+
+  MACHINE TIME (Kairos is slower — synthesis is a model call)
+    BM25-only mean:                 28.1 ms
+    Kairos retrieve+synth:        9605.6 ms
 
   DOCUMENTS OPENED BEFORE THE FACT
     BM25-only mean rank:            1.35
-    fact in top-10 for:        36/37 questions
+    fact in top-10 for:        45/46 questions
     Kairos:                         1.00  (cited source, verified once)
 
   MODELLED HUMAN TIME TO A TRUSTED ANSWER
-    traditional:                   100.0 min total  (2.7 min/question)
-    Kairos:                         90.5 min total  (2.4 min/question)
-    reduction:                       9.5 %
+    traditional:                   124.0 min total  (2.7 min/question)
+    Kairos:                         99.4 min total  (2.2 min/question)
+    reduction:                      19.9 %
 ```
+
+The reduction rose from 9.5% (37 questions, 2026-09) mainly because Kairos's own time fell: machine time
+9.6 s against 26.7 s, on Super instead of the slower models of that run. Keyword search still finds the
+fact at rank 1.35 on average, so the modelled gap stays small; the claim is the cited, verified answer,
+not speed.
+
+**Prior — 37 questions:** BM25 34.8 ms, Kairos 26749.0 ms, mean rank 1.35, fact in top-10 for 36/37,
+modelled 100.0 → 90.5 min, **reduction 9.5%**.
 
 ## 6. `run_load_test.py` — concurrency sweep
 
@@ -352,13 +393,19 @@ Prior run (2026-08-17, n=37, before the fix): exact 33/37 (89.2%), semantic 35/3
 
 ## 8. `run_safety_eval.py` — adversarial safety
 
+**Current — 2026-10-17, local API on Nemotron 3 Super** (same cloud stores as live; the harness sends no
+login, so it runs against the local API):
+
 ```
   Kairos — Adversarial Safety Eval   15 questions
   UNSAFE ANSWERS:            0
-  Refusals:                  12
+  Refusals:                  14
   Not classified as safety:  0
   Run validity:              VALID
 ```
+
+S05 (answerable) is refused again: a safe over-refusal, which the harness flags because it costs trust.
+The prior run (2026-08-17) had 12 refusals with S05 answered. The headline, 0 unsafe answers, is unchanged.
 
 ## 9. `run_brief_eval.py` — proactive brief quality (Layer 8)
 

@@ -42,7 +42,7 @@ export function BriefCard({ brief }: { brief: Brief }) {
                 ) : p.label}
               </span>
             )}
-            <span className="text-label text-muted">· {triggerLabel(brief.trigger_event_type)}</span>
+            <span className="text-label text-muted">{triggerLabel(brief.trigger_event_type)}</span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {brief.acknowledged_at && (

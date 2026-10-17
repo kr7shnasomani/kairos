@@ -673,10 +673,14 @@ button:not(:disabled),
    landing's pixel wipe, as one compositor-only transform instead of 72 spans.
    The host needs `position: relative`; put labels above the sweep with `z-10`.
    Touch devices get nothing, and the global reduced-motion rule flattens it. */
-.fill-sweep {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
+/* Layered so a position utility on the control wins: unlayered, `relative` beat
+   Copilot's `absolute` New chat button and stretched it under the rail. */
+@layer components {
+  .fill-sweep {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
 }
 @media (hover: hover) {
   .fill-sweep::after {

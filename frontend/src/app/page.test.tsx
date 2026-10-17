@@ -134,8 +134,8 @@ describe("Home", () => {
     // than a single flattering number, and that grading is deterministic.
     // The chart shows a point estimate, so the interval must still be
     // disclosed in the caption rather than quietly dropped.
-    expect(screen.getByText("93%")).toBeInTheDocument();
-    expect(screen.getByText("43/46")).toBeInTheDocument();
+    expect(screen.getByText("87%")).toBeInTheDocument();
+    expect(screen.getByText("40/46")).toBeInTheDocument();
     // Two: the retrieval and provenance chart bars. KG linkage is quoted
     // document-centric (90%), not as a third 100% — see status.md on why the
     // asset-centric cut isn't trustworthy to publish as-is.
@@ -150,16 +150,16 @@ describe("Home", () => {
     expect(screen.getAllByText(/graded by fixed rules/i, { selector: "p" })).toHaveLength(1);
     expect(screen.getByText(/fixed rules, never another model/i)).toBeInTheDocument();
     // The spread is carried by the chart itself, not rounded away in prose.
-    expect(screen.getByText("43/46")).toBeInTheDocument();
-    expect(screen.getByText(/95% confidence: 82 to 98/i)).toBeInTheDocument();
+    expect(screen.getByText("40/46")).toBeInTheDocument();
+    expect(screen.getByText(/95% confidence: 74 to 94/i)).toBeInTheDocument();
     // What the chart cannot show: which model answered, and why the misses understate it.
-    expect(screen.getByText(/one\s+from a fallback provider/i, { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText(/no fallback provider/i, { selector: "p" })).toBeInTheDocument();
     // The other harnesses are on the page too, with their real figures.
     expect(screen.getByText("13 / 13")).toBeInTheDocument();
     expect(screen.getByText("0 unsafe")).toBeInTheDocument();
     expect(screen.getByText("F1 0.912")).toBeInTheDocument();
     expect(screen.getByText("F1 0.805")).toBeInTheDocument();
-    expect(screen.getByText("−9.5%")).toBeInTheDocument();
+    expect(screen.getByText("−19.9%")).toBeInTheDocument();
     expect(screen.getByText("0% errors")).toBeInTheDocument();
     expect(screen.getByText("No leak signal")).toBeInTheDocument();
 

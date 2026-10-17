@@ -1,6 +1,6 @@
 """Retrieval baseline comparison — replaces the word "modelled".
 
-The results table currently reports "9.5% modelled reduction in time-to-answer". `modelled` is the
+The results table currently reports "19.9% modelled reduction in time-to-answer". `modelled` is the
 weakest word in it, and it is attached to the core value claim. This measures the thing directly:
 the golden questions (37 when last measured; 46 since 2026-09-13) run through each retrieval method alone, then through the hybrid
 fusion, scored on whether the expected fact actually reaches the context.
