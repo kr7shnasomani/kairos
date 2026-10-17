@@ -518,7 +518,7 @@ Cross-site pattern detection requires knowledge to flow from local data planes t
 
 | What | Tool | Notes |
 |------|------|-------|
-| Cloud LLM synthesis | **NVIDIA NIM** | Nemotron 3 Ultra 550B (`nvidia/nemotron-3-ultra-550b-a55b`; Nemotron 3 Super 120B was retired by NVIDIA on 2026-10-03), OpenAI-compatible API. Cascade: **Nebius Token Factory → NIM → OpenRouter → Gemini → Ollama**, built by `services/model_providers.py`; a tier with no API key is left out, and Token Factory is unkeyed by default, so the working cascade starts at NIM. The tiers are redundancy across different failure modes (NIM: free, largest token budget; OpenRouter: `llama-3.1-70b`, a different model since NVIDIA retired it as tier 1 in 2026-09; Gemini: fast, different model family). Any fallthrough is a different model, so the benchmark verdict flags it |
+| Cloud LLM synthesis | **NVIDIA NIM** | Nemotron 3 Super 120B (`nvidia/nemotron-3-super-120b-a12b`; NVIDIA announced it retired on 2026-10-03 and Ultra 550B replaced it, but Ultra stopped answering on 2026-10-17 while Super is served again, so Super is back), OpenAI-compatible API. Cascade: **Nebius Token Factory → NIM → OpenRouter → Gemini → Ollama**, built by `services/model_providers.py`; a tier with no API key is left out, and Token Factory is unkeyed by default, so the working cascade starts at NIM. The tiers are redundancy across different failure modes (NIM: free, largest token budget; OpenRouter: `llama-3.1-70b`, a different model since NVIDIA retired it as tier 1 in 2026-09; Gemini: fast, different model family). Any fallthrough is a different model, so the benchmark verdict flags it |
 | Local LLM fallback | **Ollama** | Qwen2.5 14B — edge/offline synthesis fallback |
 | OCR | **NVIDIA NIM Nemotron-OCR-v2** | Cloud API; PyMuPDF fast path for native digital PDFs |
 | Named entity recognition | **NVIDIA NIM llama-3.2-11b-vision** | JSON-prompted NER; Ollama llama3.1:8b local fallback; regex last resort |
@@ -607,7 +607,7 @@ One command starts the entire local stack. Agents generate this file in minutes.
 **Mock or simulate for demo:**
 - YOLOv9 custom drawing parser (show architecture, use simplified pre-processed topology)
 - EEMUA 191 governor (implement rate limiting logic, mock the DCS state feed)
-- Cross-site control plane (single-site for MVP, show multi-site in architecture diagram)
+- Cross-site control plane (one deployment for MVP; cross-site pattern alerts run inside it across the sites a token covers, the separate control plane is shown in the architecture diagram)
 - MoC webhook loop (manual approval UI stands in for the full webhook cycle; the webhook itself is built and HMAC-signed, `X-Webhook-Timestamp` plus `X-Webhook-Signature`, but no plant MoC system is connected)
 
 ---
@@ -723,6 +723,7 @@ The SPC circuit breaker per asset class catches this before it propagates widely
 A sophisticated attacker targeting a high-value industrial facility could attempt to corrupt the knowledge base by submitting documents containing subtly falsified parameters — a revised operating procedure with an incorrect pressure limit, an OEM bulletin with a modified inspection interval — designed to pass human review and enter the canonical graph. A second vector is model supply-chain compromise: a maliciously modified extraction model or LLM weight file introduced during an update.
 
 The architecture's existing safeguards address much of this: the immutable vault preserves originals so falsified parameters can be identified if the underlying document is inspected, the human promotion workflow requires engineering sign-off for safety-critical parameters, and Layer 0 validates model updates against the rolling corpus before deployment. Additional mitigations that should be implemented: cryptographic signing of all model weight files at source, anomaly detection over extraction outputs flagging parameters that deviate significantly from historical distributions for a given equipment class (a pressure limit that is 40% above or below the existing canonical value should trigger automatic review regardless of source authority), and audit monitoring for unusual patterns of document submission from specific source accounts. The system cannot guarantee immunity from a sophisticated insider threat with engineering authority, but it can ensure that any successful poisoning leaves a complete audit trail that enables detection and rollback.
+
 ---
 
 ## 9. Measured Performance

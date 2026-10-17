@@ -40,10 +40,3 @@ export function CardDescription({ className, children }: { className?: string; c
   return <p className={cn("mt-0.5 text-caption text-muted", className)}>{children}</p>;
 }
 
-export function CardContent({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("p-5", className)}>{children}</div>;
-}
-
-export function CardFooter({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={cn("flex items-center gap-2 p-5 pt-0", className)}>{children}</div>;
-}

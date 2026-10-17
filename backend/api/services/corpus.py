@@ -62,7 +62,9 @@ _TEST_FILENAME = re.compile(r"^(ann_test_|dbtest_|test_|e2e_|kairos_|probe|tmp|l
 # `scripts/purge_test_data.py` holds, kept separate on purpose, because that script DELETES and
 # this module only hides. `QA-TEST-` was added 2026-09-22 for the asset a manual QA sweep
 # registered through the UI (`QA-TEST-155635`, "QA test pump"): verified to match 1 of the 11
-# live assets and 0 of the 10 in `dataset/01_Structured_Backbone/asset_registry.csv`.
+# live assets and 0 of the 10 in `dataset/01_Structured_Backbone/asset_registry.csv`. That asset and
+# the rest of its sweep were deleted with the owner's approval on 2026-10-17; the prefix stays as the
+# naming rule for a manual sweep, so the next one is hidden without a code change.
 # Same evidence bar as `_TEST_FILENAME`: hiding a real asset is the failure this must not have.
 TEST_ASSET_PREFIXES = ("QA-TEST-", "ASSET-TEST-", "ASSET-DEDUP-", "ASSET-EV-", "ASSET-ACK-", "ASSET-FRESH-")
 
@@ -108,8 +110,10 @@ def partition_test_artifacts(rows: Iterable[dict]) -> set[str]:
     }
 
 
-async def document_rows(supabase, document_ids: Collection[str]) -> list[dict]:
-    """`documents` rows (`document_id`, `file_name`) for the given ids, chunked.
+async def document_rows(
+    supabase, document_ids: Collection[str], columns: str = "document_id, file_name"
+) -> list[dict]:
+    """`documents` rows (`document_id`, `file_name`, plus any extra `columns`) for the given ids, chunked.
 
     Shared by the test-artifact filter and by callers that need a readable source name, so one
     lookup serves both. Returns `[]` on any failure — callers fail open (see `partition_test_artifacts`).
@@ -121,7 +125,7 @@ async def document_rows(supabase, document_ids: Collection[str]) -> list[dict]:
         try:
             res = await asyncio.to_thread(
                 lambda c=chunk: supabase.table("documents")
-                .select("document_id, file_name")
+                .select(columns)
                 .in_("document_id", c)
                 .execute()
             )

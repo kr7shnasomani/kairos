@@ -19,15 +19,6 @@ export interface CopilotSource {
   vault_url?: string;
 }
 
-export interface ExtractedEntity {
-  entity_text: string;
-  entity_type: string;
-  document_id: string;
-  confidence: number;
-  span_start?: number;
-  span_end?: number;
-}
-
 /** An engineering conflict on a cited asset that is awaiting MoC sign-off. */
 export interface PendingMoc {
   conflict_id: string;
@@ -51,18 +42,19 @@ export interface CopilotAnswer {
   refusal_reason?: string;
   safety_critical: boolean;
   model?: string;
-  entities?: ExtractedEntity[];
   /** Non-empty → the answer touches a parameter under formal dispute; the UI must say so. */
   pending_moc?: PendingMoc[];
   /** True while sources have been retrieved but synthesis is still running. */
   is_synthesizing?: boolean;
 }
 
+// Each one is checked against the live data: a cited history, a value under MoC, a value
+// changed by a newer bulletin, and a safety question the gate refuses.
 export const SUGGESTIONS = [
-  "What's the failure history of P-101?",
+  "What's the failure history of P-1101A?",
+  "What is the minimum continuous flow for P-1101A?",
   "Maximum allowable pressure for the HE-3xx series?",
   "Isolation points for work on V-247",
-  "Open compliance gaps on P-101",
 ];
 
 // ─── Meta questions ──────────────────────────────────────────────────────────
@@ -85,7 +77,7 @@ const META_REPLIES: ReadonlyArray<{ test: RegExp; answer: string }> = [
     test: /^\s*(hi|hey|hello|yo|good\s*(morning|afternoon|evening))\b/i,
     answer:
       "Hello. Ask me about an asset, a document, a procedure or a compliance clause and I'll answer " +
-      "from governed sources with citations.\n\nTry: \"What's the failure history of P-101?\"",
+      "from governed sources with citations.\n\nTry: \"What's the failure history of P-1101A?\"",
   },
   {
     test: /\b(what can you do|what do you do|who are you|what are you|how do you work|what is kairos|help me|^\s*help\s*$|capabilities)\b/i,

@@ -172,6 +172,26 @@ async def test_stream_writes_the_audit_row_and_pending_moc(monkeypatch):
     assert audits[0]["details"]["evidence_document_ids"] == ["D1"]
 
 
+def test_moc_notice_follows_the_answer_not_every_retrieved_document():
+    sources = [{"asset_id": "DEMO-P-1101A"}, {"asset_id": "HE-301"}, {"asset_id": "DEMO-T-6101"}]
+    from api.services.llm import disclosed_sources as disclosed
+    # An answer discloses the assets of the sources it cites, nothing else it was shown.
+    assert disclosed("MAWP for HE-301?", {"sources": sources, "sources_used": [2, 9]}, None) == [sources[1]]
+    # A refusal cites nothing: the retrieved sources for the asset the question names, not the noise.
+    assert disclosed("Isolation points for HE-301", {"sources": sources, "sources_used": []}, None) == [sources[1]]
+    aliases = [{"alias": "P-1101A", "canonical_asset_id": "DEMO-P-1101A"}]
+    assert disclosed("torque for P-1101A?", {"sources": sources}, aliases) == [sources[0]]
+    # A typed asset id is never looked up on its own: retrieval decides what the caller may see,
+    # so a named asset with no retrieved source discloses nothing (security review, 2026-10-17).
+    assert disclosed("Isolation points for V-247", {"sources": sources, "sources_used": []}, None) == []
+    assert disclosed("torque for ZZ-901?", {"sources": sources}, None) == []
+    # A series names no single asset: the retrieved sources in that series stand in for it.
+    series = [{"asset_id": "HE-301"}, {"asset_id": "HE-302"}, {"asset_id": "HE-3011"}, {"asset_id": "EQ-101"}]
+    assert disclosed("MAWP for the HE-3xx series?", {"sources": series}, None) == series[:2]
+    # Neither: every retrieved source, as before.
+    assert disclosed("what changed last week?", {"sources": sources}, None) == sources
+
+
 def test_both_routes_share_the_audit_step():
     import inspect
 
@@ -439,6 +459,32 @@ async def test_rca_pack_serves_the_callers_own_site_and_admin(monkeypatch):
     assert own.asset_id == "EQ-101"
     admin = await _rca({"user_id": "a", "role": "admin", "site_id": ""}, sb)
     assert admin.asset_id == "EQ-101"
+
+
+async def test_rca_pack_never_reasons_from_a_test_artifact(monkeypatch):
+    sb = _rca_fakes(monkeypatch, [{"equipment_class": "pump", "site_id": "SITE-A"}])
+    hits = [
+        {"score": 0.5, "payload": {"document_id": "DOC-REAL", "text": "seal bulletin", "authority_level": 3}},
+        {"score": 0.4, "payload": {"document_id": "DOC-QA", "text": "QA check", "authority_level": 4}},
+    ]
+    seen: list = []
+
+    async def search(_self, **_k):
+        return hits
+
+    async def synthesize(_self, _code, _timeline, evidence):
+        seen.extend(e["document_id"] for e in evidence)
+        return {"answer": None}
+
+    monkeypatch.setattr(search_router.VectorStoreService, "search", search)
+    monkeypatch.setattr(search_router.LLMService, "rca_synthesize", synthesize)
+    rows = [{"document_id": "DOC-REAL", "file_name": "oem_bulletin.pdf"},
+            {"document_id": "DOC-QA", "file_name": "test_qa_submission_20260914.txt"}]
+    monkeypatch.setattr(search_router, "document_rows", lambda sb, ids: _async(rows))
+
+    pack = await _rca({"user_id": "u", "role": "engineer", "site_id": "SITE-A"}, sb)
+    assert seen == ["DOC-REAL"]
+    assert [d["document_id"] for d in pack.supporting_documents] == ["DOC-REAL"]
 
 
 # =============================================================================

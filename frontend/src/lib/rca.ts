@@ -20,7 +20,7 @@ const SEAL_PACK: RcaPack = {
     { event_type: "vibration_alarm", occurred_at: "2026-06-18T06:12:00Z", description: "Elevated vibration on P-101 drive end (7.1 mm/s RMS).", source: "neo4j" },
     { event_type: "thermal_cycling", occurred_at: "2026-06-24T14:40:00Z", description: "Discharge temperature swings matching the pre-failure signature from the 2025 incident.", source: "historian" },
     { event_type: "operator_note", occurred_at: "2026-06-28T22:05:00Z", description: "Field note: unusual vibration and intermittent seal weep observed. Not formally raised.", source: "quarantine" },
-    { event_type: "work_order_created", occurred_at: "2026-07-02T09:00:00Z", description: "WO-88213 opened — mechanical seal failure, P-101.", source: "supabase" },
+    { event_type: "work_order_created", occurred_at: "2026-07-02T09:00:00Z", description: "WO-88213 opened — mechanical seal failure, P-101.", source: "operational_events" },
   ],
   hypotheses: [
     { hypothesis: "Thermal cycling beyond the OEM envelope degraded the seal faces, consistent with 3 of 4 prior failures.", evidence_weight: 0.82, sources: ["DOC-P101-FAILURE-HIST", "OEM-BULL-MS44-r3"] },
@@ -43,7 +43,7 @@ const FOUL_PACK: RcaPack = {
   timeline: [
     { event_type: "efficiency_drop", occurred_at: "2026-05-10T00:00:00Z", description: "Heat-transfer efficiency down 9% over baseline.", source: "historian" },
     { event_type: "feedwater_excursion", occurred_at: "2026-05-22T00:00:00Z", description: "Feed-water hardness excursion recorded upstream.", source: "historian" },
-    { event_type: "work_order_created", occurred_at: "2026-06-30T08:00:00Z", description: "3rd fouling-related WO in 90 days.", source: "supabase" },
+    { event_type: "work_order_created", occurred_at: "2026-06-30T08:00:00Z", description: "3rd fouling-related WO in 90 days.", source: "operational_events" },
   ],
   hypotheses: [
     { hypothesis: "Feed-water hardness excursions are driving recurrent scaling — a systemic upstream issue, not an exchanger fault.", evidence_weight: 0.79, sources: ["DOC-HX3-FOULING"] },
@@ -62,7 +62,7 @@ const REFUSED_PACK: RcaPack = {
   incident_date: "2026-07-01T00:00:00Z",
   failure_code: "RELIEF-SET",
   timeline: [
-    { event_type: "setpoint_query", occurred_at: "2026-07-01T00:00:00Z", description: "Relief-valve setpoint under review.", source: "supabase" },
+    { event_type: "setpoint_query", occurred_at: "2026-07-01T00:00:00Z", description: "Relief-valve setpoint under review.", source: "operational_events" },
   ],
   hypotheses: [],
   supporting_documents: [

@@ -77,7 +77,7 @@ compliance; a field worker hitting a gated URL redirects to `/briefs`.
 | 29 | `/governance/sla` | Escalation report shape | ✅ renders, 0 console errors |
 | 30 | `/overview` | Exec KPI view | ✅ **API-verified 2026-08-17** — all 5 core fetches 200 (conflicts · quarantine · SLA · compliance · events) |
 | 31 | `/overview/coverage` | Knowledge-coverage heatmap | ✅ renders, 0 console errors |
-| 32 | `/overview/cross-site` | Honest "single-site" state; **eyebrow must not say Layer 13** | ✅ **fixed** — eyebrow was 'Layer 13' (no such layer); now 'Overview · All sites' (2026-09-22 plain-language pass). Honest empty state correct. |
+| 32 | `/overview/cross-site` | Honest "single-site" state; **eyebrow must not say Layer 13** | ✅ **fixed** — eyebrow was 'Layer 13' (no such layer); now 'Overview · All sites' (2026-09-22 plain-language pass). Honest empty state correct. **Live data since 2026-10-09** (`GET /assets/cross-site-patterns`); the empty state now shows only for an account that covers one site. |
 | 33 | `/overview/plant-state` | Plant state set/read (admin) | ✅ **API-verified 2026-08-17** **write path** — normal → set `turnaround` (202) → read back `turnaround` → restored to `normal`. Full round trip. |
 | 34 | `/projects` | Project/procurement registry | ✅ renders, 0 console errors |
 | 35 | `/offboarding` | Programme list | ✅ **API-verified 2026-08-17** — 1 programme; detail returns 5 session items, and `/offboarding/{id}/questions` returns **5 questions per item** (the items themselves don't carry questions — that is the documented shape) |

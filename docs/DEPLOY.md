@@ -4,7 +4,7 @@ This guide hosts **everything except the frontend** on one EC2 instance in **Mum
 the public can use Kairos. The frontend is deployed separately on Vercel and calls this server over HTTPS.
 
 ```
-Browser ──► https://kairos-deterium.vercel.app          Vercel: Next.js frontend
+Browser ──► https://kairos.deterium.xyz                 Vercel: Next.js frontend (also kairos-deterium.vercel.app)
    │
    └──────► https://kairos-deterium.duckdns.org          EC2: Caddy :443 ──► FastAPI :8000
                  ├─ Celery · Temporal + Postgres · Temporal activity and elicitation workers · Go connector
@@ -24,17 +24,18 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 
 `docker-compose.override.yml` is for **local development only**. It is never copied to or used on the server.
 
-## Current deployment (updated 2 October 2026)
+## Current deployment (updated 17 October 2026)
 
 | | |
 |---|---|
-| Frontend | **https://kairos-deterium.vercel.app** · Vercel project `kairos` (team `kr1shnasomani-preview`), root `frontend`, Vercel Authentication **off** |
+| Frontend | **https://kairos.deterium.xyz** (custom domain, added 16 October 2026; `https://kairos-deterium.vercel.app` still serves the same deployment) · Vercel project `kairos` (team `kr1shnasomani-preview`), root `frontend`, Vercel Authentication **off** |
+| Domain | `deterium.xyz` registered at Gen.xyz on its default nameservers; record `A kairos → 76.76.21.21` (Vercel). The root `deterium.xyz` is not configured. Gen.xyz's registrant e-mail verification (required within 15 days or it suspends the domain) was completed on 17 October 2026 |
 | API | **https://kairos-deterium.duckdns.org** (`/health`, `/docs`, `/health/detailed` needs a sign-in) |
 | Server | EC2 `i-012800d81f549557b` · `c7i-flex.large` (resized down from `m7i-flex.large` on 28 September 2026, see §2) · Ubuntu 24.04 · 30 GB gp3 · Mumbai `ap-south-1` |
 | Address | Elastic IP `3.7.186.159` ← DuckDNS `kairos-deterium` |
 | Security group | 22 (one IP: the deployer's current address), 80, 443 |
 | Certificate | Let's Encrypt, renewed automatically by Caddy |
-| Code | the working tree as of 2 October 2026 (security update, role migration applied, `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` set). `make sync-check` compares it with local, GitHub and Vercel (section 14b) |
+| Code | the working tree of the 9 October 2026 redeploy (cross-site patterns and form extraction; earlier, 2 October: security update, role migration applied, `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` set). `make sync-check` compares it with local, GitHub and Vercel (section 14b) |
 | Running | the 11 services started by `make prod`; memory about 2.1 GiB of 3.7 GiB. Elasticsearch runs the 512 MB heap (`-Xms512m -Xmx512m`) |
 | Account | AWS Free plan, $200 credit ($100 sign-up + $100 in activity credits), about $2.28 a day while running (down from $2.63/day on the old instance type) |
 | Runway | **$167.64** left as of 28 September 2026 ÷ $2.28/day = about 74 days. Credit runs out around **10 December 2026** |
@@ -500,11 +501,13 @@ Without them the build silently falls back to `http://localhost:8000`.
 **3. Allow the frontend origin on the server** and recreate the API:
 
 ```bash
-cd ~/kairos && sed -i 's#^CORS_ORIGINS=.*#CORS_ORIGINS=["https://kairos-deterium.vercel.app"]#' .env
+cd ~/kairos && sed -i 's#^CORS_ORIGINS=.*#CORS_ORIGINS=["https://kairos-deterium.vercel.app","https://kairos.deterium.xyz"]#' .env
 docker compose -f docker-compose.yml --profile prod up -d --force-recreate kairos-backend-api
 ```
 
-If you add a custom domain on Vercel, add it to the same JSON list.
+Every origin the frontend is served from must be in that JSON list; a missing one fails every browser call with a CORS error while `/health/` still answers.
+
+**Custom domain.** `kairos.deterium.xyz` is attached with `vercel domains add kairos.deterium.xyz` (project `kairos`), which also requests its HTTPS certificate; at the registrar, point an `A` record for the subdomain at `76.76.21.21` (with the registrar's own nameservers, not a parking set). Then add the origin to `CORS_ORIGINS` as above and recreate the API.
 
 **4. Public access.** Vercel Authentication is on by default, so visitors who are not signed in to your Vercel
 team see a login screen. For a public site, go to **Settings → Deployment Protection → Vercel Authentication**

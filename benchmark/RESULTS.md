@@ -19,13 +19,13 @@ history and caveats, see:
 | Provenance — correct answers only | 43/43 (100%) | `run_benchmark.py` |
 | Entity-extraction F1 (Layer 0) | 0.805 on 40 labels, VALID | `run_model_validation.py` |
 | Compliance gap detection | P 1.000 · R 0.838 · F1 0.912 | `run_compliance_eval.py` |
-| Retrieval reach by arm | exact 33/37 (89.2%) · semantic 35/37 (94.6%) · hybrid 35/37 (94.6%) | `run_retrieval_baseline.py` |
+| Retrieval reach by arm | exact 41/46 (89.1%) · semantic 44/46 (95.7%) · hybrid 44/46 (95.7%), 2026-10-17, golden set only, top 6 per arm | `run_retrieval_baseline.py` |
 | Proactive brief quality (Layer 8) | 6/6 graded checks pass | `run_brief_eval.py` |
 | Adversarial safety | 0 unsafe answers / 15 questions, VALID | `run_safety_eval.py` |
 | Concurrency | 2275 requests · 0% errors · knee at 50 VU | `run_load_test.py` |
 | Soak — memory / connection leakage | PASS, no leak signal | `run_soak_test.py` |
 | OCR accuracy on paired images | 2/4 scoreable — handwriting mean recall 0.333 (Layer 3 limitation); 2 correctly in review, not indexed | `run_ocr_gate.py` |
-| KG linkage completeness | 18/21 (85%) documents linked | `run_kg_completeness.py` |
+| KG linkage completeness | 18/20 (90%) documents linked | `run_kg_completeness.py` |
 | Cross-functional discovery | NULL on this corpus | `run_cross_functional.py` |
 
 ## 1. `verify_layers.py` — per-layer smoke + latency
@@ -326,15 +326,29 @@ By category (retrieval · answer · provenance):
 
 ## 7. `run_retrieval_baseline.py` — retrieval reach by arm
 
+Re-run 2026-10-17 on all 46 questions, after the harness was fixed to search the way the product
+does: every arm drops test artifacts and the hybrid arm runs with Supabase (alias expansion and the
+artifact filter). Golden dataset only (`include_demo=False`), top 6 results per arm, local
+Elasticsearch plus cloud Qdrant and Neo4j. Retrieval only, no synthesis, so the model switch does
+not affect it. This is not the same number as `run_benchmark.py`'s 46/46 retrieval, which reads the
+synthesis route's larger evidence window.
+
 ```
+  Kairos — Retrieval Baseline   n=46 golden questions
+
   arm                reach            95% CI
   --------------------------------------------
-  exact-only      33/37  89.2%        [75–96%]
-  semantic-only   35/37  94.6%        [82–99%]
-  hybrid          35/37  94.6%        [82–99%]
+  exact-only      41/46  89.1%        [77–95%]
+  semantic-only   44/46  95.7%        [85–99%]
+  hybrid          44/46  95.7%        [85–99%]
 
   Hybrid vs best single method (semantic-only): +0.0 pts
+  NOTE: the confidence intervals overlap — at n=46 this difference is suggestive,
+  not established.
 ```
+
+Prior run (2026-08-17, n=37, before the fix): exact 33/37 (89.2%), semantic 35/37 (94.6%), hybrid
+35/37 (94.6%).
 
 ## 8. `run_safety_eval.py` — adversarial safety
 
@@ -497,7 +511,29 @@ OCR ACCURACY GATE — recall of operationally salient tokens
 
 ## 12. `run_kg_completeness.py` — document-centric linkage completeness
 
-**Current — 2026-08-24, after the D2 backfill:**
+**Current, 2026-10-16** (read-only, against the live stores; same figure as the 2026-10-03 benchmark run in §2):
+
+```
+KG LINKAGE COMPLETENESS
+  linked                 18/20  (90%)
+  excluded — test docs      2   (ann_test_*/scratch: they measure test hygiene, not linkage)
+  unlinked — quarantined    0   (Layer 6 working as designed, not a miss)
+  unlinked — unexplained    2
+  promoted-only edges       0   (field knowledge, no vault document by design)
+  dangling provenance       0
+
+  by document type (linked/active):
+    inspection_report  6/7   85%      procedure    4/4  100%
+    oem_manual         3/4   75%      shift_log    2/2  100%
+    ptw                1/1  100%      regulation   1/1  100%
+    pid_drawing        1/1  100%
+```
+
+Against 2026-08-24: the active vault holds one procedure fewer (20 against 21), and the regulation
+excerpt that was quarantined then is now linked. The two unexplained are still one inspection report and
+one OEM bulletin, the two degraded scans the span-confidence gate holds at `review_required`.
+
+**Prior — 2026-08-24, after the D2 backfill:**
 
 ```
 KG LINKAGE COMPLETENESS

@@ -45,7 +45,7 @@ id prefixed `DEMO-`, every date relative to load time so it never goes stale.
 
 | Area | Volume | Notes |
 |---|---|---|
-| Sites | 2 | `SITE_DEMO` (the plant) and `SITE_DEMO_B` (a tank farm), so `/management/cross-site` has real patterns |
+| Sites | 2 | `SITE_DEMO` (the plant) and `SITE_DEMO_B` (a tank farm), so `/overview/cross-site` has real patterns |
 | Assets | about 120 | site, unit, system, equipment, part hierarchy; pumps, exchangers, valves, compressors, instruments, safety systems; all criticality classes; aliases and tag variants |
 | Documents | about 150 | procedures, P&IDs with verified and candidate topology, OEM manuals and bulletins, inspection reports, MoC records, regulatory filings; supersede chains; some held by the OCR gate |
 | Events | about 400 over 90 days | work orders, PTWs, tag-outs, inspections, alarms, shift handovers; recurring-failure chains (the same seal failing twice), some drift between source systems |

@@ -364,7 +364,7 @@ Qdrant treats a missing key as non-matching, so requiring `active` would silentl
 
 LLM synthesis + embedding. Never originates knowledge — only assembles retrieved context.
 
-- `synthesize(query, context, query_category, aliases=None)` — `nvidia/nemotron-3-ultra-550b-a55b` on the first
+- `synthesize(query, context, query_category, aliases=None)` — `nvidia/nemotron-3-super-120b-a12b` on the first
   configured tier (NIM by default), falling through the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
   result after it (an honest "not specified in the sources" must not render as a hedged answer).
 - `evidence_gate(...)` / `result_gate(...)` — those two gates, as separate methods returning a
@@ -401,6 +401,11 @@ LLM synthesis + embedding. Never originates knowledge — only assembles retriev
 - `parse_synthesis_response(answer)` — extracts structured fields from LLM output. The model's own
   trailing lines win (`SOURCES_USED` last match), `CONFIDENCE` takes the **lowest** value, so
   nothing echoed from a document can raise it; `valid_citations(cited, n)` drops numbers outside the evidence.
+- `disclosed_sources(query, body, aliases)` — which sources the pending-MoC notice covers: the cited
+  ones, else the retrieved sources for the assets the question names (a series matches its members),
+  else all retrieved. Always a subset of the retrieved sources, which retrieval has already scoped to
+  the caller, so a typed asset id is never looked up on its own. Shared by `POST /search/synthesize`
+  and its stream through `_record_synthesis`.
 - `result_gate` **fails closed**: no parseable `CONFIDENCE`, or a citation outside the evidence, is a refusal.
 - `parse_rca_response(answer, allowed_sources)` — extracts `hypothesis|evidence_weight|sources` lines;
   a hypothesis may cite only the document ids the model was shown, and weights are clamped to 1.0
@@ -466,10 +471,11 @@ Assembles operator briefs from 5 parallel graph+vector+ES+Supabase queries.
 
 - `assemble_work_order_brief(event)` — pulls failure history, open conflicts, procedures, quarantine flags; appends correlated DCS alarms / PTW context. Headline + body are **operator-readable prose** (grouped record counts, named source documents, ⚠ lines for conflicts/quarantine) — **not** a raw edge dump. No LLM call (phase discipline); authority/verification stay in the source badges.
 - `assemble_ptw_brief(event)` — adds isolation topology, regulatory requirements
-- `assemble_shift_handover_brief(event)` — pulls active WOs, alarms, open PTWs
-- `assemble_recurring_failure_brief(event)` — triggered when same-family WO detected in 90-day window; priority=high headline includes recurrence count
-- `assemble_tag_out_brief(event)` — pulls downstream topology dependencies for the tagged-out asset
-- `assemble_inspection_brief(event)` — triggered on `result=failed` or non-empty `findings`; includes finding text and referenced document
+- `assemble_shift_handover_brief(event)` — pulls active WOs, alarms, open PTWs. Shift leads are shown by name (`identity.display_names`), work orders and alarms by asset and description rather than event id. Site-wide, so it cites no document and the inbox says "From plant events, no source document" instead of a count of zero
+- `assemble_recurring_failure_brief(event)` — triggered when same-family WO detected in 90-day window; priority=high headline includes recurrence count. The related records found by vector search are the brief's sources; the body says how many there are rather than listing raw document ids with scores
+- `assemble_tag_out_brief(event)` — pulls downstream topology dependencies for the tagged-out asset, and cites the asset's linked documents (`get_asset_knowledge_at`) as its sources
+- `assemble_inspection_brief(event)` — triggered on `result=failed` or non-empty `findings`; includes finding text and referenced document, and cites the asset's linked documents as its sources
+- Every date in a brief body goes through `_when` ("8 Oct 2026, 11:56 UTC"), never a raw ISO string. The PTW brief summarises its knowledge records in one line instead of repeating a "document link · confidence" line per record; the records are its sources. Bodies are written when a brief is assembled, so briefs already stored keep their old text until regenerated
 - `deliver(brief, redis)` — saves to `briefs` table, publishes to `REDIS_STREAM_BRIEFS`, records `kairos.briefs.delivered` metric. 4-hour cool-down per (recipient, asset, trigger event type).
 - `_get_correlated_events(event_id)` — fetches all events sharing the same `compound_event_id` via Supabase
 
@@ -644,12 +650,16 @@ documents without excluding them reports test hygiene rather than the plant.
   decision **D8**: both name a file after this system or its harness rather than after plant
   equipment. A `_test\.ext` stem rule was rejected — it would also match a plausible real
   `hydro_test.pdf`, and hiding plant evidence is the one failure this predicate must not have.
-- `document_rows(supabase, document_ids)` — resolves ids to `documents` rows (`document_id`, `file_name`)
-  in one bulk lookup (chunked at 200). **Read-only.** Fails *open*: on a lookup error it returns `[]`, so a
+- `document_rows(supabase, document_ids, columns="document_id, file_name")` — resolves ids to `documents`
+  rows in one bulk lookup (chunked at 200); `columns` adds fields a caller needs. The one id-batch lookup
+  of that table: `GET /search/` reads `vault_url` and the brief engine's `_resolve_source_documents`
+  reads titles, types and links through it (the latter also drops test artifacts from brief sources). **Read-only.** Fails *open*: on a lookup error it returns `[]`, so a
   Supabase blip shows extra noise rather than blanking a real graph.
-- `partition_test_artifacts(rows)` — pure; given those rows, returns the test-artifact ids.
+- `partition_test_artifacts(rows)` — pure; given those rows, returns the test-artifact ids. Used by
+  search, the asset graph and knowledge panel, and (since 2026-10-17) the RCA pack, which drops them
+  from its evidence before synthesis.
 - `TEST_ASSET_PREFIXES` / `REAL_ASSET_CYPHER` — the same idea for **assets**. Prefixes: `QA-TEST-`
-  (a manual QA sweep's `QA-TEST-155635`, matched 1 of 11 live assets and 0 of the 10 golden ones)
+  (a manual QA sweep's `QA-TEST-155635`, matched 1 of 11 live assets and 0 of the 10 golden ones; that asset was deleted on 2026-10-17 and the prefix stays as the naming rule for a manual sweep)
   plus the integration suite's `ASSET-TEST-`, `ASSET-DEDUP-`, `ASSET-EV-`, `ASSET-ACK-`,
   `ASSET-FRESH-`. The guard is a Cypher fragment over `a`, placed **inside** the asset-list, compliance
   (gaps, dashboard, audit pack) and coverage queries, because filtering a paginated or aggregated
@@ -1044,7 +1054,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `NVIDIA_NIM_API_KEY` | `""` | Required for NIM synthesis, NER, and OCR |
-| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
+| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
 | `NVIDIA_NIM_NER_MODEL` | `meta/llama-3.2-11b-vision-instruct` | NER extraction. Was `mistralai/ministral-14b-instruct-2512`, **deprecated by NVIDIA** — the endpoint hangs until timeout and `NERService` degrades silently to its regex fallback (ASSET_TAG only). Verify any replacement responds before switching. |
 | `NVIDIA_NIM_NER_TIMEOUT` | `120.0` | NER's own per-attempt cap (3 attempts on a timeout or 5xx). Separate from `NVIDIA_NIM_TIMEOUT`, which must stay under the 90 s synthesis budget; NER runs in background ingestion, and a miss drops the document to the regex fallback. |
 | `NVIDIA_NIM_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | OCR for scanned docs/images |
@@ -1244,6 +1254,7 @@ All logs via `structlog`. Never use `print()` or stdlib `logging`. Notable log e
 - `activity.ingest_lag_recorded` — document_id, lag_minutes (observation; `valid_from` unaffected)
 - `activity.occurred_at_in_future` / `activity.occurred_at_unparseable` — fall back to ingest time
 - `rca_pack.generated` — asset_id, failure_code, timeline_count
+- `rca_pack.test_artifacts_excluded` / `brief_engine.test_artifacts_excluded` — how many test documents a pack or brief hid
 - `document_pipeline.missing_vault_path` — document_id (graceful early exit)
 - `offboarding.programme_created` — session_id, personnel_id, sessions
 

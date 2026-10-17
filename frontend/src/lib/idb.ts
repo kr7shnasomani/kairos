@@ -43,20 +43,6 @@ export async function enqueueWrite(path: string, method: string, body: unknown):
   }
 }
 
-export async function getQueueLength(): Promise<number> {
-  if (typeof indexedDB === "undefined") return 0;
-  const db = await open();
-  try {
-    return await new Promise<number>((res, rej) => {
-      const r = db.transaction(STORE, "readonly").objectStore(STORE).count();
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
-    });
-  } finally {
-    db.close();
-  }
-}
-
 // Bounded so one hung endpoint can't stall the whole sequential replay loop.
 const REPLAY_TIMEOUT_MS = 8000;
 

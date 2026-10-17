@@ -65,11 +65,6 @@ export function useCountUp(target: number, duration = 600): number {
   return value;
 }
 
-/** Count-up with the redesign's 800ms default — alias of useCountUp. */
-export function useAnimatedNumber(target: number, duration = 800): number {
-  return useCountUp(target, duration);
-}
-
 /** Reveal-once-on-scroll. Consumer applies the transition classes and flips
  *  them on `revealed`. Reduced motion (or no IntersectionObserver) reveals
  *  immediately — content is never hidden from anyone. */

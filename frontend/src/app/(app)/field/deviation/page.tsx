@@ -74,7 +74,7 @@ export default function DeviationPage() {
             type="text"
             value={assetId}
             onChange={(e) => setAssetId(e.target.value)}
-            placeholder="e.g. P-101"
+            placeholder="e.g. P-1101A"
             required
             aria-required="true"
             className="mt-1.5 min-h-[52px] w-full rounded-xl border border-line bg-surface-2 px-4 text-sm outline-none transition-colors focus-visible:border-accent"
@@ -107,7 +107,7 @@ export default function DeviationPage() {
             type="text"
             value={topology}
             onChange={(e) => setTopology(e.target.value)}
-            placeholder="e.g. P-101 → suction valve → isolation boundary"
+            placeholder="e.g. P-1101A → suction valve → isolation boundary"
             className="mt-1.5 min-h-[52px] w-full rounded-xl border border-line bg-surface-2 px-4 text-sm outline-none transition-colors focus-visible:border-accent"
           />
         </div>

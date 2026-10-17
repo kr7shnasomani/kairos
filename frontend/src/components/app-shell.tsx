@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandLink } from "./brand-link";
 import { MobileAppHeader } from "./mobile-app-header";
 import { CommandPalette, ShortcutsHelp, type PaletteItem } from "./command-palette";
@@ -105,61 +105,24 @@ function GovernorPill({ userId }: { userId: string }) {
     <div
       title={`Governor: ${gov.push_count_last_hour}/${gov.ceiling} briefs/hr`}
       className={cn(
-        "rail-governor rail-link mx-3 my-1 flex items-center justify-between px-2.5 py-1.5 text-label",
+        "rail-link mx-3 my-1 flex items-center justify-between px-2.5 py-1.5 text-label",
         suppressed
           ? "bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] text-danger"
           : "bg-surface-2 text-muted",
       )}
     >
-      {/* Collapsed the wording goes, the count stays — the ratio is the signal,
-          and `title` above still carries the full sentence. */}
-      <span className="rail-label font-semibold">{suppressed ? "Governor suppressed" : "Governor active"}</span>
+      <span className="font-semibold">{suppressed ? "Governor suppressed" : "Governor active"}</span>
       <span className="tabular font-medium">{gov.push_count_last_hour}/{gov.ceiling}</span>
     </div>
   );
-}
-
-/** Rail collapse (review item 2). `<html data-nav>` is the single source of truth,
- *  set before paint in layout.tsx so a collapsed rail never flashes wide. React
- *  only *observes* it — the width itself is pure CSS.
- *
- *  useSyncExternalStore rather than useState+useEffect: the attribute is external
- *  state, and the server snapshot lets React render `false` on the server without
- *  a hydration mismatch. The effect version had to setState synchronously on mount
- *  to catch up, which is a cascading render (react-hooks/set-state-in-effect) and
- *  briefly rendered the wrong label. */
-const subscribeToNav = (onChange: () => void) => {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, { attributeFilter: ["data-nav"] });
-  return () => observer.disconnect();
-};
-const navIsCollapsed = () => document.documentElement.getAttribute("data-nav") === "collapsed";
-const navServerSnapshot = () => false;
-
-function useRailCollapsed(): [boolean, () => void] {
-  const collapsed = useSyncExternalStore(subscribeToNav, navIsCollapsed, navServerSnapshot);
-  // Writes the attribute only; the observer above turns that into a re-render.
-  const toggle = () => {
-    const next = !navIsCollapsed();
-    const el = document.documentElement;
-    if (next) el.setAttribute("data-nav", "collapsed");
-    else el.removeAttribute("data-nav");
-    try {
-      localStorage.setItem("kairos-nav", next ? "collapsed" : "expanded");
-    } catch {
-      // Private mode / storage disabled: the rail still toggles for this session.
-    }
-  };
-  return [collapsed, toggle];
 }
 
 /** Global actions the rail owns on desktop (there is no top bar): search, the primary
  *  action, and the account. Optional so the rail renders standalone in tests. */
 export type RailActions = { onSearch: () => void; onCreate?: () => void; onOpenUser: () => void; accountName: string; accountInitials: string };
 
-export function SidebarContent({ onNavigate, role, user, collapsible = false, actions }: { onNavigate?: () => void; role: Role; user: User | null; collapsible?: boolean; actions?: RailActions }) {
+export function SidebarContent({ onNavigate, role, user, actions }: { onNavigate?: () => void; role: Role; user: User | null; actions?: RailActions }) {
   const pathname = usePathname();
-  const [railCollapsed, toggleRail] = useRailCollapsed();
   const homeHref = role === "field_worker" || role === "demo" ? roleHome(role) : "/overview";
   const shortcut = getSearchShortcut(typeof navigator === "undefined" ? undefined : navigator.platform);
   const sections = NAV
@@ -168,18 +131,12 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
 
   return (
     <div className="flex h-full flex-col">
-      {/* Layout here is CSS, not `railCollapsed` — state is false on the first
-          client render, so a state-driven row would paint the expanded layout
-          inside a 68px rail for one frame on every load. */}
-      {/* Fixed 56px in BOTH states. The collapse toggle lives at the foot precisely
-          so this row never has to grow to hold it: when it stacked here, collapsing
-          pushed the whole icon column ~90px down and nothing lined up any more. */}
       <div className="rail-brand-row flex h-14 shrink-0 items-center gap-2 border-b border-line px-5">
         <BrandLink href={homeHref} />
       </div>
 
       {actions && (
-        <div className="rail-actions flex shrink-0 gap-2 px-3 pt-4">
+        <div className="flex shrink-0 gap-2 px-3 pt-4">
           <button
             type="button"
             onClick={actions.onSearch}
@@ -188,8 +145,8 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
             className="rail-link flex h-9 min-w-0 flex-1 items-center gap-3 border border-line px-2.5 text-body text-muted transition-colors hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--line))] hover:text-ink"
           >
             <SharedIcon name="magnifying-glass" className="size-4 shrink-0" />
-            <span className="rail-label flex-1 text-left">Search</span>
-            <kbd className="rail-label border border-line px-1.5 font-sans text-micro text-muted">{shortcut}</kbd>
+            <span className="flex-1 text-left">Search</span>
+            <kbd className="border border-line px-1.5 font-sans text-micro text-muted">{shortcut}</kbd>
           </button>
           {actions.onCreate && (
             <button
@@ -197,7 +154,6 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
               onClick={actions.onCreate}
               aria-label="Ingest document"
               title="Ingest document"
-              data-rail-ingest
               className="fill-sweep grid size-9 shrink-0 place-items-center bg-accent text-on-accent"
             >
               <SharedIcon name="plus" className="relative z-10 size-4" />
@@ -206,10 +162,9 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
         </div>
       )}
 
-      {/* No section headings. They cost four rows of chrome, and collapsing the rail
-          hid them anyway, so the icon column re-flowed on every toggle. The grouping
-          survives as spacing plus each list's aria-label, and the ⌘K palette still
-          groups its results by the same NAV section names. */}
+      {/* No section headings: they cost four rows of chrome. The grouping survives as
+          spacing plus each list's aria-label, and the ⌘K palette still groups its
+          results by the same NAV section names. */}
       <nav className="rail-nav flex-1 space-y-[var(--rail-section-gap,1.25rem)] overflow-y-auto px-3 pb-2 pt-5 scrollbar-none">
         {sections.map((section) => (
           <ul key={section.group || "top"} aria-label={section.group || undefined} className="space-y-1">
@@ -231,7 +186,7 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
                     )}
                   >
                     <Icon name={item.icon} active={active} />
-                    <span className="rail-label">{item.label}</span>
+                    <span>{item.label}</span>
                   </Link>
                 </li>
               );
@@ -245,7 +200,7 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
 
       {/* Account lives at the foot of the rail, as in Linear / Vercel / Notion.
           Settings, System Health (admins) and sign-out are inside the menu it opens. */}
-      <div className="rail-foot mx-3 mb-3 mt-2 flex items-center gap-2 border-t border-line pt-3">
+      <div className="mx-3 mb-3 mt-2 flex items-center gap-2 border-t border-line pt-3">
       {actions ? (
         <button
           type="button"
@@ -254,31 +209,16 @@ export function SidebarContent({ onNavigate, role, user, collapsible = false, ac
           className="rail-link flex min-w-0 flex-1 items-center gap-3 px-2 py-1 text-left transition-colors hover:text-ink"
         >
           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-label font-bold text-ink">{actions.accountInitials}</span>
-          <span className="rail-label min-w-0 flex-1 leading-tight">
+          <span className="min-w-0 flex-1 leading-tight">
             <span className="block truncate text-body text-ink">{actions.accountName}</span>
             <span className="block text-micro capitalize text-muted">{role.replace(/_/g, " ")}</span>
           </span>
-          <SharedIcon name="caret-up-down" className="rail-label size-4 shrink-0 text-muted" />
+          <SharedIcon name="caret-up-down" className="size-4 shrink-0 text-muted" />
         </button>
       ) : (
         <Link href="/settings" onClick={onNavigate} aria-label="System Settings" title="System Settings" className="rail-link flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2 text-body text-muted transition-colors hover:bg-surface-2 hover:text-ink">
-          <Icon name="settings" /><span className="rail-label">System Settings</span>
+          <Icon name="settings" /><span>System Settings</span>
         </Link>
-      )}
-      {/* Exactly one toggle in the DOM — a second, hidden copy would shadow it in
-          the accessibility tree. Collapsed, it drops under the account square:
-          growth at the foot costs scroll height, never icon alignment. */}
-      {collapsible && (
-        <button
-          type="button"
-          onClick={toggleRail}
-          aria-expanded={!railCollapsed}
-          aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
-          title={railCollapsed ? "Expand navigation" : "Collapse navigation"}
-          className="grid size-8 shrink-0 place-items-center text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <Icon name="chevron" className={cn("size-4 transition-transform duration-200 motion-reduce:transition-none", !railCollapsed && "rotate-180")} />
-        </button>
       )}
       </div>
 
@@ -500,7 +440,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (authed !== true) {
     return (
       <div className="flex min-h-dvh">
-        <aside data-rail className="sidebar-scope hidden w-[var(--rail-w)] shrink-0 border-r border-line transition-[width] duration-200 motion-reduce:transition-none lg:block" aria-hidden="true">
+        <aside data-rail className="sidebar-scope hidden w-[var(--rail-w)] shrink-0 border-r border-line lg:block" aria-hidden="true">
           <div className="sticky top-0 h-dvh px-4 py-4">
             <BrandLink href="/overview" />
           </div>
@@ -528,9 +468,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Desktop sidebar — all roles; sidebar-scope remaps tokens to the dark rail palette.
           There is no desktop top bar: search, Ingest and the account live in the rail. */}
-      <aside data-rail className="sidebar-scope hidden w-[var(--rail-w)] shrink-0 border-r border-line transition-[width] duration-200 motion-reduce:transition-none lg:block print:hidden">
+      <aside data-rail className="sidebar-scope hidden w-[var(--rail-w)] shrink-0 border-r border-line lg:block print:hidden">
         <div className="sticky top-0 h-dvh">
-          <SidebarContent role={role} user={user} collapsible actions={railActions} />
+          <SidebarContent role={role} user={user} actions={railActions} />
         </div>
       </aside>
 

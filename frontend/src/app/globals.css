@@ -779,78 +779,17 @@ button:not(:disabled),
 }
 
 /* ---------------------------------------------------------------------------
-   Nav rail — collapsible (senior review item 2)
-
-   Width and the collapsed presentation are driven by `data-nav` on <html>,
-   which layout.tsx sets BEFORE first paint from localStorage. Doing it in CSS
-   rather than React state is what keeps a collapsed rail from flashing wide on
-   every navigation; the React state only owns the toggle button and writes the
-   preference back.
-
-   Every collapsed-state selector is scoped under `[data-rail]`, which only the
-   desktop aside carries. The mobile drawer renders the same component and must
-   keep its labels regardless of the desktop preference.
+   Nav rail. Fixed width and never collapsible on desktop (owner decision
+   2026-10-17); below `lg` the same component opens as a drawer instead.
 --------------------------------------------------------------------------- */
 :root {
   --rail-w: 316px;
 }
-:root[data-nav="collapsed"] {
-  --rail-w: 68px;
-}
 
-/* Hiding with display:none also removes the text from the accessibility tree,
-   which is why every rail link carries its own aria-label. */
-:root[data-nav="collapsed"] [data-rail] .rail-label {
-  display: none;
-}
-/* Every rail row is the same height in BOTH states. Without this the row height
-   comes from its content: the label's line box (19.5px) expanded vs the bare
-   18px icon collapsed. That 1.5px compounds down the column — the last icon
-   landed 20px off its expanded position, so collapsing re-flowed the rail
-   instead of minimising it in place. */
+/* Every rail row is the same height, so the column keeps one rhythm whatever
+   each row holds (a label's line box is 19.5px, a bare icon 18px). */
 [data-rail] .rail-link {
   min-height: 2.25rem;
-}
-:root[data-nav="collapsed"] [data-rail] .rail-link {
-  justify-content: center;
-}
-/* "0/6" with no label is a riddle, and the row is what tipped the collapsed admin
-   rail into scrolling. The governor state comes back when the rail expands. */
-:root[data-nav="collapsed"] [data-rail] .rail-governor {
-  display: none;
-}
-/* 68px has room for one square, so Ingest drops out (⌘K and /documents still
-   reach it) rather than stacking: a second row here moved every nav icon down. */
-:root[data-nav="collapsed"] [data-rail] .rail-actions {
-  justify-content: center;
-}
-:root[data-nav="collapsed"] [data-rail] [data-rail-ingest] {
-  display: none;
-}
-/* The foot may grow — it eats scroll height, not alignment. */
-:root[data-nav="collapsed"] [data-rail] .rail-foot {
-  flex-direction: column;
-  align-items: center;
-}
-:root[data-nav="collapsed"] [data-rail] .rail-actions > .rail-link {
-  flex: none;
-  width: 2.25rem;
-  padding-inline: 0;
-}
-:root[data-nav="collapsed"] [data-rail] .rail-brand {
-  justify-content: center;
-  padding-inline: 0;
-}
-/* The auth-gate rail renders BrandLink without the shell around it. */
-:root[data-nav="collapsed"] [data-rail] .rail-brand > img {
-  margin-inline: auto;
-}
-:root[data-nav="collapsed"] [data-rail] .rail-brand-row {
-  /* Height, direction and the bottom hairline all stay: the row holds only the
-     mark now, so it fits 68px unchanged and the header line still runs across
-     rail and content. */
-  justify-content: center;
-  padding-inline: 0;
 }
 
 /* Short viewports (laptop at 125% scale, browser with two toolbar rows): the
@@ -876,7 +815,7 @@ button:not(:disabled),
   [data-rail] .rail-link {
     /* 7px, not 4px: at 4px rows sat 2px apart and read as a cramped list.
        The 34px floor (vs 36px on tall screens) buys back the ~32px the full
-       admin rail needs here, and applies to BOTH states so rows stay aligned. */
+       admin rail needs here. */
     padding-block: 0.4375rem;
     min-height: 2.125rem;
   }

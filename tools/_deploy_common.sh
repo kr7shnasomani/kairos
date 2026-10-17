@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SSH_KEY="${KAIROS_SSH_KEY:-$HOME/.ssh/kairos-aws.pem}"
 SERVER="${KAIROS_SERVER:-ubuntu@kairos-deterium.duckdns.org}"
 API_URL="${KAIROS_API_URL:-https://kairos-deterium.duckdns.org}"
-WEB_URL="${KAIROS_WEB_URL:-https://kairos-deterium.vercel.app}"
+WEB_URL="${KAIROS_WEB_URL:-https://kairos.deterium.xyz}"
 VERCEL_SCOPE="${KAIROS_VERCEL_SCOPE:-kr1shnasomani-preview}"
 SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=20)
 

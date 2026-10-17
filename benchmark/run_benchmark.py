@@ -392,12 +392,13 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
         else:
             print(f"    {cat:<22} {d['retr']}/{d['n']} · {d['correct']}/{d['n']} · {d['prov']}/{d['n']}")
     try:
-        print(f"  KG linkage (assets):               {await _kg_completeness()}")
         # The PS criterion is document-centric: "assets linked" reads 100% as soon as every asset
         # has one edge, which is reachability rather than completeness. Imported rather than
-        # reimplemented so both harnesses report the same number.
+        # reimplemented so both harnesses report the same number and exclude the same showcase documents.
         from run_kg_completeness import measure, summary_line
-        print(f"  KG linkage (documents):            {summary_line(await measure())}")
+        m = await measure()
+        print(f"  KG linkage (assets):               {await _kg_completeness(m['showcase_docs'])}")
+        print(f"  KG linkage (documents):            {summary_line(m)}")
     except Exception as e:  # noqa: BLE001
         print(f"  KG linkage:                        (unavailable: {type(e).__name__})")
     print("  Entity-extraction F1: backend/scripts/run_model_validation.py (Layer-0 model gate)\n")
@@ -446,7 +447,7 @@ def _validity(via: "Counter[str]", graded: int, total: int, aborted: bool) -> st
     return f"VALID — {same_model}/{graded} answered by the pinned Nemotron model."
 
 
-async def _kg_completeness() -> str:
+async def _kg_completeness(showcase_docs: list[str]) -> str:
     from neo4j import AsyncGraphDatabase
 
     from api.config import Settings
@@ -456,15 +457,20 @@ async def _kg_completeness() -> str:
     try:
         async with driver.session(database=s.NEO4J_DATABASE) as sess:
             async def scalar(cypher: str, key: str) -> int:
-                rec = await (await sess.run(cypher)).single()
+                rec = await (await sess.run(cypher, demo=showcase_docs)).single()
                 return int(rec[key]) if rec and rec[key] is not None else 0
+
+            # Edges citing a showcase document belong to the showcase plant, not the golden graph.
+            real = "(k.document_id IS NULL OR NOT k.document_id IN $demo)"
 
             assets = await scalar("MATCH (a:Asset) WHERE NOT a.asset_id STARTS WITH 'DEMO-' RETURN count(a) AS n", "n")
             linked = await scalar(
                 "MATCH (a:Asset)-[:KNOWLEDGE_EDGE]-() WHERE NOT a.asset_id STARTS WITH 'DEMO-' RETURN count(DISTINCT a) AS n", "n"
             )
-            edges = await scalar("MATCH ()-[k:KNOWLEDGE_EDGE]->() RETURN count(k) AS n", "n")
-            verified = await scalar("MATCH ()-[k:KNOWLEDGE_EDGE]->() WHERE k.verification_status='verified' RETURN count(k) AS n", "n")
+            edges = await scalar(f"MATCH ()-[k:KNOWLEDGE_EDGE]->() WHERE {real} RETURN count(k) AS n", "n")
+            verified = await scalar(
+                f"MATCH ()-[k:KNOWLEDGE_EDGE]->() WHERE {real} AND k.verification_status='verified' RETURN count(k) AS n", "n"
+            )
     finally:
         await driver.close()
     return (f"{linked}/{assets} assets linked ({(100*linked//assets) if assets else 0}%) · "

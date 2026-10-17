@@ -1,8 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MetricCard } from "./ui";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui-card";
-import { ErrorBoundary } from "./error-boundary";
+import { Card, CardDescription, CardHeader, CardTitle } from "./ui-card";
 
 describe("MetricCard (KpiCard alias)", () => {
   afterEach(cleanup);
@@ -39,25 +38,10 @@ describe("foundations mount check", () => {
           <CardTitle>Title</CardTitle>
           <CardDescription>Sub</CardDescription>
         </CardHeader>
-        <CardContent>Body</CardContent>
+        <p>Body</p>
       </Card>,
     );
     expect(screen.getByText("Title")).toBeInTheDocument();
     expect(screen.getByText("Body")).toBeInTheDocument();
-  });
-
-  it("ErrorBoundary catches a render throw and shows the retry fallback", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    function Bomb(): React.ReactElement {
-      throw new Error("kaboom");
-    }
-    render(
-      <ErrorBoundary>
-        <Bomb />
-      </ErrorBoundary>,
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong");
-    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    spy.mockRestore();
   });
 });

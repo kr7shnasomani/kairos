@@ -18,10 +18,10 @@ describe("Home", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: /the plant already knows/i })).toBeInTheDocument();
 
-    // Two ways in, not three: the header CTA and the footer CTA. The duplicate
-    // "Sign in" was removed, and the hero's primary action is the demo instead.
+    // One way in: the header CTA. The duplicate "Sign in" and the footer button were
+    // removed, and the hero's primary action is the demo instead.
     const workspaceLinks = screen.getAllByRole("link", { name: /open workspace/i });
-    expect(workspaceLinks).toHaveLength(2);
+    expect(workspaceLinks).toHaveLength(1);
     for (const link of workspaceLinks) expect(link).toHaveAttribute("href", "/login");
     expect(screen.queryByRole("link", { name: /sign in/i })).not.toBeInTheDocument();
 
@@ -62,7 +62,7 @@ describe("Home", () => {
     expect(how).toBeInTheDocument();
     // Five numbered steps, ending on the refusal — the step people miss.
     expect(within(how).getAllByRole("listitem")).toHaveLength(5);
-    expect(how).toHaveTextContent(/a work order is raised on pump p-101/i);
+    expect(how).toHaveTextContent(/a work order is raised on pump p-1101a/i);
     expect(how).toHaveTextContent(/when the evidence is thin, it says so/i);
 
     // Both must precede the first capability claim in document order.
@@ -143,7 +143,7 @@ describe("Home", () => {
     expect(screen.getByText("18 / 20")).toBeInTheDocument();
     expect(screen.getByText("6 / 6")).toBeInTheDocument();
     // Scoped to the <p>: a bare regex also matches every ancestor's textContent.
-    expect(screen.getByText(/forty-six questions written by domain experts/i, { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByText(/forty-six domain-expert questions, written against a fixed answer key/i, { selector: "p" })).toBeInTheDocument();
     // Said once on the chart's own sub-label, and explained once in the filled cell
     // at the foot of the section. It used to be in the section intro as well, which
     // made that cell a repeat rather than the explanation.
@@ -233,7 +233,7 @@ describe("Home", () => {
       "https://drive.google.com/file/d/18ZO95MckNtESg-Z2ruRBNnKq6JyB57rP/view?usp=drive_link",
     ];
     for (const href of hrefs) {
-      const ok = href === "/login" || href === "/" || href?.startsWith("#") || allowedExternal.includes(href ?? "");
+      const ok = href === "/login" || href === "/docs" || href === "/" || href?.startsWith("#") || allowedExternal.includes(href ?? "");
       expect(ok, `unexpected footer href: ${href}`).toBe(true);
     }
     // Every external link opens safely.

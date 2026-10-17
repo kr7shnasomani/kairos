@@ -76,23 +76,23 @@ const problemStats: { figure: string; label: string; body: string; source: strin
 const scenario: { tag: string; title: string; body: string }[] = [
   {
     tag: "The trigger",
-    title: "A work order is raised on pump P-101",
+    title: "A work order is raised on pump P-1101A",
     body: "A technician is assigned to a seal failure. Nobody searches for anything. Kairos sees the work order the moment it is created, and starts gathering what the person doing this job needs to know.",
   },
   {
     tag: "What it finds",
-    title: "Four failures, a superseded part, an ignored warning",
-    body: "P-101 has failed this way four times in eight years. The vendor changed the seal specification 18 months ago. Six months ago, a technician recorded a voice note about unusual vibration that nobody ever investigated.",
+    title: "Four failures, a raised flow limit, an unlogged warning",
+    body: "P-1101A has failed with a seal fault four times in 84 days. A vendor bulletin raised its minimum flow from 120 to 150 m³/h, and the flow before each failure was below both. A technician's voice note says the minimum-flow valve is not opening fully, and nobody has acted on it.",
   },
   {
     tag: "The check",
     title: "Each fact is ranked by who said it",
-    body: "A regulation outranks a vendor manual, and a vendor manual outranks a local note. Nobody has verified the vibration note, so Kairos labels it as unverified instead of mixing it in with established fact.",
+    body: "A regulation outranks a vendor manual, and a vendor manual outranks a local note. Nobody has verified the voice note, so Kairos labels it as unverified instead of mixing it in with established fact.",
   },
   {
     tag: "The delivery",
     title: "A brief reaches the technician before they walk out",
-    body: "One screen on a phone shows the history, the part number that changed, the unverified warning, and a link to every source document behind it. They read it before they touch the pump, not after.",
+    body: "One screen on a phone shows the history, the flow limit that changed, the unverified warning, and a link to every source document behind it. They read it before they touch the pump, not after.",
   },
   {
     tag: "The refusal",
@@ -149,7 +149,7 @@ const capabilities: {
     Mock: ComplianceMock,
     eyebrow: "Quality and regulatory",
     title: "Gaps found before the auditor finds them",
-    body: "The demo loads twelve clauses from OISD-117 and ISO 45001, and seven more frameworks ship as options, among them PESO, CEA, IEC 62443 and FDA 21 CFR Part 11. Kairos checks them continuously against current procedures, equipment state and inspection records. Every finding is tied to one clause: a gap means no document of the type that clause requires is linked to that asset. You can export an audit evidence pack at any time.",
+    body: "The demo loads twelve clauses from OISD-117 and ISO 45001, and seven more are named in the framework catalogue and need their clauses loaded, among them PESO, CEA, IEC 62443 and FDA 21 CFR Part 11. Kairos checks them continuously against current procedures, equipment state and inspection records. Every finding is tied to one clause: a gap means no document of the type that clause requires is linked to that asset. You can export an audit evidence pack at any time.",
   },
   {
     id: "ingestion",
@@ -470,7 +470,7 @@ const faqGroups = [
   {
     name: "Evidence",
     items: [
-      ["How was it evaluated?", "Forty-six questions written by domain experts across fifteen categories, graded by fixed rules. Retrieval, answer quality and sourcing are scored separately, and a refusal counts as correct when refusing was the right call."],
+      ["How was it evaluated?", "Forty-six domain-expert questions, written against a fixed answer key, across fifteen categories and graded by fixed rules. Retrieval, answer quality and sourcing are scored separately, and a refusal counts as correct when refusing was the right call."],
       ["Why quote a confidence interval for answer quality?", "Because 43 out of 46 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 82 to 98 percent. Retrieval and sourcing are graded by fixed rules and stay at 46 out of 46. Every run is also checked for validity, and we never quote a run in which more than a tenth of the answers came from a fallback model."],
       ["What do these numbers not cover?", "Four things, and we would rather name them. The soak test ran for one hour, so it says nothing about days. The validation set is small: 40 labels in total and only 3 for ORGANIZATION, so quote a per-type score with the number of labels behind it. Fifty virtual users against a demo-sized dataset is not evidence that the system handles a 10,000-asset plant. And hybrid retrieval reaches 35 of 37, which is exactly what semantic search alone reaches, so we report it as matching the best single method rather than beating it."],
       ["Is any of this running against a real plant?", "No. Every figure is measured against a golden dataset we wrote ourselves, and Kairos is not connected to any live plant. That is the intended limit of this MVP. We would rather say so than let a number imply otherwise."],
@@ -479,13 +479,14 @@ const faqGroups = [
   },
 ] as const;
 
-// Footer links point only at real destinations: page anchors and /login.
-const footerColumns: { heading: string; links: [string, string][] }[] = [
-  { heading: "Product", links: [["Capabilities", "#capabilities"], ["Use cases", "#field"]] },
-  { heading: "How it works", links: [["System design", "#system"], ["Provenance", "#provenance"], ["Evals", "#evidence"], ["FAQ", "#faq"]] },
-];
-
 const GITHUB_URL = "https://github.com/kr7shnasomani/kairos";
+
+// Footer links point only at real destinations: page anchors, /docs, /login and the repository.
+const footerColumns: { heading: string; links: [string, string][] }[] = [
+  { heading: "Product", links: [["The problem", "#problem"], ["Capabilities", "#capabilities"], ["Use cases", "#field"]] },
+  { heading: "How it works", links: [["The pipeline", "#how"], ["System design", "#system"], ["Provenance", "#provenance"], ["Evals", "#evidence"]] },
+  { heading: "Resources", links: [["Documentation", "/docs"], ["FAQ", "#faq"], ["Source code", GITHUB_URL]] },
+];
 /* ── Capability mocks, one bespoke composition each ─────────────────────
    Shared atoms only; the layouts deliberately differ so the tab list reveals a
    genuinely different picture each time rather than the same card retitled. */
@@ -513,7 +514,7 @@ function BriefsMock() {
       <div className="mt-6 grid gap-2 sm:grid-cols-2">
         <Slab>
           <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-(--lp-accent-text)">Dispatched 07:41</p>
-          <p className="mt-1 font-semibold">P-101 isolation changed</p>
+          <p className="mt-1 font-semibold">P-1101A isolation changed</p>
           <p className="mt-1 text-[11px] text-(--lp-muted)">Rank 1 · to the duty operator</p>
         </Slab>
         <Slab className="border-l-4 border-(--lp-accent)">
@@ -536,7 +537,7 @@ function CopilotMock() {
   return (
     <div>
       <div className="ml-auto w-fit max-w-[85%] bg-black/55 px-3 py-2 text-[12px] text-white">
-        What changed on P-101 since the last turnaround?
+        What changed on P-1101A since the last turnaround?
       </div>
 
       <div className="mt-3 max-w-[92%] border-l-2 border-(--lp-accent) bg-white p-3">
@@ -657,7 +658,7 @@ function GovernanceMock() {
 /** Field capture: a device with a mic and an offline write queue. */
 function FieldMock() {
   const queue = [
-    ["Bearing noise on P-101", "Sent"],
+    ["Seal weep on P-1101A", "Sent"],
     ["Gasket weep, WO-4471", "Queued"],
     ["Photo · gauge reading", "Queued"],
   ] as const;
@@ -794,13 +795,12 @@ function ComplianceMock() {
             <span className="truncate text-[12px] text-(--lp-ink)">{clause}</span>
             <span className="text-[11px] text-(--lp-muted)">{asset}</span>
             <span
-              className={`px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] ${
-                state === "Gap"
-                  ? "bg-(--lp-accent-strong) text-white"
-                  : state === "Unverified"
-                    ? "border border-(--lp-accent) text-(--lp-accent-text)"
-                    : "bg-(--lp-band) text-(--lp-muted)"
-              }`}
+              className={`px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] ${state === "Gap"
+                ? "bg-(--lp-accent-strong) text-white"
+                : state === "Unverified"
+                  ? "border border-(--lp-accent) text-(--lp-accent-text)"
+                  : "bg-(--lp-band) text-(--lp-muted)"
+                }`}
             >
               {state}
             </span>
@@ -1226,9 +1226,8 @@ function HeroVisual() {
             return (
               <span
                 key={source.tag}
-                className={`lp-orbit-node inline-flex items-center gap-2 border bg-(--lp-dark)/78 px-2.5 py-1.5 text-[11px] text-white shadow-lg backdrop-blur-md xl:px-3 xl:py-2 xl:text-[12px] ${
-                  source.cited ? "border-(--lp-accent)/70" : "border-white/12"
-                }`}
+                className={`lp-orbit-node inline-flex items-center gap-2 border bg-(--lp-dark)/78 px-2.5 py-1.5 text-[11px] text-white shadow-lg backdrop-blur-md xl:px-3 xl:py-2 xl:text-[12px] ${source.cited ? "border-(--lp-accent)/70" : "border-white/12"
+                  }`}
                 style={
                   {
                     "--orbit-x": `${((x / 1000) * 100).toFixed(2)}%`,
@@ -1237,9 +1236,8 @@ function HeroVisual() {
                 }
               >
                 <span
-                  className={`shrink-0 text-[9px] font-semibold tracking-[0.08em] ${
-                    source.cited ? "text-(--lp-accent)" : "text-white/50"
-                  }`}
+                  className={`shrink-0 text-[9px] font-semibold tracking-[0.08em] ${source.cited ? "text-(--lp-accent)" : "text-white/50"
+                    }`}
                 >
                   {source.tag}
                 </span>
@@ -1256,7 +1254,7 @@ function HeroVisual() {
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--lp-accent-text)">
                 Checked answer
               </span>
-              <span className="text-[11px] tabular-nums text-(--lp-muted)">2.1 s</span>
+              <span className="text-[11px] tabular-nums text-(--lp-muted)">5.5 s</span>
             </div>
 
             <p className="lp-display mt-3 text-[17px] leading-tight text-pretty text-(--lp-ink) sm:text-[19px]">
@@ -1388,21 +1386,15 @@ export default function Home() {
               The plant{" "}<br />
               already knows.{" "}<br />
               <span className="text-(--lp-accent)">Nobody can find it{" "}<br />
-              in time.</span>
+                in time.</span>
             </h1>
           </div>
 
           <div className="lg:pt-4">
-            <p className="max-w-md text-[16px] leading-6 text-(--lp-muted)">
-              A refinery, a power station or a factory already owns the answer to almost every
-              operational question it has. The answer is buried across drawings, procedures,
-              maintenance history and field notes, in a dozen systems that do not talk to each other.
-            </p>
-            <p className="mt-4 max-w-md text-[16px] leading-6 text-(--lp-muted)">
-              <strong className="font-semibold text-(--lp-ink)">Kairos reads all of it into one
-              system</strong> that answers questions in plain language and shows the source
-              document behind every answer. When the evidence is thin on a safety question, it
-              refuses rather than guesses.
+            <p className="max-w-md text-[18px] leading-7 text-(--lp-muted)">
+              <strong className="font-semibold text-(--lp-ink)">Kairos reads a plant&apos;s drawings,
+                procedures and maintenance history into one system</strong> that answers in plain
+              language, with the source behind every answer.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a
@@ -1472,11 +1464,11 @@ export default function Home() {
 
           <div data-reveal className="mt-14 grid gap-px bg-(--lp-dark-line) sm:grid-cols-2 lg:grid-cols-4">
             {problemStats.map((stat) => (
-              <div key={stat.figure} data-stagger className="lp-cell lp-cell--dark bg-(--lp-dark) p-5">
+              <div key={stat.figure} data-stagger className="lp-cell lp-cell--dark bg-(--lp-dark) flex h-full flex-col p-5">
                 <p className="lp-display text-[40px] leading-none text-(--lp-accent) sm:text-[48px]">{stat.figure}</p>
                 <p className="mt-3 text-[14px] font-semibold text-white">{stat.label}</p>
                 <p className="mt-3 text-[13px] leading-5 text-(--lp-dark-muted)">{stat.body}</p>
-                <p className="mt-4 border-t border-(--lp-dark-line) pt-3 text-[11px] uppercase tracking-[0.08em] text-(--lp-dark-muted)">
+                <p className="mt-auto border-t border-(--lp-dark-line) pt-3 text-[11px] uppercase tracking-[0.08em] text-(--lp-dark-muted)">
                   {stat.source}
                 </p>
               </div>
@@ -1544,7 +1536,7 @@ export default function Home() {
             That last step is the one people miss. A system that always answers is easy to build and
             impossible to trust in a plant.{" "}
             <strong className="font-semibold text-(--lp-ink)">Knowing when to stay quiet is the
-            harder half</strong>, and it is why everything below exists.
+              harder half</strong>, and it is why everything below exists.
           </p>
         </div>
       </section>
@@ -1554,57 +1546,57 @@ export default function Home() {
         <div className="lp-frame relative px-4 py-16 sm:px-6 sm:py-24">
           <Ticks />
           <div className="grid gap-10 sm:gap-14 lg:grid-cols-[1fr_1.35fr]">
-          <div data-reveal>
-            <Eyebrow>Capabilities</Eyebrow>
-            <h2 className="mt-6 text-[30px] text-(--lp-ink) sm:text-[44px]">
-              Answers paired with{" "}<br />their <Box>evidence.</Box>
-            </h2>
-            <p className="mt-6 max-w-md text-[16px] leading-6 text-(--lp-muted)">
-              Kairos already knows the plant&apos;s documents, assets and history. Every screen works
-              the same way, so nothing is claimed without a way to check it.
-            </p>
+            <div data-reveal>
+              <Eyebrow>Capabilities</Eyebrow>
+              <h2 className="mt-6 text-[30px] text-(--lp-ink) sm:text-[44px]">
+                Answers paired with{" "}<br />their <Box>evidence.</Box>
+              </h2>
+              <p className="mt-6 max-w-md text-[16px] leading-6 text-(--lp-muted)">
+                Kairos already knows the plant&apos;s documents, assets and history. Every screen works
+                the same way, so nothing is claimed without a way to check it.
+              </p>
 
-            <div className="mt-10">
-              {capabilities.map((item, index) => {
-                const on = index === capability;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={on}
-                    aria-controls="capability-panel"
-                    onClick={() => setCapability(index)}
-                    className="relative block w-full border-b border-(--lp-line) py-4 pl-3 text-left"
-                  >
-                    {/* 20px / 500-on-active, matching the reference's own tab
+              <div className="mt-10">
+                {capabilities.map((item, index) => {
+                  const on = index === capability;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={on}
+                      aria-controls="capability-panel"
+                      onClick={() => setCapability(index)}
+                      className="relative block w-full border-b border-(--lp-line) py-4 pl-3 text-left"
+                    >
+                      {/* 20px / 500-on-active, matching the reference's own tab
                         metrics and its 0.24s colour easing. Light-section tokens:
                         this list sits on --lp-band, so --lp-accent-text and
                         --lp-tab-idle are the pair that clears 4.5:1 here. At 20px
                         these are not "large text", so --lp-accent (3.35:1) and the
                         dark-band tokens do not qualify. */}
-                    <span
-                      className={`lp-display text-[20px] transition-colors duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${on ? "font-medium text-(--lp-accent-text)" : "text-(--lp-tab-idle) hover:font-medium hover:text-(--lp-ink)"}`}
-                    >
-                      {item.name}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className={`absolute -bottom-px left-0 h-0.5 bg-(--lp-accent) transition-all duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${on ? "w-4/5" : "w-0"}`}
-                    />
-                  </button>
-                );
-              })}
+                      <span
+                        className={`lp-display text-[20px] transition-colors duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${on ? "font-medium text-(--lp-accent-text)" : "text-(--lp-tab-idle) hover:font-medium hover:text-(--lp-ink)"}`}
+                      >
+                        {item.name}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={`absolute -bottom-px left-0 h-0.5 bg-(--lp-accent) transition-all duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${on ? "w-4/5" : "w-0"}`}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Composite card: gradient media on top, white text block beneath. */}
-          {/* Stretches to the tab list's full height rather than sitting short of
+            {/* Composite card: gradient media on top, white text block beneath. */}
+            {/* Stretches to the tab list's full height rather than sitting short of
               it. The slack goes to the media panel, not the copy: a taller mock
               is the point of the card, a taller paragraph is just white space. */}
-          <div id="capability-panel" data-reveal className="lp-card relative flex flex-col border border-(--lp-accent) bg-(--lp-surface)">
-            <Ticks solid bottom />
-            <div key={active.id} className="lp-swap flex flex-1 flex-col">
-              {/* Both regions grow but neither shrinks (`flex: N 0 auto`), and the
+            <div id="capability-panel" data-reveal className="lp-card relative flex flex-col border border-(--lp-accent) bg-(--lp-surface)">
+              <Ticks solid bottom />
+              <div key={active.id} className="lp-swap flex flex-1 flex-col">
+                {/* Both regions grow but neither shrinks (`flex: N 0 auto`), and the
                   slack is split 2:1 so a stretched card gives its extra height to
                   the mock rather than to the paragraph.
 
@@ -1615,22 +1607,22 @@ export default function Home() {
                   automatic minimum size — so the panel shrank to its floor and cut
                   the last rows off Ingestion and Root cause. `shrink-0` restores
                   content as the floor and lets the card grow instead. */}
-              <div className="lp-media lp-dither relative flex min-h-[340px] flex-[2_0_auto] flex-col p-5 sm:min-h-[350px] sm:p-6">
-                <p className="inline-block self-start bg-(--lp-accent-strong) px-3 py-1.5 text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-white sm:text-[11px]">
-                  {active.banner}
-                </p>
-                <div className="mt-5 flex flex-1 flex-col justify-center">
-                  <active.Mock />
+                <div className="lp-media lp-dither relative flex min-h-[340px] flex-[2_0_auto] flex-col p-5 sm:min-h-[350px] sm:p-6">
+                  <p className="inline-block self-start bg-(--lp-accent-strong) px-3 py-1.5 text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-white sm:text-[11px]">
+                    {active.banner}
+                  </p>
+                  <div className="mt-5 flex flex-1 flex-col justify-center">
+                    <active.Mock />
+                  </div>
+                </div>
+
+                <div className="flex min-h-[208px] flex-[1_0_auto] flex-col justify-center p-5 sm:p-7">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-(--lp-accent-text)">{active.eyebrow}</p>
+                  <h3 className="mt-3 text-[24px] text-(--lp-ink) sm:text-[32px]">{active.title}</h3>
+                  <p className="mt-4 max-w-xl text-[15px] leading-6 text-(--lp-muted)">{active.body}</p>
                 </div>
               </div>
-
-              <div className="flex min-h-[208px] flex-[1_0_auto] flex-col justify-center p-5 sm:p-7">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-(--lp-accent-text)">{active.eyebrow}</p>
-                <h3 className="mt-3 text-[24px] text-(--lp-ink) sm:text-[32px]">{active.title}</h3>
-                <p className="mt-4 max-w-xl text-[15px] leading-6 text-(--lp-muted)">{active.body}</p>
-              </div>
             </div>
-          </div>
           </div>
 
           {/* The same subject at a different altitude: eight screens above, the ten
@@ -1804,13 +1796,13 @@ export default function Home() {
               <Box fill>Provenance at 100%.</Box>
             </h2>
             <p className="mt-6 max-w-xl text-[16px] leading-6 text-(--lp-dark-muted)">
-              Forty-six questions written by domain experts across fifteen categories, run
-              against the live stack. Higher is better.
+              Forty-six domain-expert questions, written against a fixed answer key, across
+              fifteen categories and run against the live stack. Higher is better.
             </p>
           </div>
 
           <div data-reveal className="mt-14">
-            <p className="text-[11px] uppercase tracking-[0.12em] text-(--lp-dark-muted)">Graded outcomes · 37 questions</p>
+            <p className="text-[11px] uppercase tracking-[0.12em] text-(--lp-dark-muted)">Graded outcomes, 46 questions</p>
 
             {/* pt-24 reserves room for the badge, value and sub-line stacked
                 above each bar; a 100% bar would otherwise push them off. */}
@@ -2091,24 +2083,16 @@ export default function Home() {
       {/* ── Footer ──────────────────────────────────────────────────────── */}
       <footer className="bg-(--lp-bg)">
         <div className="lp-frame px-4 py-14 sm:px-6">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[2.5fr_repeat(2,0.6fr)]">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[2fr_repeat(3,0.6fr)]">
             <div>
               <div className="flex items-center gap-2.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.png" alt="" width={26} height={26} className="object-cover" />
-<span className="lp-display text-[22px] text-(--lp-ink)">Kairos</span>
+                <span className="lp-display text-[22px] text-(--lp-ink)">Kairos</span>
               </div>
               <p className="mt-4 max-w-xs text-[14px] leading-5 text-(--lp-muted)">
                 The right knowledge to the right person at the moment of action.
               </p>
-              <Link
-                href="/login"
-                className="group relative mt-6 inline-flex min-h-11 items-center justify-center gap-2 overflow-hidden bg-(--lp-accent-strong) px-5 py-[15px] text-[14px] font-medium text-white transition-transform duration-150 ease-out active:scale-[0.98]"
-              >
-                <PixelFill />
-                <span className="relative z-10">Open workspace</span>
-                <span aria-hidden="true" className="relative z-10">›</span>
-              </Link>
             </div>
 
             {footerColumns.map(({ heading, links }) => (
@@ -2120,7 +2104,13 @@ export default function Home() {
                       {href.startsWith("/") ? (
                         <Link href={href} className="text-[14px] text-(--lp-muted) transition-colors hover:text-(--lp-accent-text)">{label}</Link>
                       ) : (
-                        <a href={href} className="text-[14px] text-(--lp-muted) transition-colors hover:text-(--lp-accent-text)">{label}</a>
+                        <a
+                          href={href}
+                          {...(href.startsWith("http") ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+                          className="text-[14px] text-(--lp-muted) transition-colors hover:text-(--lp-accent-text)"
+                        >
+                          {label}
+                        </a>
                       )}
                     </li>
                   ))}
@@ -2129,10 +2119,15 @@ export default function Home() {
             ))}
 
           </div>
+        </div>
 
-          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-(--lp-line) pt-6">
+        {/* Full-width divider — lives outside lp-frame so it runs edge-to-edge */}
+        <div className="border-t border-(--lp-line)" />
+
+        <div className="lp-frame px-4 pb-8 pt-6 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="text-[12px] uppercase tracking-[0.08em] text-(--lp-muted)">
-              © 2026 Kairos · Governed industrial operational intelligence
+              © 2026 Kairos Inc
             </p>
             <div className="flex items-center gap-2">
               <a

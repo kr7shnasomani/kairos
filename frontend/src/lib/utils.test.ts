@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { localDateString, parseLocalDate, relativeTime, slaCountdown } from "./utils";
+import { localDateString, parseLocalDate, relativeTime, slaCountdown, triggerLabel } from "./utils";
 
 const NOW = new Date("2026-07-14T12:00:00Z").getTime();
 
@@ -45,5 +45,13 @@ describe("local dates", () => {
   it("formats a Date as its local calendar day", () => {
     expect(localDateString(new Date(2026, 6, 14, 0, 30))).toBe("2026-07-14");
     expect(localDateString(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+  });
+});
+
+describe("triggerLabel", () => {
+  it("title-cases a coded value and keeps the shared acronym overrides", () => {
+    expect(triggerLabel("work_order_created")).toBe("Work Order Created");
+    expect(triggerLabel("ptw_generated")).toBe("PTW Generated");
+    expect(triggerLabel("he-3xx_series")).toBe("HE-3xx Series");
   });
 });

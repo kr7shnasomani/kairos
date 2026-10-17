@@ -355,6 +355,32 @@ def valid_citations(cited: list[int], source_count: int) -> list[int]:
     return [n for n in cited if 1 <= n <= source_count]
 
 
+def disclosed_sources(query: str, body: dict, aliases: list[dict[str, str]] | None = None) -> list[dict]:
+    """The sources whose assets an answer is about, for its pending-MoC notice.
+
+    Every retrieved source used to count, so a question about V-247 carried the P-1101A notice
+    because one of the six retrieved documents was about P-1101A. The cited sources come first; a
+    refusal cites none, so it falls back to the retrieved sources for the assets the question names
+    (a series such as "HE-3xx" matches the sources in that series), and only then to everything
+    retrieved. Every result is drawn from `sources`, which retrieval has already scoped to what the
+    caller may read: an asset id typed into the question is never looked up on its own, or a refusal
+    would disclose conflicts on any asset the caller can guess (a showcase or another site's).
+    """
+    sources = body.get("sources", []) or []
+    cited = [sources[n - 1] for n in body.get("sources_used", []) or [] if 1 <= n <= len(sources)]
+    if cited:
+        return cited
+    named = query_asset_tags(query, aliases)
+    if not named:
+        return sources
+    patterns = [
+        re.compile(re.escape(t.rstrip("X")) + rf"\d{{{len(t) - len(t.rstrip('X'))}}}[A-Z]?")
+        if _ASSET_SERIES_IN_QUERY_RE.fullmatch(t) else re.compile(re.escape(t))
+        for t in named
+    ]
+    return [s for s in sources if any(p.fullmatch((s.get("asset_id") or "").upper()) for p in patterns)]
+
+
 def _lowest_confidence(raw_values: list[str]) -> float | None:
     """The lowest parseable 0..1 value among the model's `CONFIDENCE:` fields, else None.
 

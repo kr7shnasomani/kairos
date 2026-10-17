@@ -18,8 +18,10 @@ from api.config import Settings
 from api.models.brief import Brief, SourceCitation
 from api.models.event import PTWEvent, ShiftHandoverEvent, WorkOrderEvent
 from api.services import tenant
+from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.event_bus import EventBusService
 from api.services.graph import GraphService
+from api.services.identity import display_names
 from api.services.llm import LLMService
 from api.services.metrics import briefs_delivered
 from api.services.vector_store import VectorStoreService
@@ -152,7 +154,7 @@ class BriefEngine:
                     f"\n[PTW correlated] ID: {p.get('ptw_id', '?')} | Isolation: {p.get('isolation_points', [])}"
                 )
             elif et in ("shift_handover", "work_order_created"):
-                body_lines.append(f"\n[{et.upper()} correlated] at {c.get('occurred_at', '?')}")
+                body_lines.append(f"\nCorrelated {et.replace('_', ' ')} at {_when(c.get('occurred_at', '?'))}")
 
         confidence = _calc_confidence(graph_edges, vector_hits)
 
@@ -208,12 +210,10 @@ class BriefEngine:
             f"Isolation boundary: {', '.join(event.asset_ids)}",
         ]
         if topology:
-            body_lines.append(f"\nGraph knowledge for boundary assets ({len(topology)} records):")
-            for e in topology[:5]:
-                edge = e.get("edge", {})
-                body_lines.append(
-                    f"  • {_humanize_rel(edge.get('relationship_type'))} · confidence {edge.get('confidence', '?')}"
-                )
+            body_lines.append(
+                f"\n{len(topology)} knowledge record(s) on file for the boundary assets "
+                f"({_summarize_relationships(topology)}). Each source document is listed below."
+            )
         if regulations:
             body_lines.append(f"\nRegulatory requirements ({len(regulations)}):")
             for r in regulations[:3]:
@@ -260,18 +260,25 @@ class BriefEngine:
 
         warnings = [c["parameter"] for c in conflicts if isinstance(c, dict) and "parameter" in c]
 
+        # Shift leads are auth user ids; a person's name is what a handover reads by.
+        leads = (event.outgoing_shift_lead_id, event.incoming_shift_lead_id)
+        names = await display_names(self.supabase, leads)
+        outgoing, incoming = (names.get(u, u) for u in leads)
         body_lines = [
-            f"Shift handover at {event.handover_time} | Site: {event.site_id}",
-            f"Outgoing: {event.outgoing_shift_lead_id} → Incoming: {event.incoming_shift_lead_id}",
+            f"Shift handover at {_when(event.handover_time)}",
+            f"Outgoing: {outgoing} → Incoming: {incoming}",
         ]
         if open_wos:
             body_lines.append(f"\nOpen work orders ({len(open_wos)}):")
             for wo in open_wos[:5]:
-                body_lines.append(f"  • {wo.get('event_id', '?')} — {wo.get('payload', {}).get('description', '')}")
+                desc = (wo.get("payload") or {}).get("description") or "no description"
+                body_lines.append(f"  • {wo.get('asset_id') or 'Unassigned'}: {desc}")
         if alarms:
             body_lines.append(f"\nActive/recent alarms ({len(alarms)}):")
             for a in alarms[:5]:
-                body_lines.append(f"  • {a.get('event_id', '?')} [{a.get('asset_id', '?')}]")
+                p = a.get("payload") or {}
+                detail = p.get("alarm_description") or p.get("alarm_tag") or "alarm acknowledged"
+                body_lines.append(f"  • {a.get('asset_id') or 'Unassigned'}: {detail}, {_when(a.get('occurred_at', '?'))}")
         if conflicts:
             body_lines.append(f"\nOpen knowledge conflicts ({len(conflicts)}) — review required")
 
@@ -338,24 +345,24 @@ class BriefEngine:
             for i, row in enumerate(timeline[:6]):
                 occurred = row.get("occurred_at", "?")
                 fc = (row.get("payload") or {}).get("failure_code", "?")
-                body_lines.append(f"  [{i + 1}] {occurred} — {fc}")
+                line = f"  [{i + 1}] {_when(occurred)}, {fc}"
                 if prev_ts and occurred != "?":
                     try:
                         t1 = datetime.fromisoformat(occurred.replace("Z", "+00:00"))
                         t2 = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
-                        days_between = abs((t2 - t1).days)
-                        body_lines.append(f"       ↑ {days_between} day(s) since prior failure")
+                        # The timeline is newest first, so the gap is to the failure listed above.
+                        line += f", {abs((t2 - t1).days)} day(s) before the one above"
                     except Exception:
                         pass
+                body_lines.append(line)
                 prev_ts = occurred if occurred != "?" else prev_ts
             if len(timeline) >= 3:
                 body_lines.append("\n⚠ Three or more failures in 90 days — check for accelerating degradation")
 
         if vector_hits:
-            body_lines.append(f"\nRelated patterns across equipment class (top {min(3, len(vector_hits))}):")
-            for h in vector_hits[:3]:
-                p = h.get("payload", {})
-                body_lines.append(f"  • [{p.get('document_id', '?')}] score={h.get('score', 0):.2f}")
+            body_lines.append(
+                f"\n{min(3, len(vector_hits))} related record(s) from the same equipment class are listed in the sources."
+            )
 
         return Brief(
             brief_id=str(uuid.uuid4()),
@@ -392,14 +399,16 @@ class BriefEngine:
         ptw_task = self._get_active_ptw_for_asset(asset_id)
         moc_task = self._get_open_moc(asset_id)
         compliance_task = self._get_asset_compliance_obligations(asset_id)
+        graph_task = self.graph.get_asset_knowledge_at(asset_id)
 
         results = await asyncio.gather(
-            topology_task, ptw_task, moc_task, compliance_task,
+            topology_task, ptw_task, moc_task, compliance_task, graph_task,
             return_exceptions=True,
         )
-        topology, ptw_items, moc_items, compliance_reqs = [
+        topology, ptw_items, moc_items, compliance_reqs, graph_edges = [
             r if not isinstance(r, Exception) else [] for r in results
         ]
+        sources = await _resolve_source_documents(self.supabase, _sources_from_graph(graph_edges))
 
         dep_count = len(topology) + len(ptw_items) + len(moc_items)
         headline = f"Asset {asset_id} is being tagged out — {dep_count} downstream dependencies identified"
@@ -414,7 +423,7 @@ class BriefEngine:
         if ptw_items:
             body_lines.append(f"\nActive PTW items referencing this asset ({len(ptw_items)}):")
             for p in ptw_items[:3]:
-                body_lines.append(f"  • PTW {(p.get('payload') or {}).get('ptw_id', '?')} at {p.get('occurred_at', '?')}")
+                body_lines.append(f"  • PTW {(p.get('payload') or {}).get('ptw_id', '?')} at {_when(p.get('occurred_at', '?'))}")
         if moc_items:
             body_lines.append(f"\nOpen MoC items for this asset ({len(moc_items)}):")
             for m in moc_items[:3]:
@@ -440,7 +449,7 @@ class BriefEngine:
             ],
             warnings=["Open MoC items exist for this asset"] if moc_items else [],
             quarantine_flags=[],
-            sources=[],
+            sources=sources,
             confidence=0.85,
         )
 
@@ -459,14 +468,16 @@ class BriefEngine:
         timeline_task = self._get_failure_timeline(asset_id)
         last_inspection_task = self._get_last_inspection(asset_id)
         compliance_task = self._get_asset_compliance_obligations(asset_id)
+        graph_task = self.graph.get_asset_knowledge_at(asset_id)
 
         results = await asyncio.gather(
-            timeline_task, last_inspection_task, compliance_task,
+            timeline_task, last_inspection_task, compliance_task, graph_task,
             return_exceptions=True,
         )
-        timeline, last_inspections, compliance_reqs = [
+        timeline, last_inspections, compliance_reqs, graph_edges = [
             r if not isinstance(r, Exception) else [] for r in results
         ]
+        sources = await _resolve_source_documents(self.supabase, _sources_from_graph(graph_edges))
 
         headline = (
             f"Inspection {inspection_type} FAILED on {asset_id} — "
@@ -483,12 +494,12 @@ class BriefEngine:
         if timeline:
             body_lines.append(f"\nFailure history — {len(timeline)} work order(s) in 90 days:")
             for row in timeline[:5]:
-                body_lines.append(f"  • {row.get('occurred_at', '?')} — {(row.get('payload') or {}).get('failure_code', '?')}")
+                body_lines.append(f"  • {_when(row.get('occurred_at', '?'))}, {(row.get('payload') or {}).get('failure_code', '?')}")
         if last_inspections:
             prev = last_inspections[0]
             body_lines.append(
-                f"\nPrevious inspection: {prev.get('occurred_at', '?')} "
-                f"— result: {(prev.get('payload') or {}).get('result', '?')}"
+                f"\nPrevious inspection: {_when(prev.get('occurred_at', '?'))}, "
+                f"result: {(prev.get('payload') or {}).get('result', '?')}"
             )
         if compliance_reqs:
             body_lines.append(f"\nRelated compliance obligations ({len(compliance_reqs)}):")
@@ -511,7 +522,7 @@ class BriefEngine:
             ],
             warnings=[f"Inspection result: {result.upper()}"] if result == "failed" else [],
             quarantine_flags=[],
-            sources=[],
+            sources=sources,
             confidence=0.8,
         )
 
@@ -854,7 +865,7 @@ class BriefEngine:
     async def _get_active_alarms(self, site_id: str) -> list[dict[str, Any]]:
         result = await asyncio.to_thread(
             lambda: self.supabase.table("operational_events")
-            .select("event_id, asset_id, occurred_at")
+            .select("event_id, asset_id, payload, occurred_at")
             .eq("event_type", "alarm_acknowledged")
             .eq("site_id", site_id)
             .order("occurred_at", desc=True)
@@ -894,6 +905,18 @@ def _humanize_rel(rel: str | None) -> str:
     if not rel:
         return "record"
     return _REL_FRIENDLY.get(rel, rel.replace("_", " ").lower())
+
+
+def _when(ts: Any) -> str:
+    """'8 Oct 2026, 11:56 UTC' for an ISO string or datetime; anything unparseable is returned as is."""
+    try:
+        dt = ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return str(ts)
+    zone = ""
+    if dt.tzinfo is not None:  # without an offset no zone is claimed
+        dt, zone = dt.astimezone(UTC), " UTC"
+    return f"{dt.day} {dt:%b %Y, %H:%M}{zone}"
 
 
 def _distinct_docs(edges: list[dict[str, Any]]) -> list[str]:
@@ -957,21 +980,17 @@ async def _resolve_source_documents(supabase, sources: list[SourceCitation]) -> 
 
     Best-effort: on any lookup failure the caller keeps the id-titled sources rather than losing
     the citation entirely, because a brief without provenance is worse than one with a terse id.
+    The same rows drop test artifacts, so a brief never cites a test-suite file.
     """
     doc_ids = sorted({s.document_id for s in sources if s.document_id})
     if not doc_ids:
         return sources
-    try:
-        rows = await asyncio.to_thread(
-            lambda: supabase.table("documents")
-            .select("document_id, file_name, document_type, vault_url")
-            .in_("document_id", doc_ids)
-            .execute()
-        )
-        by_id = {r["document_id"]: r for r in (rows.data or [])}
-    except Exception as exc:  # noqa: BLE001
-        log.warning("brief_engine.source_resolve_failed", error=str(exc), documents=len(doc_ids))
-        return sources
+    rows = await document_rows(supabase, doc_ids, "document_id, file_name, document_type, vault_url")
+    artifacts = partition_test_artifacts(rows)
+    if artifacts:
+        sources = [s for s in sources if s.document_id not in artifacts]
+        log.info("brief_engine.test_artifacts_excluded", excluded=len(artifacts), remaining=len(sources))
+    by_id = {r["document_id"]: r for r in rows}
 
     for s in sources:
         row = by_id.get(s.document_id)

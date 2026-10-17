@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { AuthorityLevel, AuditLogEntry, BriefSource } from "@/lib/types";
+import type { AuthorityLevel, BriefSource } from "@/lib/types";
 import { authorityDescription, authorityLabel, cn } from "@/lib/utils";
 import { fmtRelTime } from "@/lib/format";
 import { useCountUp } from "@/lib/motion";
@@ -357,23 +357,6 @@ export function ButtonLink({
   );
 }
 
-// ─── TrendDelta ──────────────────────────────────────────────────────────────
-
-/** Signed percent-change chip. `invert` for metrics where up is bad (gaps, overdue). */
-export function TrendDelta({ value, invert = false }: { value: number; invert?: boolean }) {
-  if (value === 0) {
-    return <span className="tabular text-label font-semibold text-muted">±0%</span>;
-  }
-  const up = value > 0;
-  const good = invert ? !up : up;
-  return (
-    <span className={cn("tabular inline-flex items-center gap-0.5 text-label font-semibold", good ? "text-verified" : "text-danger")}>
-      <Icon name={up ? "trend-up" : "trend-down"} size={12} />
-      {up ? "+" : ""}{value}%
-    </span>
-  );
-}
-
 // ─── Sparkline ───────────────────────────────────────────────────────────────
 
 /** Inline trend line — pure SVG so ui.tsx stays free of the chart bundle.
@@ -404,8 +387,8 @@ export function Sparkline({
 
 // ─── KpiCard (Task 4) ────────────────────────────────────────────────────────
 
-/** Executive KPI tile — display numeral, label, optional threshold colour,
- *  optional trend delta + sparkline. Numeric values count up on change. */
+/** Executive KPI tile — display numeral, label and optional threshold colour.
+ *  Numeric values count up on change. */
 export function KpiCard({
   label,
   value,
@@ -415,9 +398,6 @@ export function KpiCard({
   onClick,
   href,
   loading = false,
-  delta,
-  invertDelta,
-  spark,
 }: {
   label: string;
   /** null/undefined renders an em dash — no metric ever shows "NaN"/"undefined". */
@@ -430,12 +410,6 @@ export function KpiCard({
   href?: string;
   /** Renders MetricCardSkeleton with identical geometry (zero layout shift). */
   loading?: boolean;
-  /** Percent change vs previous period — renders a TrendDelta chip. */
-  delta?: number;
-  /** Up is bad for this metric (open gaps, overdue items). */
-  invertDelta?: boolean;
-  /** Recent series for an inline sparkline. */
-  spark?: number[];
 }) {
   // One loud colour per row, as on the landing: the numeral stays ink unless the
   // metric is the lead (accent) or an actual alarm (danger). Every other tone is
@@ -467,16 +441,8 @@ export function KpiCard({
         </span>
         {icon && <span className={cn("shrink-0", valueColor)} aria-hidden="true">{icon}</span>}
       </span>
-      <span className="flex items-end justify-between gap-2">
-        <span className={cn("display mt-1.5 text-hero", valueColor)}>{display}</span>
-        {spark && <Sparkline data={spark} className="text-accent opacity-70" />}
-      </span>
-      {(sub || delta !== undefined) && (
-        <span className="flex items-center gap-2">
-          {delta !== undefined && <TrendDelta value={delta} invert={invertDelta} />}
-          {sub && <span className="text-label text-muted">{sub}</span>}
-        </span>
-      )}
+      <span className={cn("display mt-1.5 text-hero", valueColor)}>{display}</span>
+      {sub && <span className="text-label text-muted">{sub}</span>}
     </>
   );
   const base = "group relative flex min-h-[96px] w-full flex-col gap-0.5 overflow-hidden border border-line bg-surface px-5 py-4 text-left";
@@ -758,16 +724,10 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
 
 // ─── EvidenceLineage (Task 4) ────────────────────────────────────────────────
 
-/** Collapsible source + audit trail — shown under every AI answer and brief. */
-export function EvidenceLineage({
-  sources,
-  auditEntries,
-}: {
-  sources?: BriefSource[];
-  auditEntries?: AuditLogEntry[];
-}) {
+/** Collapsible source list — shown under RCA packs and briefs. */
+export function EvidenceLineage({ sources }: { sources?: BriefSource[] }) {
   const [open, setOpen] = useState(false);
-  const total = (sources?.length ?? 0) + (auditEntries?.length ?? 0);
+  const total = sources?.length ?? 0;
   if (total === 0) return null;
 
   return (
@@ -805,20 +765,6 @@ export function EvidenceLineage({
                         Vault ↗
                       </a>
                     )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {auditEntries && auditEntries.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-label font-bold uppercase tracking-[0.1em] text-muted">Audit Trail</p>
-              <ul className="space-y-1">
-                {auditEntries.map((e) => (
-                  <li key={e.log_id} className="flex flex-wrap gap-2 text-label text-muted">
-                    <time className="tabular shrink-0">{new Date(e.timestamp).toLocaleString()}</time>
-                    <span className="font-medium text-ink">{e.action}</span>
-                    <span>by {e.performed_by}</span>
                   </li>
                 ))}
               </ul>

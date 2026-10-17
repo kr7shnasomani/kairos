@@ -125,16 +125,6 @@ class GraphService:
             database = settings.NEO4J_DATABASE
         self.database = database
 
-    async def health_check(self) -> bool:
-        try:
-            async with self.driver.session(database=self.database) as session:
-                result = await session.run("RETURN 1 AS ok")
-                await result.single()
-            return True
-        except Exception as e:
-            log.error("neo4j.health_check_failed", error=str(e))
-            return False
-
     # -------------------------------------------------------------------------
     # Asset nodes (Layer 1)
     # -------------------------------------------------------------------------

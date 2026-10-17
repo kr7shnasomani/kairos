@@ -65,13 +65,12 @@ frontend/
 │   │   ├── icon.tsx                 # THE icon set — Phosphor Regular path data, inlined (MIT); `*-fill` cuts for active nav
 │   │   ├── brand-link.tsx           # Logo link component
 │   │   ├── mobile-app-header.tsx    # Mobile top bar (menu · search · + Ingest · account)
-│   │   ├── error-boundary.tsx       # Client error boundary wrapper
 │   │   ├── brief-card.tsx · brief-inbox.tsx · brief-detail.tsx   # brief inbox pieces
 │   │   ├── charts.tsx · charts/     # Chart primitives and chart sub-components
 │   │   ├── stat-pills.tsx           # Compact metric pills
 │   │   ├── system-tabs.tsx          # Sub-nav tabs for system surfaces (Health · Settings)
 │   │   ├── theme-toggle.tsx · skeleton.tsx
-│   │   ├── use-role.ts              # useRole() + ADMIN_ROLES / PROMOTE_ROLES / RESOLVE_ROLES / FIELD_ROLES
+│   │   ├── use-role.ts              # useRole() + ADMIN_ROLES / PROMOTE_ROLES / RESOLVE_ROLES
 │   │   ├── ui.tsx                   # Primitives: PageHeader, KpiCard/KpiGroup, DataTable, FilterTabs, StatusBadge,
 │   │   │                             # AuthorityBadge, SourceChip, Button, Modal, Timeline, EmptyState, RefusalCard
 │   │   └── ui-card.tsx              # Card primitives (lp-card, lp-cell hovers)
@@ -166,7 +165,7 @@ frontend/
 
 `AppShell` (`components/app-shell.tsx`) renders two distinct navigations depending on role and viewport.
 
-**Desktop sidebar** (316px, collapsible to 68px; slide-over drawer on mobile). There is **no desktop
+**Desktop sidebar** (316px, fixed from `lg` up and never collapsible, owner decision 2026-10-17; below `lg`, on phones and small tablets, the same nav opens as a slide-over drawer from the header's menu button). There is **no desktop
 top bar**: the rail owns the global actions (sidebar-first, as in Linear / Vercel).
 
 - **Top:** Search (⌘K command palette) + **Ingest** (`/documents/ingest`)
@@ -198,7 +197,7 @@ Mobile keeps a top bar: menu · search · + Ingest · account.
 
 Active route is a square row with a 2px inset accent rule, ink text and the **filled** cut of its icon (`bg-surface-2 … shadow-[inset_2px_0_0_var(--accent)]`). The account row at the foot shows the signed-in email and role from `GET /auth/me`; its menu holds System Settings, System Health (admins) and Sign out, which clears tokens and redirects to `/login`. The sidebar logo is `public/logo.png` at 30px (square, like all chrome since the 2026-09-22 overhaul).
 
-- **`/system-health`** — admin-only live dashboard: probes all 11 cheap API surfaces + 5 datastores every 30s, plus an opt-in "AI models" section (NIM/Gemini/Jina/Groq) that probes `GET /health/model?provider=…` once/minute **only when toggled on** (each probe spends provider quota; off by default, persisted in `localStorage`).
+- **`/system-health`** — admin-only live dashboard: probes all 11 cheap API surfaces + 5 datastores every 30s, plus an opt-in "AI models" section (Token Factory, NIM, OpenRouter and Gemini in cascade order, then Jina and Groq; Token Factory is tier 1 only when its key is set) that probes `GET /health/model?provider=…` once/minute **only when toggled on** (each probe spends provider quota; off by default, persisted in `localStorage`).
 - **Login** (`/login`) has an **"Explore the live demo"** button that signs straight into the seeded admin account.
 
 **Browser tab titles** — `Kairos: <page>` on every app route (landing/`/login` = `Kairos`). Resolved
@@ -229,7 +228,7 @@ finding. Hiding the column would read as "not measured".
 > **There is no mobile bottom tab bar.** `BottomTabs` (never `FieldBottomTabs` — that name is from an
 > older revision) was **deleted** from `app-shell.tsx` on 2026-08-15: it had been commented out since the
 > mobile UX was deferred, so it was neither shipped nor removed, and it left `isField` orphaned. Mobile
-> navigates via the hamburger sidebar. `FIELD_ROLES` gating is unaffected and still live. Recover the
+> navigates via the hamburger sidebar. Recover the
 > component from git history if the tab bar is revived.
 
 ---
@@ -344,7 +343,6 @@ export const API_BASE =
 | `getCircuitBreaker()` | `GET /governance/circuit-breaker` |
 | `getModelGateHistory()` | `GET /governance/model-gate/history` |
 | `runModelGate()` | `POST /governance/model-gate/run` |
-| `getValidationCorpusStats()` | `GET /governance/validation-corpus/stats` |
 | `getKnowledgeGraph(assetId, asOf?)` | `GET /graph/asset/{id}?as_of=…` |
 | `getAuditLog(entityId?, type?)` | `GET /audit/log` |
 | `getDocumentTopology(id)` | `GET /documents/{id}/topology` |
@@ -358,10 +356,9 @@ export const API_BASE =
 | `getMocList()` / `getMoc(id)` / `approveMoc(id)` | Management of Change |
 | `ingestDocument(form)` / `getDocumentStatus(id)` / `supersedeDocument(id, newId)` | document ingest (the result carries `authority_level`, `authority_requested`, `authority_capped`) + pipeline status + supersede. `supersedeDocument` returns `SupersedeResponse`, whose `status` is `superseded` or `pending_moc_approval` (HTTP 202, authority 1 to 3): callers **must branch on `status`**, never treat a 2xx as done |
 | `confirmAssetIdentity(...)` | MDM identity confirmation (asset bootstrap) |
-| `triggerElicitation / getElicitationQuestions / submitElicitationResponses` | field micro-interview |
-| `getOffboardingList / getOffboarding / getOffboardingQuestions / submitOffboardingResponses / createOffboarding` | retiring-expert knowledge transfer |
+| `getElicitationQuestions / submitElicitationResponses` | field micro-interview |
+| `getOffboardingList / getOffboarding / getOffboardingQuestions / submitOffboardingResponses` | retiring-expert knowledge transfer |
 | `submitVoiceNote(id, blob, user)` | `POST /elicitation/{id}/voice` (field name `file`) |
-| `createAnnotation / getAnnotations / getAnnotationStats` | inline document annotation |
 | `getGovernorState / getPlantState / setPlantState / getHealthDetailed / getOtCoverage` | ops + system state |
 
 ### Response normalizers
@@ -422,8 +419,19 @@ source. Fetchers **throw** on failure. The user always sees **real data**, a **l
   not happen. This is the one fetcher whose failure is *not* an error state, and it is exempt from
   the throw rule because it returns a bare `boolean`, not `Fetched<>`.
 - **`/copilot` renders `pending_moc` above the answer.** `POST /search/synthesize` returns open
-  engineering conflicts awaiting MoC sign-off for any cited asset; the banner sits above the prose
-  because after it a technician has already read the number.
+  engineering conflicts awaiting MoC sign-off for the assets the answer cites (or, for a refusal, the
+  assets the question names); the banner sits above the prose because after it a technician has
+  already read the number.
+- **The Copilot's suggested questions are checked against the live data** (`SUGGESTIONS`,
+  2026-10-17): P-1101A failure history (cited), P-1101A minimum flow (cited, carries its MoC
+  notice), HE-3xx pressure (cited, flags the superseded value) and V-247 isolation (refused). They
+  used to name `P-101`, which the first click answered with "no failure history". Change one only
+  after asking it on the live site.
+- **A brief with no source document says so.** `BriefCard` shows "From plant events, no source
+  document" instead of "0 sources" beside an L5 badge (the badge defaulted to 5 with nothing to
+  rank), and a permit brief reads "Permit to work" with a hover explanation. `triggerLabel` is
+  `label()` from `lib/labels.ts` in Title Case, so acronyms (`PTW Generated`, `MoC`) come from that
+  one override map.
 
 Default read timeout is **4 s** (`getJson`) and **8 s** for writes (`postJson`). The two endpoints
 that run NIM synthesis — `synthesize()` and `getRcaPack()` — share **`SYNTHESIS_TIMEOUT_MS`
@@ -467,7 +475,6 @@ Key types:
 | `VaultDocument` | Document with `vault_url`, `ocr_confidence`, supersede chain |
 | `SynthesizeResponse` | Copilot answer shape from `POST /search/synthesize` |
 | `RcaPack` | Timeline + hypotheses + supporting docs from `POST /search/rca-pack` |
-| `ListEnvelope<T>` | `{ items, total, limit, offset }` — standard list shape |
 
 ---
 
@@ -689,7 +696,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **373 tests / 85 files**, all passing (2026-10-09; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
+| Test suite | **373 tests / 85 files**, all passing (2026-10-17; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---

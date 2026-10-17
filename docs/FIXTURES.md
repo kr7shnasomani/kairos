@@ -148,8 +148,8 @@ at all. Fetchers **throw** on failure.
   `dynamic = "force-dynamic"` so these render per request, never prerendered at build.)
 - **Custom-client pages** (governance hub, MoC detail, plant-state, projects, off-boarding session, field
   elicitation) — show an inline "unavailable — retry" instead of the fixture.
-- **`/overview/cross-site`** has no backend (single-site MVP) — it shows an honest "No cross-site data in
-  this deployment" state, not fabricated alerts.
+- **`/overview/cross-site`** is live (`GET /assets/cross-site-patterns`, 2026-10-09). An account that covers one
+  site sees "nothing to compare", not fabricated alerts.
 - A few fetchers additionally treat **empty live data as a valid state** (e.g. `getComplianceGaps` no longer
   substitutes a fixture on empty).
 

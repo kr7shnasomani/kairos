@@ -33,6 +33,12 @@ describe("CrossSiteAlertsPage", () => {
     expect(rows[1]).toHaveTextContent("Not seen here");
   });
 
+  it("shows an unmapped failure code in sentence case, not capitals", async () => {
+    live({ patterns: [{ equipment_class: "valve_isolation", failure_family: "ACTUATOR", kind: "shared", total_events: 4, sites: [] }] });
+    render(<CrossSiteAlertsPage />);
+    expect(await screen.findByRole("heading", { level: 2 })).toHaveTextContent("Actuator on Valve isolation");
+  });
+
   it("says there is nothing to compare when the account covers one site (no fabricated alerts)", async () => {
     live({ patterns: [], sites: ["SITE_A"] });
     render(<CrossSiteAlertsPage />);

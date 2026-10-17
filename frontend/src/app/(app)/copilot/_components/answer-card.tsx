@@ -5,7 +5,6 @@ import { getArtifactUrl, submitAnswerFeedback } from "@/lib/api";
 import { META_MODEL, type CopilotAnswer } from "@/lib/copilot";
 import { AuthorityBadge, SourceChip, StatusBadge, ConfidenceMeter } from "@/components/ui";
 import { cn, providerName } from "@/lib/utils";
-import { EntityAnnotations } from "./entity-annotations";
 
 import { Icon } from "@/components/icon";
 // Phase 1 = retrieval only (no synthesized prose); 2+ = full synthesis.
@@ -294,11 +293,6 @@ export function Answer({ data, query = "", streaming }: {
           </div>
           )}
         </div>
-      )}
-
-      {/* Entity annotation chips */}
-      {!data.is_synthesizing && data.entities && data.entities.length > 0 && (
-        <EntityAnnotations entities={data.entities} />
       )}
 
       {/* Footer: confidence meter + model + feedback */}

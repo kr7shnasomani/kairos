@@ -1,6 +1,4 @@
-"""STAGED — copy to benchmark/run_retrieval_baseline.py after SOAK_DONE.
-
-Retrieval baseline comparison — replaces the word "modelled".
+"""Retrieval baseline comparison — replaces the word "modelled".
 
 The results table currently reports "9.5% modelled reduction in time-to-answer". `modelled` is the
 weakest word in it, and it is attached to the core value claim. This measures the thing directly:
@@ -14,6 +12,13 @@ fusion, scored on whether the expected fact actually reaches the context.
 WHY THIS IS CHEAP. Retrieval only — no synthesis. It costs one Jina embedding per question per
 vector-using arm, and nothing else. It does NOT consume LLM quota, so unlike the safety eval it is
 safe to re-run.
+
+SAME CORPUS AS THE PRODUCT (fixed 2026-10-17). Every arm drops test artifacts
+(`corpus.partition_test_artifacts`), and the hybrid arm gets the Supabase client, so it runs alias
+expansion and the artifact filter exactly as `GET /search` does. Before that the harness built
+`SearchService` without Supabase, so its hybrid figure predated the 2026-08-24 `/search` fix, and
+the single-method arms counted test documents. The showcase plant is excluded (every service is
+built with `include_demo=False`), so this measures the golden dataset alone.
 
 WHAT IT CANNOT TELL YOU. Retrieval hit-rate is not answer quality: a fact reaching the context is
 necessary, not sufficient. Report it as retrieval reach, and do not restate it as accuracy.
@@ -66,7 +71,9 @@ async def _arm(name: str, questions: list[dict], settings) -> dict:
     from elasticsearch import AsyncElasticsearch
     from neo4j import AsyncGraphDatabase
     from qdrant_client import AsyncQdrantClient
+    from supabase import create_client
 
+    from api.services.corpus import document_rows, partition_test_artifacts
     from api.services.graph import GraphService
     from api.services.llm import LLMService
     from api.services.search_engine import SearchEngineService
@@ -83,7 +90,13 @@ async def _arm(name: str, questions: list[dict], settings) -> dict:
     llm = LLMService(settings)
     engine = SearchEngineService(es, settings)
     vector = VectorStoreService(qdrant, settings)
-    svc = SearchService(GraphService(driver, settings.NEO4J_DATABASE), vector, engine, llm)
+    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+    svc = SearchService(GraphService(driver, settings.NEO4J_DATABASE), vector, engine, llm, supabase=supabase)
+
+    async def real(rows: list[dict], doc_id) -> list[dict]:
+        """The rows whose document is not a test artifact, the filter the hybrid arm applies itself."""
+        artifacts = partition_test_artifacts(await document_rows(supabase, [doc_id(r) for r in rows]))
+        return [r for r in rows if doc_id(r) not in artifacts]
 
     hits = 0
     try:
@@ -92,12 +105,14 @@ async def _arm(name: str, questions: list[dict], settings) -> dict:
             try:
                 if name == "exact-only":
                     rows = await engine.search(q["question"], asset_id=q.get("asset_id"), limit=6)
+                    rows = await real(rows, lambda r: r.get("document_id"))
                     blob = " ".join((r.get("snippet") or "") + " " + (r.get("title") or "") for r in rows)
                 elif name == "semantic-only":
                     vec = await llm.embed(q["question"], task="retrieval.query")
                     rows = await vector.search(
                         settings.QDRANT_COLLECTION_DOCUMENTS, vec, limit=6, asset_id=q.get("asset_id")
                     )
+                    rows = await real(rows, lambda r: (r.get("payload") or {}).get("document_id"))
                     blob = " ".join((r.get("payload", {}) or {}).get("text", "") for r in rows)
                 else:  # hybrid — what ships
                     rows = await svc.hybrid_search(
@@ -146,7 +161,7 @@ async def main() -> int:
     delta = (hybrid["rate"] - best_single["rate"]) * 100
     print(f"\n  Hybrid vs best single method ({best_single['arm']}): {delta:+.1f} pts")
     if hybrid["ci"][0] <= best_single["ci"][1]:
-        print("  NOTE: the confidence intervals overlap — at n=37 this difference is suggestive,")
+        print(f"  NOTE: the confidence intervals overlap — at n={len(questions)} this difference is suggestive,")
         print("  not established. Report it as such, or grow the question set.")
 
     out = Path("/app/.benchmark_runs/retrieval_baseline.json")

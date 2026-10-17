@@ -82,7 +82,6 @@ anything.
 | `/rca` **Generate** button | ~90 s of dead air. Tab 7 is pre-generated |
 | `/governance/model-gate` **Run** button | **~12-minute** background job, **27 extractions** (the old "~2.5 min / ~15 calls" figure came from a run where nearly every call failed fast on a 429 — `e2e-sweep.md` row 27) |
 | Any file in `benchmark/` | `run_safety_eval.py` burns provider quota and then reports `INVALID` |
-| `/overview/cross-site` | Deliberate empty state. Correct, but not a demo screen |
 | `/system-health` model probes | They spend quota. Off by default for a reason |
 
 ---
@@ -563,7 +562,6 @@ Have these bookmarked. Do **not** open them unprompted.
 | Route | Why not |
 |---|---|
 | `/system-health` | Admin-only, and the model probes spend provider quota |
-| `/overview/cross-site` | An honest "no data — this is a single-site deployment" state. Correct, but it looks like a bug to someone who does not know that |
 | `/governance/sla` · `/governance/circuit-breaker` | Real, but they need a paragraph of setup each to make sense. Q&A material |
 | `/compliance/nonconformance` | Beat 9 already makes the compliance point |
 | `/documents/compare` · `/assets/bootstrap` · `/projects` · `/settings` | Real, but no story beat needs them |

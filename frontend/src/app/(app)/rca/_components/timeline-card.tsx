@@ -7,14 +7,14 @@ import type { RcaPack } from "@/lib/types";
 const SOURCE_TONE: Record<string, TimelineEvent["tone"]> = {
   neo4j: "verified",
   historian: "info",
-  supabase: "neutral",
+  operational_events: "neutral",
   quarantine: "caution",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
   neo4j: "graph",
   historian: "telemetry",
-  supabase: "events",
+  operational_events: "plant events",
   quarantine: "unverified",
 };
 

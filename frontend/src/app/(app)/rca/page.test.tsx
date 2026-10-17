@@ -68,6 +68,14 @@ describe("RcaPage", () => {
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
 
+  it("names an event's source in plain words, never the backend table name", async () => {
+    mocks.getRcaPack.mockResolvedValue(rcaFor("P-101", "SEAL-FAIL"));
+    render(<RcaPage />);
+    await assemble();
+    expect((await screen.findAllByText("plant events")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("operational_events")).not.toBeInTheDocument();
+  });
+
   it("replaces everything below the header with a RefusalCard on refusal", async () => {
     mocks.getRcaPack.mockResolvedValue(rcaFor("P-101", "PSV-RELIEF"));
 

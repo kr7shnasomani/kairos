@@ -30,9 +30,15 @@ from api.models.document import (
     SynthesizeResponse,
 )
 from api.services import tenant
-from api.services.corpus import document_rows
+from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.graph import GraphService
-from api.services.llm import SAFETY_CRITICAL_CATEGORIES, LLMService, query_asset_tags, valid_citations
+from api.services.llm import (
+    SAFETY_CRITICAL_CATEGORIES,
+    LLMService,
+    disclosed_sources,
+    query_asset_tags,
+    valid_citations,
+)
 from api.services.search_engine import SearchEngineService
 from api.services.search_service import SearchService
 from api.services.timeline import merge_timeline
@@ -141,16 +147,11 @@ async def search(
         limit=limit,
     )
 
-    # Batch-fetch vault_url from Supabase so frontend can render "view source" links
+    # Batch-fetch vault_url so the frontend can render "view source" links; a failed lookup only
+    # drops the links, never the results.
     doc_ids = [r.document_id for r in results if r.document_id]
     if doc_ids:
-        vault_rows = await asyncio.to_thread(
-            lambda: supabase.table("documents")
-            .select("document_id, vault_url")
-            .in_("document_id", doc_ids)
-            .execute()
-        )
-        vault_map = {row["document_id"]: row.get("vault_url") for row in (vault_rows.data or [])}
+        vault_map = {row["document_id"]: row.get("vault_url") for row in await document_rows(supabase, doc_ids, "document_id, vault_url")}
         for r in results:
             r.vault_url = vault_map.get(r.document_id)
 
@@ -363,7 +364,9 @@ def _synthesis_payload(result: dict, category: str | None) -> dict:
     }
 
 
-async def _record_synthesis(supabase, current_user: dict, query: str, category: str | None, body: dict) -> list[dict]:
+async def _record_synthesis(
+    supabase, current_user: dict, query: str, category: str | None, body: dict, aliases: list[dict] | None = None
+) -> list[dict]:
     """The step every answer owes, however it was delivered: MoC disclosure and an audit row.
 
     Shared by `POST /synthesize` and its stream. The stream once had neither, so every Copilot
@@ -371,9 +374,7 @@ async def _record_synthesis(supabase, current_user: dict, query: str, category: 
     (security review M3). Returns the pending-MoC warnings for the response.
     """
     sources = body.get("sources", []) or []
-    # Computed from the sources actually returned (refusals include them too), so a refusal that
-    # hands back source documents still says those documents are under MoC dispute.
-    pending_moc = await pending_moc_warnings(supabase, sources)
+    pending_moc = await pending_moc_warnings(supabase, disclosed_sources(query, body, aliases))
     try:
         await asyncio.to_thread(
             lambda: supabase.table("audit_log").insert({
@@ -428,7 +429,7 @@ async def synthesize(
 
     result = await LLMService(settings).synthesize(payload.query, evidence, category, aliases=aliases)
     body = _synthesis_payload(result, category)
-    body["pending_moc"] = await _record_synthesis(supabase, current_user, payload.query, category, body)
+    body["pending_moc"] = await _record_synthesis(supabase, current_user, payload.query, category, body, aliases)
     return SynthesizeResponse(**body)
 
 
@@ -482,7 +483,7 @@ async def synthesize_stream(
                 if event == "done":
                     data = _synthesis_payload(data, category)
                     data["pending_moc"] = await _record_synthesis(
-                        supabase, current_user, payload.query, category, data
+                        supabase, current_user, payload.query, category, data, aliases
                     )
                 yield _sse(event, data)
         except Exception as exc:  # noqa: BLE001 — a dead stream must still terminate the client
@@ -649,6 +650,16 @@ async def generate_rca_pack(
         for h in evidence_hits
     ]
 
+    # The vault file name is the title an engineer recognises; without it the pack listed bare
+    # "DOC-9V7Z7YCEEXEC" ids under "Supporting documents". The same rows drop test artifacts
+    # before synthesis, so a hypothesis can never rest on a test-suite file.
+    doc_rows = await document_rows(supabase, [e["document_id"] for e in evidence if e.get("document_id")])
+    file_names = {r["document_id"]: r.get("file_name") for r in doc_rows}
+    artifact_ids = partition_test_artifacts(doc_rows)
+    if artifact_ids:
+        evidence = [e for e in evidence if e.get("document_id") not in artifact_ids]
+        log.info("rca_pack.test_artifacts_excluded", excluded=len(evidence_hits) - len(evidence), remaining=len(evidence))
+
     # -- LLM synthesis --
     rca_result = await llm.rca_synthesize(payload.failure_code, timeline, evidence)
 
@@ -675,10 +686,6 @@ async def generate_rca_pack(
             refused = True
             hypotheses = []
 
-    # The vault file name is the title an engineer recognises; without it the pack listed bare
-    # "DOC-9V7Z7YCEEXEC" ids under "Supporting documents".
-    doc_rows = await document_rows(supabase, [e["document_id"] for e in evidence if e.get("document_id")])
-    file_names = {r["document_id"]: r.get("file_name") for r in doc_rows}
     supporting_documents = [
         {
             "document_id": e["document_id"],

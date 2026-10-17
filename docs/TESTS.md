@@ -22,7 +22,7 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind: run it on a stack
 you will reset, never on the dataset you are about to demo or benchmark.
 
-### Tier 1 — service-free (969 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (975 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push. The container run is **786 passed and 3 skipped** (2026-10-01): the Docker test image mounts only `./backend`, `./tests` and `./db`, so the checks in `test_sec_infra.py` that read `infra/`, `docker-compose*.yml` and `.github/` skip there (they run on a full checkout, and in CI, which has the whole repo).
 
@@ -38,7 +38,7 @@ ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit
 document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm,cr_fixes,tenant_isolation,showcase_dataset}.py
 ```
 
-All **55** files, **969 tests** (counted 2026-10-09; matches the 55 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
+All **55** files, **975 tests** (counted 2026-10-17; matches the 55 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
 
 **Security pass, 2026-10-01: the five `test_sec_*.py` files.** Each is named for the review group it covers; all run against in-memory fakes, with nothing written to any store. Finding ids (H1, M4, ...) are the 2026-09-30 security review's, listed one per line in `implementation/status.md` § Accepted risks and deploy checklist.
 
@@ -48,7 +48,7 @@ All **55** files, **969 tests** (counted 2026-10-09; matches the 55 `tests/test_
 | `test_sec_authz.py` | `ingest_event` mapping, OPA grants and `_sensitive_actions` (H2); site scope on event reports, plant state, asset reads and create, events reads, audit pack (H3 route gate, M8); inspection `document_id` must be an `inspection_report` and the evidence confidence is capped (H3); acknowledgements use the token actor, are idempotent and 404/403 correctly, deviation-flag, tag-out and elicitation actors come from the token (M6); annotation corpus roles, dedup and rate limit (M7); off-boarding programmes limited to staff and the subject (M9); voice-upload size and path sanitising (M11, M12); inbox `.in_()` filter (M2); final acks and feedback visibility (L11); MoC webhook HMAC with timestamp, skew, raw body, fail-closed and replay (H7); OPA path and rate-limit exemption cannot be forged through `Host` |
 | `test_sec_documents.py` | Document type allow-list, safe filenames, `authority_capped` with the audit record, unknown asset, `occurred_at` bounds (H5, M12); normalised content type and forced-download signed URLs (L10); storage errors leak no text (L6); supersede gate: self, inactive replacement, role, MoC created once, approved applies, rejected blocks, operational documents immediate (H6); PDF page, DPI, pixel and spreadsheet ceilings and non-retryable `BadFile` (M11); confirmed-aliases-only pipeline (M13); per-document topology node ids (L12); broader PII patterns and late names (L9) |
 | `test_sec_infra.py` | RLS on every schema table and migration 017 covering the 14 late ones (M1); Caddy body cap and headers (M11); dev connector port bound to loopback and callers sending `X-Connector-Secret` (M14); third-party Actions pinned to commit SHAs (L15). Skips for the files the container does not mount |
-| `test_sec_llm.py` | Forged client `context` and `query_category` cannot clear the gate, the server retrieves its own evidence, bad `as_of` is 422, request bounds (H4, M11); the stream writes the audit row and `pending_moc` (M3); escaped document text and system-message rules, lowest `CONFIDENCE` wins, last `SOURCES_USED` wins, phantom citations and missing confidence refuse, RCA prompt escaping and citation filtering, NER default confidence below 0.7 (M4); formerly ungated wordings are classified, every named asset must be anchored, aliases resolve (M5); RCA pack site boundary (M8); NER honours the configured base URL (L8) |
+| `test_sec_llm.py` | Forged client `context` and `query_category` cannot clear the gate, the server retrieves its own evidence, bad `as_of` is 422, request bounds (H4, M11); the stream writes the audit row and `pending_moc` (M3); escaped document text and system-message rules, lowest `CONFIDENCE` wins, last `SOURCES_USED` wins, phantom citations and missing confidence refuse, RCA prompt escaping and citation filtering, NER default confidence below 0.7 (M4); formerly ungated wordings are classified, every named asset must be anchored, aliases resolve (M5); RCA pack site boundary (M8); the RCA pack drops test artifacts before synthesis; the pending-MoC notice follows the cited sources, then the retrieved sources for the named assets, and never looks up a typed asset id on its own (`llm.disclosed_sources`); NER honours the configured base URL (L8) |
 
 Existing files changed with it: `test_event_reorder.py` (a duplicate check never records the event, only `mark_seen` after a successful ingest does; `_store_event` inserts, accepts an identical retry, never overwrites another event; the pending-brief slot is per work order; a PTW never cancels another brief; the 4-hour cool-down is per trigger type), `test_authz_boundary.py`, `test_config_guardrail.py`, `test_query_category.py` and `test_synthesis_stream.py` (server-side evidence), plus the stack-tier `test_auth.py`, `test_health.py`, `test_ot_connector.py` and `conftest.py` (seed passwords from `.env`, connector secret).
 `test_alias_expansion.py` — a query naming a confirmed alias (P-101) also searches its canonical asset.
@@ -188,7 +188,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 969 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 975 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud
@@ -212,7 +212,7 @@ gh secret set GROQ_API_KEY
 > Token Factory → NIM → OpenRouter → Gemini cascade, and elicitation calls the LLM. Gemini's free tier is a few hundred requests/day and
 > is shared with the benchmark harnesses, so a busy day of pushes exhausts it; once it 429s,
 > synthesis silently returns no answer and *measured answer quality collapses* (observed:
-> 24/25 → 13/25). Tier-1 gives 969 service-free tests with **zero** provider calls, which is the
+> 24/25 → 13/25). Tier-1 gives 975 service-free tests with **zero** provider calls, which is the
 > signal CI should be providing. Enable tier 2 only for a deliberate pre-release run, against
 > a throwaway Supabase project.
 
@@ -282,7 +282,7 @@ tests/                        ← project root (NOT inside backend/)
 pytest.ini                    ← project root
 ```
 
-Suite size: **1,210 tests collected** across 70 files for the full suite (counted 2026-10-09: 1,194 after the 8 legacy-role-fallback tests went and 1 re-date test came, plus the 7 cross-site and 9 form tests (table layout and the extract-form route); 969 are service-free, the rest need the stack). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
+Suite size: **1,216 tests collected** across 70 files for the full suite (counted 2026-10-17, after the RCA test-artifact, brief-date, MoC-notice and QA-work-order tests; on 2026-10-09 it was 1,210: 1,194 after the 8 legacy-role-fallback tests went and 1 re-date test came, plus the 7 cross-site and 9 form tests (table layout and the extract-form route); 975 are service-free, the rest need the stack). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
 to get one, and do not quote 412 as a pass figure for the present tree. **1 known transient flake**
 (`test_briefs.py::test_attribution_worker_queues_recheck` — a work-order POST occasionally 500s under
 concurrent load; passes deterministically in isolation).
@@ -401,7 +401,7 @@ have to hit the production project.
 | `test_timestamp_alignment.py` | Cross-**source-system** drift only; same-source events are not drift; unparseable timestamps skipped rather than read as epoch-zero. | 9 |
 | `test_model_gate_classes.py` | Per-asset-class gate — a regressed class is blocked, others unaffected, enforcement off by default, lookup failure fails **open**. | 6 |
 | `test_superseded_filter.py` | **Superseded documents must not read as current.** ES and Qdrant both exclude them by default; the exclusion is `must_not superseded`, never `must active`, because `kairos_assets` docs and pre-existing Qdrant points carry no `status` at all and would otherwise vanish. Time-travel (`as_of`) re-includes them. Covers the `Filter(must=…) or None` regression that dropped the exclusion when no other condition existed. | 7 |
-| `test_brief_signing.py` | **HMAC acknowledgment signatures.** Deterministic, and bound to every fact it claims — brief, signer, action, timestamp, key. A signature captured on one brief cannot be replayed onto another, and ack vs countersign never collide. | 3 |
+| `test_brief_signing.py` | **HMAC acknowledgment signatures.** Deterministic, and bound to every fact it claims — brief, signer, action, timestamp, key. A signature captured on one brief cannot be replayed onto another, and ack vs countersign never collide. Also brief bodies: dates read as dates (`_when`, and a date with no offset claims no zone), a handover names its leads and describes work orders and alarms instead of printing event ids, and an inspection brief cites the asset's documents but never a test file. | 12 |
 | `test_ner_parse.py` | **NER truncation recovery.** `max_tokens: 1024` truncates the JSON on entity-dense documents; `json.loads` rejected the whole response and the document fell to the regex path (ASSET_TAG only). Salvage keeps the complete objects and flags `parse_recovered`; unrecoverable garbage still returns `None`. | 8 |
 
 `test_query_category.py` also gained the post-synthesis safety gate cases and the

@@ -19,7 +19,7 @@ function PatternCard({ pattern }: { pattern: CrossSitePattern }) {
     <li data-testid="cross-site-pattern" className="rounded-xl border border-line bg-surface p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-body font-semibold text-ink">
-          {label(pattern.failure_family)} on {label(pattern.equipment_class)}
+          {label(pattern.failure_family.toLowerCase())} on {label(pattern.equipment_class)}
         </h2>
         <StatusBadge tone={shared ? "danger" : "caution"} dot={false}>
           {shared ? "Seen at more than one site" : "Advisory"}

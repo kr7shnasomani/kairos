@@ -23,10 +23,8 @@ export const metadata: Metadata = {
   icons: { icon: "/logo.png", apple: "/logo.png" },
 };
 
-// Apply saved theme + contrast + nav-rail state before paint to avoid a flash.
-// The rail is here rather than in React state because a collapsed rail would
-// otherwise render at its full 316px on every first paint and snap narrow.
-const themeInit = `(function(){try{var t=localStorage.getItem('kairos-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('kairos-contrast');if(c==='high')document.documentElement.setAttribute('data-contrast','high');var n=localStorage.getItem('kairos-nav');if(n==='collapsed')document.documentElement.setAttribute('data-nav','collapsed');var d=localStorage.getItem('kairos-devtools');if(d==='show')document.documentElement.setAttribute('data-devtools','show');}catch(e){}})();`;
+// Apply saved theme, contrast and devtools state before paint to avoid a flash.
+const themeInit = `(function(){try{var t=localStorage.getItem('kairos-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('kairos-contrast');if(c==='high')document.documentElement.setAttribute('data-contrast','high');var d=localStorage.getItem('kairos-devtools');if(d==='show')document.documentElement.setAttribute('data-devtools','show');}catch(e){}})();`;
 
 export default function RootLayout({
   children,

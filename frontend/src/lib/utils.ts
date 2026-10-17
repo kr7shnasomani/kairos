@@ -1,4 +1,5 @@
 import type { AuthorityLevel, BriefPriority } from "./types";
+import { label as displayLabel } from "./labels";
 
 /** Tiny classNames joiner — avoids a dependency for simple conditional classes. */
 export function cn(...parts: Array<string | false | null | undefined>): string {
@@ -42,17 +43,6 @@ export function slaCountdown(sla_due_at: string, currentMs = nowMs()): { label: 
   const tone = hoursLeft < 4 ? "text-danger" : hoursLeft < 24 ? "text-caution" : "text-muted";
   const label = hoursLeft < 24 ? `${hoursLeft}h left` : `${Math.floor(hoursLeft / 24)}d left`;
   return { label, tone };
-}
-
-/** Compact "halted since" duration, e.g. "7h" / "2d". */
-export function haltedDuration(since: string): string {
-  const hrs = Math.round((Date.now() - new Date(since).getTime()) / 3600000);
-  return hrs < 24 ? `${hrs}h` : `${Math.round(hrs / 24)}d`;
-}
-
-/** Whole hours a deadline is past (0 if not yet due). Keeps clock reads out of render. */
-export function overdueHours(deadline: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(deadline).getTime()) / 3600000));
 }
 
 export interface PriorityMeta {
@@ -138,12 +128,10 @@ export function criticalityMeta(c: string): { label: string; color: string } {
   }
 }
 
-/** Human label for a trigger_event_type like "work_order_created". */
+/** Title Case label for a coded value like "work_order_created". Built on `label()`, so its acronym
+ *  overrides ("ptw_generated" → "PTW Generated") live in one map, `lib/labels.ts`. */
 export function triggerLabel(t: string): string {
-  return t
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return displayLabel(t).replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
 /** First letter uppercased, rest unchanged. Safe on undefined/empty (live data can drift). */

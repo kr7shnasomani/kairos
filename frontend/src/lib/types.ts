@@ -129,14 +129,6 @@ export interface RcaPack {
   synthesis_available: boolean;
 }
 
-/** Generic list envelope used by /assets, /governance/*, /compliance/gaps (MEMORY task 25). */
-export interface ListEnvelope<T> {
-  items: T[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 // --- Compliance (GET /compliance/gaps, /dashboard) ---
 // severity is derived server-side from authority_level: 1→critical, 2→major, else minor.
 export type GapSeverity = "critical" | "major" | "minor";
@@ -482,13 +474,6 @@ export interface ModelGateRunResponse {
   status: string;
 }
 
-// Mirrors GET /governance/validation-corpus/stats — no by_asset_class breakdown.
-export interface ValidationCorpusStats {
-  total_corpus_size: number;
-  by_entity_type: Record<string, number>;
-  last_updated_at: string | null;
-}
-
 // --- Governance: blast radius ---
 export interface BlastRadiusItem {
   item_id: string;
@@ -503,26 +488,6 @@ export interface BlastRadiusReport {
   affected_count: number;
   items: BlastRadiusItem[];
   generated_at: string;
-}
-
-// --- Annotations (POST /annotations, GET /annotations) ---
-export interface Annotation {
-  annotation_id: string;
-  document_id: string;
-  entity_text: string;
-  entity_type: string;
-  corrected_type?: string | null;
-  is_correct: boolean;
-  span_start?: number | null;
-  span_end?: number | null;
-  created_by: string;
-  created_at: string;
-}
-
-export interface AnnotationStats {
-  total: number;
-  corrections_this_week: number;
-  top_corrected_entity_types: Array<{ type: string; count: number }>;
 }
 
 // --- Elicitation (GET /elicitation/{wo}/questions) ---
@@ -788,7 +753,6 @@ export interface KnowledgeGraphData {
    *  that does not say it is filtered is the same mistake that kept the linkage figure wrong. */
   excluded_test_documents: number;
 }
-
 
 /** One row of the knowledge-coverage matrix (`GET /assets/coverage`). Counts are DISTINCT by
  *  `edge_id` server-side, so a re-ingested asset does not look better covered than it is. */

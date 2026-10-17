@@ -205,7 +205,7 @@ Opt-in liveness probe for a **rate-limited model provider**. Makes the smallest 
 
 **Response `200`:**
 ```json
-{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-ultra-550b-a55b", "served_model": "nvidia/nemotron-3-ultra-550b-a55b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
+{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-super-120b-a12b", "served_model": "nvidia/nemotron-3-super-120b-a12b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
 ```
 
 For a synthesis tier the probe sends the tier's own provider-specific body keys (Nemotron's thinking-off flag), so a provider that rejects them fails here rather than on every real answer. `served_model` is the model the provider says it ran; `model_mismatch` is `null` when it matches the pin (casing ignored) and a record otherwise. Both are `null` for Jina and Groq.
@@ -1183,11 +1183,19 @@ leave the line out.
 
 `uncertainty` carries the model's own statement of what it could not establish; `rate_limited` is
 `true` only when **every** provider tier returned HTTP 429 (see above). `model` names the provider tier
-that actually answered — `nim` (Nemotron 3 Ultra 550B), `openrouter` (Llama 3.1 70B) or `gemini` — and
+that actually answered — `nim` (Nemotron 3 Super 120B), `openrouter` (Llama 3.1 70B) or `gemini` — and
 `served_model`, when present, is the exact model id the provider reported.
 
-**`pending_moc` — the change-under-review warning.** Non-empty when an asset cited in the answer has
-an open engineering-track conflict awaiting MoC sign-off. While a conflict sits in the MoC queue the
+**`pending_moc` — the change-under-review warning.** Non-empty when an asset the answer is about has
+an open engineering-track conflict awaiting MoC sign-off. "About" is decided in order
+(`llm.disclosed_sources`, 2026-10-17): the sources the answer cites (`sources_used`); if it cites
+none, as a refusal does, the retrieved sources for the assets the question names (aliases resolved,
+a series such as "HE-3xx" matching its members); and only when the question names no asset, every
+retrieved source. Every disclosed asset comes from the retrieved sources, which are already scoped to
+what the caller may read: an asset id typed into the question is never looked up on its own, so a
+refusal cannot reveal conflicts on a showcase or another site's asset. Before that it used every
+retrieved source, so a V-247 question carried a P-1101A notice because one of its six retrieved
+documents was about P-1101A. While a conflict sits in the MoC queue the
 canonical graph is deliberately **not** updated, so the answer may be reporting a value that is under
 formal dispute — architecture Layer 7 and Flow C both require the query to say so:
 
@@ -1204,13 +1212,12 @@ formal dispute — architecture Layer 7 and Flow C both require the query to say
 ]
 ```
 
-Populated on refusals too, so a refusal that hands back source documents still discloses that those
-documents are contested. The copilot renders it as a banner **above** the answer — after it, a
+Populated on refusals too: a refusal discloses conflicts on the retrieved sources for the assets its question names. The copilot renders it as a banner **above** the answer — after it, a
 technician has already read the number. `moc_id` is null when a conflict is flagged but no MoC draft
 has been raised yet.
 
-*Scope:* currently returned by `POST /search/synthesize` only, not by `GET /search/` or
-`POST /search/rca-pack`.
+*Scope:* returned by `POST /search/synthesize` and its stream (scoped as above), and by `GET /search/`,
+`GET /search/assets/{asset_id}` and `POST /search/rca-pack` (scoped to the results or the named asset).
 
 **Response `200` — refused:**
 ```json
@@ -1307,6 +1314,8 @@ that did not happen.
 3. **Supabase** — `operational_events` (work orders, alarms, PTWs) in the same 90-day window
 
 Combined evidence is passed to `LLMService.rca_synthesize()`. Falls back to raw timeline + documents when LLM is unavailable.
+
+**Test documents are hidden on read, never deleted** (2026-10-17). Test-artifact documents (`corpus.partition_test_artifacts`) are dropped from the evidence **before** synthesis, so no hypothesis or supporting document can rest on one; the exclusion is logged with its count (`rca_pack.test_artifacts_excluded`).
 
 **Safety-critical queries:** `refused=True` when the failure code matches a safety-critical category. Sources returned directly.
 

@@ -55,7 +55,7 @@ export default function VoiceCapturePage() {
               id="voice-tag"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
-              placeholder="e.g. P-101 or WO-2024-118"
+              placeholder="e.g. P-1101A or WO-2024-118"
               className="mt-1.5 min-h-11 w-full rounded-xl border border-line bg-surface-2 px-3.5 text-subtitle text-ink placeholder:text-muted focus-visible:outline-2 focus-visible:outline-accent"
             />
           </div>

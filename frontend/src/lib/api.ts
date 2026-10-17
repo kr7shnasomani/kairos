@@ -22,11 +22,8 @@ import type {
   ModelGateHistory,
   ModelGateResult,
   ModelGateRunResponse,
-  ValidationCorpusStats,
   BlastRadiusReport,
   BlastRadiusItem,
-  Annotation,
-  AnnotationStats,
   ElicitationQuestion,
   ElicitationSession,
   OffboardingProgramme,
@@ -932,11 +929,6 @@ export function runModelGate(): Promise<ModelGateRunResponse> {
   return postJson<ModelGateRunResponse>("/governance/model-gate/run", {});
 }
 
-export async function getValidationCorpusStats(): Promise<Fetched<ValidationCorpusStats | null>> {
-  const data = await getJson<ValidationCorpusStats>("/governance/validation-corpus/stats");
-  return { data, source: "live" };
-}
-
 // --- Governance: blast radius ---
 export async function getBlastRadius(documentId: string): Promise<Fetched<BlastRadiusReport | null>> {
   // Backend returns { document_id, affected_count, affected: [{edge, target}] }.
@@ -978,37 +970,7 @@ export async function getBlastRadius(documentId: string): Promise<Fetched<BlastR
   return { data, source: "live" };
 }
 
-// --- Annotations ---
-export function createAnnotation(body: {
-  document_id: string;
-  entity_text: string;
-  entity_type: string;
-  corrected_type?: string;
-  is_correct: boolean;
-  span_start?: number;
-  span_end?: number;
-}) {
-  return postJson<Annotation>("/annotations/", body);
-}
-
-export async function getAnnotations(documentId: string): Promise<Fetched<Annotation[]>> {
-  const data = await getJson<Annotation[]>(`/annotations/?document_id=${encodeURIComponent(documentId)}`);
-  return { data, source: "live" };
-}
-
-export async function getAnnotationStats(): Promise<Fetched<AnnotationStats | null>> {
-  const data = await getJson<AnnotationStats>("/annotations/stats");
-  return { data, source: "live" };
-}
-
 // --- Elicitation ---
-export function triggerElicitation(workOrderId: string, assetId?: string) {
-  return postJson<{ session_id: string; status: string }>("/elicitation/trigger", {
-    work_order_id: workOrderId,
-    asset_id: assetId,
-  });
-}
-
 export async function getElicitationQuestions(workOrderId: string): Promise<Fetched<ElicitationSession | null>> {
   const raw = await getJson<Omit<ElicitationSession, "questions"> & { questions: Array<string | ElicitationQuestion> }>(
     `/elicitation/${encodeURIComponent(workOrderId)}/questions`,
@@ -1052,14 +1014,6 @@ export function submitVoiceNote(workOrderId: string, blob: Blob, submittedBy: st
 }
 
 // --- Offboarding ---
-export function createOffboarding(body: {
-  personnel_id: string;
-  personnel_email: string;
-  retirement_date: string;
-}) {
-  return postJson<OffboardingProgramme>("/elicitation/offboarding", body);
-}
-
 export async function getOffboardingList(): Promise<Fetched<OffboardingProgramme[]>> {
   // Backend returns { items, total }; tolerate a bare array too.
   const res = await getJson<{ items?: OffboardingProgramme[] } | OffboardingProgramme[]>("/elicitation/offboarding", 6000);
@@ -1821,7 +1775,6 @@ export async function getKnowledgeGraph(
     source: "live",
   };
 }
-
 
 // --- Cross-site failure patterns (GET /assets/cross-site-patterns) ---
 /** Failure families that repeat on one equipment class across sites. Read-only and model-free

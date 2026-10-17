@@ -117,7 +117,7 @@ export default function GraphPage() {
               id="asset-id"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="e.g. P-101"
+              placeholder="e.g. P-1101A"
               className="h-11 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-body outline-none focus-visible:border-accent sm:max-w-xs"
             />
             <button

@@ -122,3 +122,82 @@ async def test_lookup_failure_keeps_the_citation():
 
     s = (await _resolve_source_documents(_Broken(), _sources_from_graph([_edge()])))[0]
     assert s.document_id == "DOC-1"
+
+
+def test_brief_dates_read_as_dates_not_iso_strings():
+    from datetime import UTC, datetime
+
+    from api.services.brief_engine import _when
+
+    assert _when("2026-10-08T11:56:10.092277+00:00") == "8 Oct 2026, 11:56 UTC"
+    assert _when("2026-10-08T17:26:00+05:30") == "8 Oct 2026, 11:56 UTC"
+    assert _when(datetime(2026, 10, 8, 18, 6, tzinfo=UTC)) == "8 Oct 2026, 18:06 UTC"
+    assert _when("?") == "?"
+
+
+# =============================================================================
+# Brief bodies read like a plant document: names, dates and descriptions, no internal ids
+# =============================================================================
+
+import api.services.brief_engine as brief_engine  # noqa: E402
+from api.models.event import ShiftHandoverEvent  # noqa: E402
+
+_LEAD = "cad613ea-8be2-4d3d-8587-f123868dfdf1"
+
+
+async def _value(v):
+    return v
+
+
+def _engine(supabase=None, **methods):
+    """A BriefEngine with no clients; each named query is replaced by a coroutine returning its value."""
+    engine = object.__new__(brief_engine.BriefEngine)
+    engine.supabase = supabase
+    for name, value in methods.items():
+        setattr(engine, name, lambda *_a, _v=value: _value(_v))
+    return engine
+
+
+async def test_handover_brief_names_people_and_describes_rows(monkeypatch):
+    engine = _engine(
+        _get_open_work_orders=[{"event_id": "a478b2d5-1524", "asset_id": "DEMO-P-1101A", "payload": {"description": "Seal leaking"}}],
+        _get_active_alarms=[{"event_id": "e948d147-c269", "asset_id": "DEMO-H-1101", "occurred_at": "2026-10-08T11:56:00+00:00",
+                             "payload": {"alarm_description": "Outlet temperature high high"}}],
+        _get_open_conflicts=[],
+    )
+    monkeypatch.setattr(brief_engine, "display_names", lambda _sb, _ids: _value({_LEAD: "Kiran Joshi"}))
+    brief = await engine.assemble_shift_handover_brief(ShiftHandoverEvent(
+        source_system="manual", site_id="SITE_DEMO", outgoing_shift_lead_id="Ravi Solanki",
+        incoming_shift_lead_id=_LEAD, handover_time="2026-10-08T18:06:10+00:00",
+    ))
+
+    assert "Outgoing: Ravi Solanki → Incoming: Kiran Joshi" in brief.body
+    assert "8 Oct 2026, 18:06 UTC" in brief.body
+    assert "DEMO-P-1101A: Seal leaking" in brief.body
+    assert "DEMO-H-1101: Outlet temperature high high, 8 Oct 2026, 11:56 UTC" in brief.body
+    for internal in ("a478b2d5", "e948d147", _LEAD, "SITE_DEMO"):
+        assert internal not in brief.body
+    assert brief.sources == []  # site-wide, so it cites no document and says so in the UI
+
+
+async def test_inspection_brief_cites_the_assets_documents_but_never_a_test_file():
+    rows = [
+        {"document_id": "DOC-1", "file_name": "oem_manual.pdf", "document_type": "oem_manual", "vault_url": None},
+        {"document_id": "DOC-T", "file_name": "test_qa_submission_20260914.txt", "document_type": "procedure", "vault_url": None},
+    ]
+    engine = _engine(_DocSupabase(rows), _get_failure_timeline=[], _get_last_inspection=[], _get_asset_compliance_obligations=[])
+
+    class _Graph:
+        async def get_asset_knowledge_at(self, _asset_id):
+            return [_edge("DOC-1"), _edge("DOC-T")]
+
+    engine.graph = _Graph()
+    brief = await engine.assemble_inspection_brief(
+        {"event_id": "EV-1", "asset_id": "EQ-101", "inspection_type": "bench test", "result": "conditional", "findings": "Re-test after lapping"}
+    )
+    assert [s.document_id for s in brief.sources] == ["DOC-1"]
+    assert brief.sources[0].title == "oem_manual.pdf"
+
+
+def test_a_date_without_an_offset_claims_no_zone():
+    assert brief_engine._when("2026-10-08T18:06:00") == "8 Oct 2026, 18:06"

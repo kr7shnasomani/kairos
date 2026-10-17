@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     # meta/llama-3.1-70b-instruct was retired by NVIDIA (410 Gone, 2026-09-13). Of the chat models
     # the account still lists, this one answered in the ANSWER/CONFIDENCE contract at ~2.5 s with
     # thinking off; several other listed models 404 or hang. Probe before switching again.
-    NVIDIA_NIM_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b"
+    NVIDIA_NIM_MODEL: str = "nvidia/nemotron-3-super-120b-a12b"
     # Nemotron 3 reasons before answering by default, spending the token budget on hidden
     # reasoning (an answer came back truncated to 5 words) and never streaming `content` deltas.
     # Sent as `chat_template_kwargs.enable_thinking=false`; set False for a model that rejects it.

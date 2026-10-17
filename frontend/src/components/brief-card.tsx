@@ -37,7 +37,9 @@ export function BriefCard({ brief }: { brief: Brief }) {
             ) : (
               <span className="inline-flex items-center gap-1.5 text-label font-bold uppercase tracking-[0.1em]" style={{ color: p.color }}>
                 <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-                {brief.requires_countersignature ? "PTW-critical" : p.label}
+                {brief.requires_countersignature ? (
+                  <span title="Permit to work: a second person must countersign before the job starts">Permit to work</span>
+                ) : p.label}
               </span>
             )}
             <span className="text-label text-muted">· {triggerLabel(brief.trigger_event_type)}</span>
@@ -64,8 +66,15 @@ export function BriefCard({ brief }: { brief: Brief }) {
         )}
 
         <div className="mt-0.5 flex flex-wrap items-center gap-2">
-          <span className="text-label text-muted">{brief.sources.length} source{brief.sources.length !== 1 ? "s" : ""}</span>
-          <AuthorityBadge level={topAuthority} />
+          {brief.sources.length > 0 ? (
+            <>
+              <span className="text-label text-muted">{brief.sources.length} source{brief.sources.length !== 1 ? "s" : ""}</span>
+              <AuthorityBadge level={topAuthority} />
+            </>
+          ) : (
+            // A handover brief summarises plant events and cites no document; an L5 badge here would invent one.
+            <span className="text-label text-muted">From plant events, no source document</span>
+          )}
           {brief.requires_countersignature && !isFrozen && <StatusBadge tone="danger">Countersignature</StatusBadge>}
           {quarantineCount > 0 && <StatusBadge tone="caution">{quarantineCount} unverified</StatusBadge>}
         </div>

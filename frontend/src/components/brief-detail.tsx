@@ -117,7 +117,7 @@ export function BriefDetail({ brief }: { brief: Brief }) {
           ) : (
             <span className="inline-flex items-center gap-1.5 text-label font-bold uppercase tracking-[0.1em]" style={{ color: p.color }}>
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-              {isPtw ? "PTW-critical" : p.label}
+              {isPtw ? <span title="Permit to work: a second person must countersign before the job starts">Permit to work</span> : p.label}
             </span>
           )}
           <span className="text-label text-muted">· {triggerLabel(brief.trigger_event_type)}</span>

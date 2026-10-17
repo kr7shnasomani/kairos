@@ -147,6 +147,7 @@ async def measure() -> dict:
             d for d in dangling if "Asset" in doc_sources.get(d, set())
         ),
         "by_type": by_type,
+        "showcase_docs": sorted(showcase_docs),
     }
 
 

@@ -6,7 +6,6 @@ import CopilotPage from "./page";
 
 vi.mock("@/lib/api", () => ({
   synthesize: vi.fn(),
-  createAnnotation: vi.fn(),
   submitAnswerFeedback: vi.fn().mockResolvedValue(true),
   getToken: () => null,
 }));
