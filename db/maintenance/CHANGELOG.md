@@ -11,6 +11,7 @@ A running record of ad-hoc SQL run directly against the live Supabase project
 | 2026-07-10 | Loaded golden dataset via `scripts/load_demo_dataset.py` (10 assets, 4 events + deviation, 20 docs, 1 voice) | — | n/a (API pipeline) |
 | 2026-07-10 | **Full reset** — TRUNCATE every `public` table (schema + auth kept) to wipe all accumulated dev/test data | all domain rows | [`reset_all_data.sql`](./reset_all_data.sql) |
 | 2026-07-11 | Registered demo off-boarding programme (`ramesh.kumar@kairos.local`, 5 sessions) | 1 programme + 5 items | n/a (API pipeline — now seeded by `load_demo_dataset.py`) |
+| 2026-10-18 | Applied `018_moc_draft` (owner-approved): three nullable columns on `moc_items` (`draft`, `draft_generated_at`, `draft_generated_by`) for drafted MoC changes, via the Supabase MCP `apply_migration` | 0 rows (DDL only) | folded into `../schema.sql` (`moc_items`) |
 
 ## Notes
 

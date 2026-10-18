@@ -78,6 +78,8 @@ export default function ModelGatePage() {
   const reduced = useReducedMotion();
   const role = useRole();
   const isAdmin = ADMIN_VIEW_ROLES.includes(role);
+  // The demo role views admin pages but cannot run the gate (`DemoGate` disables the header button).
+  const canRun = isAdmin && role !== "demo";
   const [running, setRunning] = useState(false);
   const [queued, setQueued] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
@@ -202,7 +204,7 @@ export default function ModelGatePage() {
 
           {/* Pass mix + quality trend — asymmetric 2fr/3fr split */}
           <div data-testid="model-gate-layout" className="mt-5 grid items-start gap-6 lg:grid-cols-[2fr_3fr]">
-            <ChartContainer title="Pass mix" sub="All recorded runs" height={240} collapsible loading={loading} empty={rows.length === 0 ? "No gate runs yet." : undefined}>
+            <ChartContainer title="Pass mix" sub="All recorded runs" height={240} collapsible loading={loading} empty={rows.length === 0 ? "No gate run recorded yet." : undefined}>
               <PieChart>
                 <Pie data={[{ name: "Passed", value: passedCount }, { name: "Failed", value: rows.length - passedCount }]} dataKey="value" nameKey="name" cy="45%" innerRadius={60} outerRadius={90} paddingAngle={2} stroke="none" isAnimationActive={!reduced}>
                   <Cell fill="var(--verified)" />
@@ -214,7 +216,7 @@ export default function ModelGatePage() {
                 <Tooltip content={<ChartTooltip />} />
               </PieChart>
             </ChartContainer>
-            <ChartContainer title="Quality trend" sub="Precision / recall / F1 per run" height={240} collapsible loading={loading} empty={rows.length === 0 ? "No gate runs yet." : undefined}>
+            <ChartContainer title="Quality trend" sub="Precision / recall / F1 per run" height={240} collapsible loading={loading} empty={rows.length === 0 ? "No gate run recorded yet." : undefined}>
               <LineChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="day" {...AXIS} minTickGap={24} />
@@ -231,7 +233,11 @@ export default function ModelGatePage() {
           {/* Full run history */}
           <section data-testid="model-gate-history" className="mt-5">
             <h2 className="mb-3 text-label font-bold uppercase tracking-[0.1em] text-muted">Run history</h2>
-            <DataTable<GateRow> columns={COLUMNS} rows={rows} keyFn={(r) => r.run_id} pageSize={25} loading={loading} emptyState={<EmptyState message="No gate runs yet." />} />
+            <DataTable<GateRow> columns={COLUMNS} rows={rows} keyFn={(r) => r.run_id} pageSize={25} loading={loading} emptyState={
+              canRun
+                ? <EmptyState message="No gate run is recorded yet. Run the gate to score the extraction model on the validation corpus." action={{ label: "Run gate now", onClick: handleRun }} />
+                : <EmptyState message="No gate run is recorded yet. An admin runs the gate before a new extraction model is promoted." />
+            } />
           </section>
         </>
       )}

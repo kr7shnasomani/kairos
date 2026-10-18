@@ -6,8 +6,12 @@ Scores the OCR path against the ground-truth pairings the golden dataset already
 
     scanned_oem_bulletin_degraded.png  <- oem_bulletin_fp_sb_2025_04.pdf   ("same content as file 6")
     scanned_inspection_degraded.png    <- insp_he301_2025_q4.pdf           ("same content as file 12")
-    handwritten_shift_log.png          <- shift_log.txt                    ("same 2 events as files 22/23")
-    handwritten_inspection_note.png    <- shift_log.txt
+    handwritten_shift_log.png          <- shift_log.txt, entry 15-Jan-2026 (manifest row 22)
+    handwritten_inspection_note.png    <- shift_log.txt, entry 24-Jun-2026 (manifest row 23)
+
+Each handwritten note reproduces ONE entry of `shift_log.txt`, so it is scored against that entry.
+Until 2026-10-18 both were scored against the whole log, which also holds the other note's event
+and a later handover entry, and capped either note at about a third (both read 0.3333).
 
 The metric is **recall of operationally salient tokens** — asset tags, measurements with units,
 standards references, dates — not character error rate. See `api/services/ocr_gate.py` for why.
@@ -25,8 +29,9 @@ COST
 
 REPORTS, DOES NOT BLOCK
   Consistent with `MODEL_GATE_ENFORCE=False`: this prints numbers and exits 0 even on a poor
-  score. Handwriting is a documented Layer 3 limitation ("no separate handwriting model"), so a
-  low handwriting recall here is the expected reading of a known gap, not a new regression.
+  score. Handwriting goes through the general OCR model ("no separate handwriting model"); since
+  the 2026-08 response-key fix it transcribes both notes, so a low handwriting recall now needs
+  reading against the transcription rather than being assumed to be that limit.
 
     docker compose run --rm --no-deps kairos-backend-api python benchmark/run_ocr_gate.py
 """
@@ -42,6 +47,11 @@ PAIRINGS: dict[str, str] = {
     "scanned_inspection_degraded.png": "insp_he301_2025_q4.pdf",
     "handwritten_shift_log.png": "shift_log.txt",
     "handwritten_inspection_note.png": "shift_log.txt",
+}
+# The entry of a multi-entry reference each image reproduces, as `dataset_manifest.csv` declares it.
+ENTRY_DATE: dict[str, str] = {
+    "handwritten_shift_log.png": "15-Jan-2026",
+    "handwritten_inspection_note.png": "24-Jun-2026",
 }
 
 # Handwriting has no dedicated model in this deployment. Grouped so a weak score reads as the
@@ -65,7 +75,7 @@ async def main() -> int:
     from supabase import create_client
 
     from api.config import Settings
-    from api.services.ocr_gate import score_ocr
+    from api.services.ocr_gate import reference_entry, score_ocr
 
     settings = Settings()
     sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
@@ -107,7 +117,7 @@ async def main() -> int:
                 results.append((image, {"scoreable": False, "reason": "no_ocr_text"}))
                 continue
 
-            score = score_ocr(ref_text, ocr_text)
+            score = score_ocr(reference_entry(ref_text, ENTRY_DATE.get(image)), ocr_text)
             if not score["scoreable"]:
                 print(f"  {image:38} UNSCOREABLE — the reference carries no salient tokens")
                 continue
@@ -141,9 +151,12 @@ async def main() -> int:
     sc = [s["salient_recall"] for n, s in scored if n not in HANDWRITTEN]
     print("\n  scanned (degraded)   mean recall:", f"{sum(sc)/len(sc):.4f}" if sc else "n/a")
     print("  handwritten          mean recall:", f"{sum(hw)/len(hw):.4f}" if hw else "n/a")
-    print("\n  Handwriting is a recorded Layer 3 limitation (no separate handwriting model), so a")
-    print("  low score there is the known gap being measured, not a new regression. Recall is the")
-    print("  safety-relevant direction: a dropped pressure limit is the failure this catches.")
+    if hw and sum(hw) / len(hw) < 0.7:
+        print("\n  Handwriting runs through the general OCR model (no separate handwriting model), so")
+        print("  read a low score there against that limit before calling it a regression.")
+    print("\n  Recall is the safety-relevant direction: a dropped pressure limit is the failure this")
+    print("  catches. Each handwritten note carries only a few salient tokens, so its score is a")
+    print("  small sample; pair it with a read of the transcription.")
     return 0
 
 

@@ -16,9 +16,11 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Requ
 from api.dependencies import (
     CurrentUserDep,
     Neo4jDep,
+    QdrantDep,
     QuarantineItemIdDep,
     SettingsDep,
     SupabaseDep,
+    demo_llm_budget,
     require_role,
 )
 from api.models.document import PromoteQuarantineRequest, RequestQuarantineInfoRequest
@@ -26,8 +28,11 @@ from api.services import tenant
 from api.services.corpus import document_rows
 from api.services.graph import GraphService
 from api.services.identity import display_names
+from api.services.llm import LLMService
 from api.services.metrics import conflicts_open
+from api.services.moc_draft import draft_moc_change
 from api.services.sla_service import SLAService
+from api.services.vector_store import VectorStoreService
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -795,6 +800,8 @@ async def get_moc_item(
         "status": moc.get("status"),
         "created_at": moc.get("created_at"),
         "draft_content": moc.get("description"),
+        "draft": moc.get("draft"),
+        "draft_generated_at": moc.get("draft_generated_at"),
     }
 
 
@@ -844,6 +851,54 @@ async def approve_moc_item(
     )
     log.info("moc.approved", moc_id=moc_id, approver=approver)
     return {"status": "approved", "moc_id": moc_id}
+
+
+@router.post("/moc/{moc_id}/draft", dependencies=[Depends(demo_llm_budget)], summary="Draft the document changes for a MoC")
+async def draft_moc(
+    moc_id: str,
+    supabase: SupabaseDep,
+    qdrant: QdrantDep,
+    settings: SettingsDep,
+    current_user: dict = Depends(require_role("engineer", "reliability", "admin")),
+) -> dict:
+    """Draft the cited redline an engineer reviews before approving: for each affected document, where it
+    states the old value, the current and proposed wording, and the reason, citing the MoC's own sources
+    (`services/moc_draft.py`). Stored on the MoC (`draft`), replaced by a later draft, never applied to a
+    document. An approved or rejected MoC is closed, so it is not drafted.
+    """
+    await tenant.guard_row(supabase, current_user, "moc_items", moc_id)
+    moc_result = await asyncio.to_thread(lambda: supabase.table("moc_items").select("*").eq("moc_id", moc_id).execute())
+    if not moc_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"MoC '{moc_id}' not found")
+    moc = moc_result.data[0]
+    if moc.get("status") in ("approved", "rejected"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"MoC is {moc['status']}; there is nothing to draft.")
+
+    vector_store = VectorStoreService(qdrant, settings, include_demo=tenant.sees_showcase(current_user))
+    draft = await draft_moc_change(moc, llm=LLMService(settings), vector_store=vector_store, supabase=supabase, settings=settings)
+    if draft is None:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No usable draft came back. Try again.")
+
+    user_id = current_user.get("user_id", "unknown")
+    now_iso = datetime.now(UTC).isoformat()
+    try:
+        await asyncio.to_thread(
+            lambda: supabase.table("moc_items").update(
+                {"draft": draft, "draft_generated_at": now_iso, "draft_generated_by": user_id}
+            ).eq("moc_id", moc_id).execute()
+        )
+    except Exception as exc:  # noqa: BLE001 — most likely migration 018 is not applied yet
+        log.error("moc.draft_store_failed", moc_id=moc_id, error=str(exc)[:200])
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="The draft could not be stored (db/migrations/018_moc_draft.sql may not be applied).") from exc
+    await asyncio.to_thread(
+        lambda: supabase.table("audit_log").insert({
+            "action": "moc_draft_generated", "entity_type": "moc_item", "entity_id": moc_id, "performed_by": user_id,
+            "details": {"changes": len(draft["changes"]), "open_questions": len(draft["open_questions"]), "model": draft.get("model")},
+        }).execute()
+    )
+    log.info("moc.draft_generated", moc_id=moc_id, changes=len(draft["changes"]))
+    return {"moc_id": moc_id, "draft": draft, "draft_generated_at": now_iso}
 
 
 # =============================================================================

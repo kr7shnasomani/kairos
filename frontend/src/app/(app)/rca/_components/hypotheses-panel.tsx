@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { BarList } from "@/components/charts/bar-list";
-import { EmptyState, RefusalCard, SourceChip } from "@/components/ui";
+import { EmptyState, RefusalCard, SourceChip, StatusBadge } from "@/components/ui";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui-card";
 import { fmtNum } from "@/lib/format";
 import type { RcaHypothesis } from "@/lib/types";
@@ -10,7 +10,7 @@ import type { RcaHypothesis } from "@/lib/types";
 const MAX_BARS = 8;
 
 /** Ranked hypotheses: BarList of evidence weights + per-hypothesis detail rows. */
-export function HypothesesPanel({ hypotheses }: { hypotheses: RcaHypothesis[] }) {
+export function HypothesesPanel({ hypotheses, dropped = [] }: { hypotheses: RcaHypothesis[]; dropped?: RcaHypothesis[] }) {
   const ranked = useMemo(
     () => [...(hypotheses ?? [])].sort((a, b) => (b.evidence_weight ?? 0) - (a.evidence_weight ?? 0)),
     [hypotheses],
@@ -51,6 +51,21 @@ export function HypothesesPanel({ hypotheses }: { hypotheses: RcaHypothesis[] })
           </div>
         </>
       )}
+      {dropped.length > 0 && (
+        <details className="border-t border-line">
+          <summary className="cursor-pointer px-4 py-3 text-caption font-semibold text-muted sm:px-5">
+            Dropped after checking ({dropped.length})
+          </summary>
+          <ul className="divide-y divide-line">
+            {dropped.map((h) => (
+              <li key={h.hypothesis.slice(0, 60)} className="px-4 py-3 sm:px-5">
+                <p className="text-body text-muted line-through decoration-line">{h.hypothesis}</p>
+                {h.check_reason && <p className="mt-1 text-caption text-ink">{h.check_reason}</p>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </Card>
   );
 }
@@ -66,8 +81,14 @@ function HypothesisRow({ h, rank }: { h: RcaHypothesis; rank: number }) {
         <p className="min-w-0 flex-1 text-body leading-relaxed text-ink">{h.hypothesis}</p>
         <span className="tabular shrink-0 text-caption font-semibold text-ink">{fmtNum(h.evidence_weight, 2)}</span>
       </div>
-      {(h.sources ?? []).length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2 pl-7">
+      {((h.sources ?? []).length > 0 || h.check) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
+          {h.check === "supported" && (
+            <StatusBadge tone="verified">Checked against its sources</StatusBadge>
+          )}
+          {h.check === "unchecked" && (
+            <StatusBadge tone="neutral">Not checked</StatusBadge>
+          )}
           {(h.sources ?? []).map((s) => (
             <SourceChip key={s}>{s}</SourceChip>
           ))}

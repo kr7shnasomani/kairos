@@ -293,9 +293,9 @@ type EvalBar = {
   hero: boolean;
 };
 const evalBars: EvalBar[] = [
-  { label: "Retrieval", note: "The fact reaches the model", value: 100, display: "100%", badge: "46/46", sub: "graded by fixed rules", hero: false },
+  { label: "Retrieval", note: "The fact reaches the model", value: 98, display: "98%", badge: "45/46", sub: "graded by fixed rules", hero: false },
   { label: "Provenance", note: "Sources cited", value: 100, display: "100%", badge: "46/46", sub: "every answer cited", hero: true },
-  { label: "Answer quality", note: "One valid run", value: 87, display: "87%", badge: "40/46", sub: "95% confidence: 74 to 94", hero: false },
+  { label: "Answer quality", note: "One valid run", value: 91, display: "91%", badge: "42/46", sub: "95% confidence: 80 to 97", hero: false },
 ];
 
 // The five harnesses beyond the Q&A grading, all from benchmark/RESULTS.md.
@@ -317,9 +317,9 @@ const evalSuites: {
     // Document-centric (run_kg_completeness.py), not the raw asset count —
     // that query has no test-artifact filter, see status.md.
     name: "Knowledge graph linkage",
-    headline: "18 / 20",
-    headlineNote: "Active vault documents with a verified knowledge edge",
-    rows: [["Documents linked", "90%"], ["Dangling provenance", "0"], ["Alias resolution", "2/2"], ["MDM identity", "2/2"]],
+    headline: "21 / 21",
+    headlineNote: "Active vault documents with at least one knowledge-graph edge",
+    rows: [["Documents linked", "100%"], ["Dangling provenance", "0"], ["Alias resolution", "2/2"], ["MDM identity", "2/2"]],
   },
   {
     name: "Proactive briefs · Layer 8",
@@ -364,14 +364,14 @@ const evalSuites: {
     rows: [["Memory slope", "+8.6 MB/h"], ["Connections", "+4.2/h"], ["Errors", "0.11% of 37,842"], ["Idle recovery", "4 / 4 endpoints"]],
   },
   {
-    // Every row here is the same 2026-10-17 run the chart above reports, taken
+    // Every row here is the same 2026-10-18 run the chart above reports, taken
     // from one `run_benchmark.py` output. Quoting the percentiles from one run
     // beside another run's provider mix is the mistake this card is arranged to
     // prevent — figures from earlier sweeps had drifted into the docs.
     name: "Synthesis latency",
     headline: "p50 2.6 s",
     headlineNote: "Nemotron 3 Super on NVIDIA NIM at the 60 second cap, quoted with its slowest cases",
-    rows: [["p95", "5.3 s"], ["Mean", "2.8 s"], ["Graded questions", "46"], ["Answered by", "nim 40 · refused 6"]],
+    rows: [["p95", "9.6 s"], ["Mean", "3.8 s"], ["Graded questions", "46"], ["Answered by", "nim 40 · refused 6"]],
   },
 ];
 
@@ -438,15 +438,38 @@ const faqGroups = [
     name: "Basics",
     items: [
       ["What does Kairos actually do?", "It turns the documents, drawings, asset history and field notes a plant already owns into answers people can act on. Every answer shows the source it came from, how authoritative that source is, and how confident the system is."],
+      ["What problem does it solve?", "Plant knowledge is spread across manuals, procedures, drawings, work orders and people's heads, and it goes out of date without anyone noticing. Engineers lose time finding the current version, and jobs start without the one bulletin or past failure that mattered. Kairos joins those sources, tracks which version is current, and brings the relevant facts to the person before the job."],
+      ["Who is it for?", "Field technicians get briefs before a job and a copilot on their phone. Maintenance and reliability engineers get root-cause packs, conflicts and the review queues. Compliance officers get clause-by-asset gaps and exportable audit evidence, and plant managers get one view of open risk."],
       ["How is this different from a chatbot over our documents?", "A chatbot gives you text. Kairos gives you text plus proof of where it came from, and refuses to answer when a safety-critical question has weak evidence behind it. We grade retrieval and citations with fixed rules, not with another model."],
+      ["How is it different from AVEVA, Aspen or other industrial software?", "Predictive tools such as Aspen Mtell watch sensor data; Kairos reads what people wrote about the equipment. Asset platforms such as AVEVA and Octave are adding document extraction and copilots that answer when asked. Kairos also pushes a brief when nobody asked, inside an alarm budget, refuses safety questions it cannot back up, and publishes a rule-graded benchmark that includes its failures."],
+      ["What file types can it read?", "PDFs, including scanned ones, photos and handwritten notes (PNG, JPEG, TIFF, WebP), P&ID drawings, spreadsheets (.xlsx, .xls, .ods), CSV and text files, email archives (.eml, .mbox) and voice notes. Word files are not read in this MVP, so export them to PDF first."],
       ["What does it need to get started?", "The documents you already have. Drawings, procedures, vendor manuals and maintenance history all go through the ingestion pipeline. Nothing has to be rewritten first."],
     ],
   },
   {
-    name: "Governance",
+    name: "How it works",
     items: [
+      ["How does it find an answer?", "Three searches run together: keyword search for exact tags and document numbers, meaning-based search for questions worded differently from the text, and the knowledge graph for what is linked to the asset. The results are merged by rank, the most relevant documents are kept and shown most authoritative first, and the model writes only from those documents and must cite them."],
+      ["Why a knowledge graph and not just a vector database?", "Some questions are about connections, not text: which valves sit inside an isolation boundary, which pumps share a failing part, what a revised bulletin affects downstream. A graph answers those directly. Each link also carries its source, authority, confidence, review status and the dates it was true, which a vector store has no place for."],
+      ["What happens when a document is revised?", "The old version is closed, not deleted: its facts get an end date and the new ones start. Kairos then traces everything that depended on the old version and flags it for review. You can also view the graph as it stood on any past date, which is what an incident investigation needs."],
+      ["What if two documents disagree?", "Kairos does not average them or pick the newest. It ranks sources by authority (regulation, then engineering standard, OEM manual, site procedure and field note), raises a conflict, and sends engineering disagreements to a Management of Change. It can draft the redline for that change with a citation for every edit, but an engineer approves it."],
+      ["Can it read engineering drawings?", "Yes. A vision model reads a P&ID into equipment, valves, instruments and the lines between them. The result stays a candidate until an engineer checks it element by element, and a drawing it cannot read is shown as a placeholder. It never invents a valve tag."],
+      ["What is a proactive brief?", "A short, sourced briefing that arrives when something happens in the plant, without anyone searching. Work orders, permits to work, shift handovers, alarms, equipment tag-outs, completed inspections and repeat failures each trigger one, carrying the asset's history, open conflicts and unreviewed field notes. A permit brief needs two different people to sign."],
+      ["How does root-cause analysis work?", "For a failed asset, an agent decides what to look up, up to four steps across failure history, sister assets, field notes and documents, then builds a timeline and ranked hypotheses. Each hypothesis is checked against the text it cites, and one the evidence does not support is dropped and shown as dropped. It takes about thirty seconds."],
+      ["Which AI models does it use?", "NVIDIA Nemotron 3 Super for answers, briefs and root-cause analysis, NVIDIA's OCR model for scans, a Llama 3.2 vision model for entity extraction and drawings, Jina embeddings for search and Whisper on Groq for voice. All are hosted, and Kairos does not train or fine-tune any of them on your documents."],
+      ["What if the AI provider goes down?", "Answers fall back through a chain of providers set up in one place, and every answer records which model produced it. If anything but the intended model answered, the benchmark marks the run as suspect instead of quoting it."],
+    ],
+  },
+  {
+    name: "Trust",
+    items: [
+      ["How do you know the extracted content is correct?", "The extractor only proposes. Anything below 0.7 confidence goes to a review queue, a scanned page with any doubtful passage is held whole, and everything else enters the graph marked unverified until a reliability engineer or admin signs it off. Extraction is also scored against an answer key: OCR keeps every tag, value and date on all four paired test images, and all 21 test documents are linked into the graph."],
       ["What happens when the system is not sure?", "Anything extracted with less than 0.7 confidence goes to quarantine and stays there until a person releases it. Nothing uncertain reaches the knowledge graph on its own."],
       ["Can it refuse to answer?", "Yes, and it does. A safety-critical question without solid evidence gets a refusal that still lists its sources, so you can check them yourself instead of trusting a vague answer."],
+      ["How do you stop it making things up?", "The model writes only from documents the server retrieved itself, and every claim must cite one; a request cannot slip in its own evidence. Safety-critical questions are checked twice, on the evidence and on the answer, and refused when either is weak: 15 adversarial safety questions produced no unsafe answer. Every source opens the original document, and on the latest run all 46 responses carried their sources."],
+      ["What if someone uploads a wrong or malicious document?", "It cannot overrule a better source. Only reliability engineers and admins can file a document as regulation, standard or OEM manual, so anyone else's upload is capped at site-procedure level, and replacing a high-authority document needs an approved Management of Change. Document text reaches the model as untrusted data, so instructions hidden in a file are ignored."],
+      ["Does it replace engineers?", "No. It finds, links and drafts, and people decide. Promotions, Management of Change approvals and permit sign-offs are human actions, each written to the audit log, and a permit brief needs two different signatures."],
+      ["What if a person approves something wrong?", "It can be corrected, because nothing is lost. Every approval is logged with who and when, facts are closed rather than deleted, and a later document or change supersedes the wrong one while the old state stays visible."],
       ["Why limit how many briefs someone gets?", "The EEMUA-191 standard exists because operators stop reading alarms when there are too many of them. The same happens with knowledge. So the limit is six an hour, and permit-to-work briefs are always exempt."],
       ["Who gets told when Kairos finds something?", "Whoever owns the decision, and nothing sits in a queue waiting to be noticed. An extraction it is not confident in goes to quarantine and waits for a person. Two procedures that disagree raise a conflict before the job starts, not in the post-mortem. An observation from the field is transcribed, tagged and sent to engineering for review. A safety question with thin evidence returns a refusal card with its sources attached."],
     ],
@@ -456,7 +479,12 @@ const faqGroups = [
     items: [
       ["Is anything ever deleted?", "No. The vault is permanent and stored files are never changed. When a fact stops being true, Kairos closes it instead of removing it, so the record of what you knew, and when you knew it, survives."],
       ["Can we see where an answer came from?", "Every fact carries six properties on the link itself, including the source document and whether a person verified it. Every answer lists its sources."],
-      ["Does it work without connectivity?", "Field capture does. Notes are held on the device and sent once there is signal again."],
+      ["Where does our document text go?", "To the hosted model providers that read it: NVIDIA NIM for extraction and answers, Jina for search embeddings and Groq for voice."],
+      ["Can it run on-premise or in an air-gapped plant?", "Not yet. There is no on-premise inference in this MVP, so the plant needs an outbound connection to the model providers. Running the models locally is the main blocker for air-gapped sites and the first item on our roadmap for them."],
+      ["Is our data used to train AI models?", "Kairos trains nothing on it. Corrections people make are stored as labels for scoring extraction, not for training. What each hosted provider does with the text it receives is set by that provider's terms, which a plant should check before sending documents off site."],
+      ["How is personal data handled?", "Names stay in the stored text, because removing them at ingestion would break search for who did what. They are redacted when a document is exported, under India's DPDP Act 2023."],
+      ["Does it work on a phone, or without signal?", "It is built for phones, with a high-contrast sunlight theme for outdoor use, and installs as a web app. Voice notes and deviation flags are held on the device and sent once there is signal again; asking for an answer needs a connection."],
+      ["Does it understand languages other than English?", "Only English is tested. Voice transcription records the spoken language, but extraction, answers and the benchmark are all in English, so other languages are untested in this MVP."],
     ],
   },
   {
@@ -464,6 +492,8 @@ const faqGroups = [
     items: [
       ["Who can see what?", "Access follows the role. Field workers get briefs, copilot, assets and capture. Engineering and reliability get the evidence and governance screens. System health is admin only. The check happens in one central place, not page by page."],
       ["What happens if the permission service goes down?", "Access is refused. The check fails closed, so an outage locks people out rather than letting everyone through, and the same rule covers reads as well as writes."],
+      ["Can one site see another site's data?", "Not unless the role allows it. A site account reads only its own site: the site comes from the sign-in token, never from the request, and admins keep the cross-site view. Cross-site pattern alerts share only failure codes and counts for an equipment class, never documents, and only when the class runs on two or more sites and one of them has at least two such failures."],
+      ["Has it been security tested?", "By us, not by an outside firm. Every push runs code scanning, a dependency audit and a Go vulnerability check, and an internal security review fixed its findings, each with a test, and recorded the risks it accepted. There is no external penetration test or certification yet, and the seeded demo passwords still need rotating before a real rollout."],
       ["Can we try it without a rollout?", "Yes. The demo account signs straight into a workspace with the golden dataset already loaded, so you can question real answers instead of looking at a slide."],
     ],
   },
@@ -471,10 +501,28 @@ const faqGroups = [
     name: "Evidence",
     items: [
       ["How was it evaluated?", "Forty-six domain-expert questions, written against a fixed answer key, across fifteen categories and graded by fixed rules. Retrieval, answer quality and sourcing are scored separately, and a refusal counts as correct when refusing was the right call."],
-      ["Why quote a confidence interval for answer quality?", "Because 40 out of 46 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 74 to 94 percent. Retrieval and sourcing are graded by fixed rules and stay at 46 out of 46. Every run is also checked for validity, and we never quote a run in which more than a tenth of the answers came from a fallback model."],
-      ["What do these numbers not cover?", "Four things, and we would rather name them. The soak test ran for one hour, so it says nothing about days. The validation set is small: 40 labels in total and only 3 for ORGANIZATION, so quote a per-type score with the number of labels behind it. Fifty virtual users against a demo-sized dataset is not evidence that the system handles a 10,000-asset plant. And hybrid retrieval reaches 35 of 37, which is exactly what semantic search alone reaches, so we report it as matching the best single method rather than beating it."],
-      ["Is any of this running against a real plant?", "No. Every figure is measured against a golden dataset we wrote ourselves, and Kairos is not connected to any live plant. That is the intended limit of this MVP. We would rather say so than let a number imply otherwise."],
+      ["Why grade with fixed rules instead of an AI judge?", "Because a model grading a model is not reproducible and tends to agree with itself. Each question lists the facts an answer must state, the contradictions it must not contain and a sources check, so anyone can rerun the harness and get the same score."],
+      ["Why quote a confidence interval for answer quality?", "Because 42 out of 46 is a sample, not a fixed rate. The interval says the honest thing a single percentage hides: on this set of questions the true rate sits somewhere around 80 to 97 percent. Retrieval and sourcing are graded by fixed rules: 45 and 46 out of 46 on this run. Every run is also checked for validity, and we never quote a run in which more than a tenth of the answers came from a fallback model."],
+      ["How accurate is entity extraction?", "An F1 score of 0.805 on 40 labelled entities, counted only when the intended model answered. Forty labels is a small set, so quote the score with that number."],
+      ["How well does it catch compliance gaps?", "Precision 1.000 and recall 0.838 on 52 clause-and-asset pairs: no false alarms, and about one real gap in six missed. Only OISD 117 and ISO 45001 clauses are mapped into the gap check today."],
+      ["How fast is an answer?", "2.6 seconds at the median and 9.6 seconds at the 95th percentile on the latest run, with a 60-second cap. A root-cause pack takes about thirty seconds, because it runs several lookups first."],
+      ["How much time does it save?", "On our model of a person searching, 19.9 percent across 46 questions. One input is assumed rather than measured, the two minutes an engineer takes to check a document, so the page labels the figure modelled. The bigger saving, a brief arriving when nobody searched, is not in that number."],
+      ["Does it hold up under load?", "2,275 requests with no errors, slowing past 50 concurrent users, and an hour-long soak with no sign of memory or connection leaks."],
+      ["What do these numbers not cover?", "Four things, and we would rather name them. The soak test ran for one hour, so it says nothing about days. The validation set is small: 40 labels in total and only 3 for ORGANIZATION, so quote a per-type score with the number of labels behind it. Fifty virtual users against a demo-sized dataset is not evidence that the system handles a 10,000-asset plant. And hybrid retrieval reaches 44 of 46, which is exactly what semantic search alone reaches, so we report it as matching the best single method rather than beating it."],
+      ["Is any of this running against a real plant?", "No. The documents are written by us to model a petrochemical complex, with an answer key, and Kairos is not connected to any live plant. The regulatory clause text inside them (OISD, PESO and the Factories Act) is real public text. That is the intended limit of this MVP, and we would rather say so than let a number imply otherwise."],
       ["Can we see the failures too?", "Yes. The test harness, the question set and every raw run are in the repository, including the runs where the answer was wrong."],
+    ],
+  },
+  {
+    name: "Rollout",
+    items: [
+      ["How long does a rollout take?", "Search works from day one, because it needs no integration. Months one to three are search only while the graph is built, written answers and review queues come in months three to six, and proactive briefs start from month six, once push volume has stayed inside the alarm budget for 30 days."],
+      ["How much work is onboarding a plant?", "Loading documents is not the work: each one takes seconds and nothing has to be rewritten. The work is mapping the plant's asset-tag convention and its regulations into Kairos, so that extracted tags resolve to real assets and clauses."],
+      ["Does it connect to SAP, Maximo or the historian?", "Not in this MVP. Work orders, permits, alarms and handovers come in through Kairos's event API, which a maintenance system can call. A PI historian client is written but not connected to a live historian, and the OPC-UA, SAP and Maximo connectors say they are not implemented rather than returning empty data."],
+      ["What does it cost to run?", "The backend runs on one small cloud server, about $68 a month at AWS Mumbai rates, with the frontend on Vercel and managed databases behind it. Model calls are billed per use by each provider."],
+      ["What is the business model?", "A per-plant annual licence, starting with a 90-day pilot on one unit, since search alone needs no integration. It grows per site, then per connector as historian and maintenance-system links come online."],
+      ["Which industries does it fit?", "It is built and tested on a petrochemical plant. The authority model is not tied to one industry: the top level is whichever regulation applies, such as OISD and PESO for Indian oil and gas, FDA 21 CFR Part 11 for pharma or CEA rules for power."],
+      ["What is not built yet?", "Live links to the historian and maintenance system, local models for air-gapped plants, enforcement for the model gate that today only reports, and an outside security test. Multi-site is in place: site-scoped access and cross-site failure alerts."],
     ],
   },
 ] as const;
@@ -1254,7 +1302,7 @@ function HeroVisual() {
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--lp-accent-text)">
                 Checked answer
               </span>
-              <span className="text-[11px] tabular-nums text-(--lp-muted)">2.8 s</span>
+              <span className="text-[11px] tabular-nums text-(--lp-muted)">3.8 s</span>
             </div>
 
             <p className="lp-display mt-3 text-[17px] leading-tight text-pretty text-(--lp-ink) sm:text-[19px]">
@@ -1864,9 +1912,10 @@ export default function Home() {
             <p className="mt-8 max-w-2xl text-[13px] leading-5 text-(--lp-dark-muted)">
               One run: all 40 answers came from the pinned Nemotron 3 Super model on NVIDIA NIM, with
               no fallback provider. Six safety-critical questions were refused because no authoritative source
-              covers them, and a correct refusal is graded as correct. All six misses retrieved
-              the right evidence — the gap is in how the answer is written, not in what the system
-              found.
+              covers them, and a correct refusal is graded as correct. Three of the four misses
+              retrieved the right evidence, so the gap there is in how the answer is written. The
+              fourth asks about a procedure the vault marks as superseded, so it is correctly not
+              answered from it.
             </p>
           </div>
 

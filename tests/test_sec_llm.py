@@ -410,6 +410,9 @@ def _rca_fakes(monkeypatch, asset_rows):
         async def rca_synthesize(self, *a, **k):
             return {"answer": None}
 
+        async def _synthesize_cascade(self, *a, **k):  # the RCA agent's planner: no plan, so no lookups
+            return {"answer": None}
+
     class _Vec:
         def __init__(self, *a, **k):
             pass
@@ -516,3 +519,34 @@ async def test_ner_posts_to_the_configured_base_url(monkeypatch):
 def test_ner_default_url_is_unchanged(monkeypatch):
     monkeypatch.delenv("NVIDIA_NIM_BASE_URL", raising=False)
     assert NERService()._nim_url == "https://integrate.api.nvidia.com/v1/chat/completions"
+
+
+# =============================================================================
+# Drafted MoC changes: every change is pinned to an affected document and cited to a MoC source
+# =============================================================================
+
+from api.services.moc_draft import moc_documents, parse_draft  # noqa: E402
+
+
+def test_moc_documents_reads_both_shapes_the_api_writes():
+    seeded = {"conflicting_sources": [{"value": "18.5 bar", "document_id": "DOC-SOP"}, {"value": "16.2 bar", "document_id": "DOC-BUL"}],
+              "blast_radius": ["DOC-SOP", "DOC-HYDRO"]}
+    assert moc_documents(seeded) == (["DOC-SOP", "DOC-BUL"], ["DOC-SOP", "DOC-HYDRO", "DOC-BUL"])
+    superseded = {"conflicting_sources": [{"old": "DOC-OLD", "new": "DOC-NEW"}],
+                  "blast_radius": [{"edge": {"document_id": "DOC-OLD"}}, {"edge": {}}]}
+    assert moc_documents(superseded) == (["DOC-OLD", "DOC-NEW"], ["DOC-OLD", "DOC-NEW"])
+
+
+def test_a_drafted_change_keeps_only_real_citations_and_affected_documents():
+    reply = json.dumps({"summary": "Lower the limit to 16.2 bar.", "changes": [
+        {"document_id": "DOC-SOP", "location": "Step 4", "current": "18.5 bar", "proposed": "16.2 bar", "reason": "Bulletin", "cited": ["DOC-BUL", "DOC-INVENTED"]},
+        {"document_id": "DOC-SOP", "location": "Step 9", "current": "x", "proposed": "y", "reason": "z", "cited": ["DOC-INVENTED"]},
+        {"document_id": "DOC-ELSEWHERE", "location": "1", "current": "x", "proposed": "y", "reason": "z", "cited": ["DOC-BUL"]},
+    ], "open_questions": ["Does the hydrotest procedure need re-issue?"]})
+    draft = parse_draft(reply, {"DOC-SOP", "DOC-BUL"}, {"DOC-SOP", "DOC-HYDRO", "DOC-BUL"})
+    assert [(c["location"], c["cited"]) for c in draft["changes"]] == [("Step 4", ["DOC-BUL"])]
+    assert draft["open_questions"] == ["Does the hydrotest procedure need re-issue?"]
+
+
+def test_an_unreadable_draft_is_none():
+    assert parse_draft("Here is the redline you asked for", {"A"}, {"A"}) is None

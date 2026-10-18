@@ -39,6 +39,7 @@ from api.services.llm import (
     query_asset_tags,
     valid_citations,
 )
+from api.services.rca_agent import RcaAgent
 from api.services.search_engine import SearchEngineService
 from api.services.search_service import SearchService
 from api.services.timeline import merge_timeline
@@ -263,6 +264,34 @@ async def _verified_topology_evidence(
     return evidence
 
 
+def _alias_evidence(query: str, aliases: list[dict[str, str]], include_demo: bool) -> list[dict]:
+    """One evidence item per asset the question names, listing its confirmed aliases.
+
+    The alias map was used to recognise a nickname in the question but never shown to the model,
+    so "what are the aliases for EQ-102?" retrieved documents that mention EQ-102 and answered from
+    those, while the register that holds the answer stayed out of the prompt. Authority 5 and no
+    `relevance_score`: `_authority_candidates` only credits scored items, so this can never clear
+    the safety gate. A showcase asset's aliases are shown only to a caller who reads the showcase.
+    """
+    by_asset: dict[str, list[str]] = {}
+    for row in aliases:
+        by_asset.setdefault((row.get("canonical_asset_id") or "").upper(), []).append(row["alias"])
+    evidence = []
+    for tag in sorted(query_asset_tags(query, aliases)):
+        names = by_asset.get(tag)
+        if not names or (tenant.is_demo_id(tag) and not include_demo):
+            continue
+        evidence.append({
+            "document_id": f"ALIAS-REGISTER-{tag}",
+            "asset_id": tag,
+            "authority_level": 5,
+            "source_type": "asset_alias_register",
+            "title": f"Asset alias register, {tag}",
+            "text": f"Confirmed aliases for {tag}: {', '.join(sorted(set(names)))}.",
+        })
+    return evidence
+
+
 # What the Copilot has always retrieved before it asked for an answer (`synthesize()` in api.ts).
 _SYNTH_EVIDENCE_LIMIT = 6
 
@@ -327,6 +356,8 @@ async def _server_evidence(
     category = LLMService.classify_query_category(payload.query)
     if payload.query_category and payload.query_category != category:
         log.info("synthesis.client_category_ignored", sent=payload.query_category, derived=category)
+
+    evidence += _alias_evidence(payload.query, aliases, include_demo)
 
     # Admit engineer-verified drawing topology alongside the retrieved documents.
     if category in _TOPOLOGY_EVIDENCE_CATEGORIES:
@@ -660,10 +691,18 @@ async def generate_rca_pack(
         evidence = [e for e in evidence if e.get("document_id") not in artifact_ids]
         log.info("rca_pack.test_artifacts_excluded", excluded=len(evidence_hits) - len(evidence), remaining=len(evidence))
 
-    # -- LLM synthesis --
-    rca_result = await llm.rca_synthesize(payload.failure_code, timeline, evidence)
+    # -- Investigation: the agent plans further lookups, then synthesises from everything gathered --
+    agent = RcaAgent(
+        llm=llm, graph=graph, vector_store=vector_store, supabase=supabase, settings=settings,
+        user=current_user, asset_id=payload.asset_id, asset_class=asset_class, site_pin=caller_site,
+        include_quarantine=payload.include_quarantine,
+    )
+    run = await agent.run(payload.failure_code, payload.incident_date, timeline, evidence)
+    timeline, evidence = run["investigation"].timeline, run["investigation"].evidence
+    rca_result = run["synthesis"]
 
     hypotheses: list = []
+    dropped: list = []
     confidence: float | None = None
     refused = False
     synthesis_available = bool(rca_result.get("answer"))
@@ -673,7 +712,8 @@ async def generate_rca_pack(
         parsed = LLMService.parse_rca_response(
             rca_result["answer"], {e["document_id"] for e in evidence if e.get("document_id")}
         )
-        hypotheses = parsed["hypotheses"]
+        # Each hypothesis is checked against the text it cites; unsupported ones are shown as dropped.
+        hypotheses, dropped = await agent.check(parsed["hypotheses"], evidence, run["elapsed"])
         confidence = parsed["confidence"]
 
         # Safety-critical refusal: low confidence on safety-relevant failure codes
@@ -684,12 +724,12 @@ async def generate_rca_pack(
         if ((confidence is None or confidence < 0.7)
                 and any(kw in code_lower for kw in safety_keywords)):
             refused = True
-            hypotheses = []
+            hypotheses, dropped = [], []
 
     supporting_documents = [
         {
             "document_id": e["document_id"],
-            "title": file_names.get(e["document_id"]) or e["document_id"],
+            "title": e.get("title") or file_names.get(e["document_id"]) or e["document_id"],
             "authority_level": e["authority_level"],
             "confidence": e["confidence"],
         }
@@ -712,6 +752,8 @@ async def generate_rca_pack(
                     "timeline_events": len(timeline),
                     "evidence_docs": len(evidence),
                     "hypotheses_count": len(hypotheses),
+                    "hypotheses_dropped": len(dropped),
+                    "investigation_steps": [s["tool"] for s in run["investigation"].steps],
                     "refused": refused,
                     "synthesis_available": synthesis_available,
                 },
@@ -736,6 +778,8 @@ async def generate_rca_pack(
         failure_code=payload.failure_code,
         timeline=timeline,
         hypotheses=hypotheses,
+        dropped_hypotheses=dropped,
+        investigation=run["investigation"].steps,
         supporting_documents=supporting_documents,
         confidence=confidence,
         refused=refused,

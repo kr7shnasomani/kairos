@@ -76,6 +76,33 @@ describe("RcaPage", () => {
     expect(screen.queryByText("operational_events")).not.toBeInTheDocument();
   });
 
+  it("shows the investigation steps, each hypothesis's check, and what was dropped", async () => {
+    const base = rcaFor("P-101", "SEAL-FAIL");
+    mocks.getRcaPack.mockResolvedValue({
+      ...base,
+      investigation: [{ tool: "sister_assets", args: {}, why: "Same failure on sister pumps?", found: "2 SEAL-FAIL work orders on 1 of 3 sister assets" }],
+      hypotheses: [{ ...base.hypotheses[0], check: "supported", check_reason: "Stated in the bulletin." }],
+      dropped_hypotheses: [{ hypothesis: "Operator error", evidence_weight: 0.2, sources: [], check: "dropped", check_reason: "Cites no source document." }],
+    } satisfies RcaPack);
+    render(<RcaPage />);
+    await assemble();
+
+    expect(await screen.findByRole("heading", { name: "Investigation" })).toBeInTheDocument();
+    expect(screen.getByText("Sister equipment")).toBeInTheDocument();
+    expect(screen.getByText("2 SEAL-FAIL work orders on 1 of 3 sister assets")).toBeInTheDocument();
+    expect(screen.getByText("Checked against its sources")).toBeInTheDocument();
+    expect(screen.getByText("Dropped after checking (1)")).toBeInTheDocument();
+    expect(screen.getByText("Cites no source document.")).toBeInTheDocument();
+  });
+
+  it("shows no investigation card for a pack without steps", async () => {
+    mocks.getRcaPack.mockResolvedValue(rcaFor("P-101", "SEAL-FAIL"));
+    render(<RcaPage />);
+    await assemble();
+    await screen.findByRole("heading", { name: "Timeline" });
+    expect(screen.queryByRole("heading", { name: "Investigation" })).not.toBeInTheDocument();
+  });
+
   it("replaces everything below the header with a RefusalCard on refusal", async () => {
     mocks.getRcaPack.mockResolvedValue(rcaFor("P-101", "PSV-RELIEF"));
 

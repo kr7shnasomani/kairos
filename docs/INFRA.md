@@ -230,6 +230,7 @@ make reset-showcase  # Put the showcase's state back to its seed (dry run; APPLY
 # real ids are `DOC-` + 12 random chars, so a bare `DOC-X` prefix matched ~1 in 36.
 # Whole ids live in the _EXACT lists and are matched by equality.
 make purge-test-data
+make restore-superseded DOC=<document id>   # Undo a wrongful supersede from its audit row (dry run; APPLY=1 + RESTORE_CONFIRM=<id>; run per host)
 make verify        # Per-layer smoke + latency (PASS/FAIL table); ARGS=--full adds LLM/VLM checks
 make model-gate MODEL=<model-id>   # Layer-0 deployment gate; exits non-zero on regression
 
@@ -273,7 +274,7 @@ docker exec kairos-backend-api python scripts/seed_regulations.py
 # Run tests — full suite (needs the stack up; use local stores, never cloud)
 docker exec kairos-backend-api python -m pytest tests/ -q --timeout=120
 
-# Run the service-free tests with NO stack running at all (975 tests, 55 files, no secrets, no network).
+# Run the service-free tests with NO stack running at all (1,005 tests, 55 files, no secrets, no network).
 # This is what CI's tier-1 `unit` job runs. Re-measured 2026-09-15. The list must match AGENTS.md,
 # docs/TESTS.md and .github/workflows/tests.yml.
 docker compose run --rm --no-deps -e KAIROS_SKIP_TEST_CLEANUP=1 kairos-backend-api \

@@ -63,6 +63,23 @@ def salient_tokens(text: str) -> dict[str, set[str]]:
     return out
 
 
+def reference_entry(reference_text: str, entry_date: str | None) -> str:
+    """The one `---`-separated entry of a multi-entry reference that a scan reproduces.
+
+    `shift_log.txt` holds both handwritten notes' events plus a later handover entry, and each note
+    shows exactly one of them (manifest rows 22 and 23). Scored against the whole log, a perfect
+    transcription of one note could recall at most about a third of the tokens. The entry is
+    declared per image, never chosen by best overlap, so a misread date cannot pick a kinder
+    reference. With no declared date, or no entry carrying it, the whole reference is used.
+    """
+    if not entry_date:
+        return reference_text
+    for block in re.split(r"^\s*-{3,}\s*$", reference_text or "", flags=re.MULTILINE):
+        if re.search(rf"^\s*Entry:\s*{re.escape(entry_date)}\b", block, re.MULTILINE | re.IGNORECASE):
+            return block
+    return reference_text
+
+
 def score_ocr(reference_text: str, ocr_text: str) -> dict[str, Any]:
     """Recall of salient tokens from `reference_text` in `ocr_text`.
 

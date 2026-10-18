@@ -78,7 +78,10 @@ export default function CircuitBreakerPage() {
             ? <ChartSkeleton height={200} />
             : bars.length > 0
             ? <BarList data={bars} height={Math.max(140, bars.length * 36)} valueFormat={(v) => `${fmtNum(v, 1)}σ`} />
-            : <EmptyState message="All breakers closed ✓ — no asset class under SPC watch." />}
+            : <EmptyState
+                message="No asset class has extraction corrections in the last 30 days, so nothing is under watch and every ingestion path is open. A class appears here once reviewers start correcting what was extracted from its documents."
+                action={{ label: "Open the review queue", href: "/governance/quarantine" }}
+              />}
         </div>
       </Card>
 
@@ -89,7 +92,7 @@ export default function CircuitBreakerPage() {
             rows={states as BreakerRow[]}
             keyFn={(r) => String(r.asset_class)}
             loading={loading}
-            emptyState={<EmptyState message="All breakers closed ✓" />}
+            emptyState={<EmptyState message="No breaker has tripped." />}
           />
         </div>
 

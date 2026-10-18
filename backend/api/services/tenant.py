@@ -248,6 +248,7 @@ DEMO_GUARDED = frozenset({
     ("POST", "/governance/quarantine/{item_id}/dispute"),
     ("POST", "/governance/quarantine/{item_id}/request-info"),
     ("POST", "/governance/moc/{moc_id}/approve"),
+    ("POST", "/governance/moc/{moc_id}/draft"),
     ("POST", "/events/work-order"),
     ("POST", "/events/ptw"),
     ("POST", "/events/shift-handover"),

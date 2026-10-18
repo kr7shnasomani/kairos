@@ -81,6 +81,16 @@ class VectorStoreService:
             points=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]),
         )
 
+    async def document_text(self, collection: str, document_id: str, max_chars: int = 2000) -> str:
+        """A document's indexed text, its chunks joined in index order, cut at `max_chars`."""
+        points, _ = await self.client.scroll(
+            collection_name=collection,
+            scroll_filter=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]),
+            limit=50, with_payload=["text", "content", "chunk_index"],
+        )
+        points.sort(key=lambda p: (p.payload or {}).get("chunk_index", 0))
+        return "\n".join((p.payload or {}).get("text") or (p.payload or {}).get("content") or "" for p in points)[:max_chars]
+
     async def search(self, collection: str, query_vector: list[float], limit: int = 10, **kwargs: Any) -> list[dict[str, Any]]:
         """Semantic search; for the demo role also the showcase sibling of the documents collection.
 

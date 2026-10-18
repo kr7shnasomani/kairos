@@ -34,3 +34,49 @@ def test_release_params_mirror_ingestion_and_name_the_reviewer():
 def test_a_release_without_a_recoverable_artifact_is_refused():
     with pytest.raises(ValueError):
         release_workflow_params({"document_id": "DOC-1", "vault_url": None}, None, "job-2", "admin-1")
+
+
+# =============================================================================
+# OCR gate reference: a scan is scored against the one entry it reproduces
+# =============================================================================
+
+from api.services.ocr_gate import reference_entry, score_ocr  # noqa: E402
+
+_LOG = """SHIFT LOG
+
+---
+
+Entry: 15-Jan-2026, Night Shift
+EQ-101 pump felt more vibration than usual.
+
+---
+
+Entry: 24-Jun-2026, Day Shift
+Moisture at the PG-18 gauge bypass.
+
+---
+
+Entry: 15-Jul-2026, Day Shift
+New work order for EQ-101 (WO-2026-0714).
+"""
+
+
+def test_reference_entry_picks_the_declared_entry_only():
+    block = reference_entry(_LOG, "24-Jun-2026")
+    assert "PG-18" in block and "EQ-101" not in block and "WO-2026-0714" not in block
+
+
+def test_reference_entry_falls_back_to_the_whole_reference():
+    assert reference_entry(_LOG, None) == _LOG
+    assert reference_entry(_LOG, "01-Feb-2026") == _LOG
+
+
+def test_a_note_is_not_penalised_for_the_other_notes_event():
+    note = "FIELD NOTE Date: 24-Jun-2026 PG-18 bypass gauge moisture"
+    assert score_ocr(_LOG, note)["salient_recall"] < 0.5
+    assert score_ocr(reference_entry(_LOG, "24-Jun-2026"), note)["salient_recall"] == 1.0
+
+
+def test_a_misread_date_is_still_a_miss():
+    note = "FIELD NOTE Date: 24-Jan-2026 PG-18 bypass gauge moisture"
+    assert score_ocr(reference_entry(_LOG, "24-Jun-2026"), note)["salient_recall"] < 1.0

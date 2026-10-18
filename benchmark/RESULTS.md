@@ -13,10 +13,10 @@ history and caveats, see:
 | Metric | Result | Harness |
 |---|---|---|
 | Layer smoke checks | 13/13 pass | `verify_layers.py` |
-| Retrieval (fact reaches context) | 46/46 (100%) | `run_benchmark.py` |
-| Query answer quality | 40/46 (87.0%), VALID (2026-10-17, Nemotron 3 Super, golden plant with the showcase hidden; 38/46 on the live API with the showcase visible) | `run_benchmark.py` |
+| Retrieval (fact reaches context) | 45/46 (97.8%), 2026-10-18 (46/46 in every earlier run; Q31's harness context missed the name, its answer was right) | `run_benchmark.py` |
+| Query answer quality | 42/46 (91.3%), VALID (2026-10-18, Nemotron 3 Super, golden plant with the showcase hidden; 40/46 the day before, 38/46 on the live API with the showcase visible) | `run_benchmark.py` |
 | Provenance — all responses, incl. refusals | 46/46 (100%) | `run_benchmark.py` |
-| Provenance — correct answers only | 40/40 (100%) | `run_benchmark.py` |
+| Provenance — correct answers only | 42/42 (100%) | `run_benchmark.py` |
 | Entity-extraction F1 (Layer 0) | 0.805 on 40 labels, VALID | `run_model_validation.py` |
 | Compliance gap detection | P 1.000 · R 0.838 · F1 0.912 | `run_compliance_eval.py` |
 | Retrieval reach by arm | exact 41/46 (89.1%) · semantic 44/46 (95.7%) · hybrid 44/46 (95.7%), 2026-10-17, golden set only, top 6 per arm | `run_retrieval_baseline.py` |
@@ -24,8 +24,8 @@ history and caveats, see:
 | Adversarial safety | 0 unsafe answers / 15 questions (14 refusals), VALID, 2026-10-17 on Nemotron 3 Super | `run_safety_eval.py` |
 | Concurrency | 2275 requests · 0% errors · knee at 50 VU | `run_load_test.py` |
 | Soak — memory / connection leakage | PASS, no leak signal | `run_soak_test.py` |
-| OCR accuracy on paired images | 2/4 scoreable — handwriting mean recall 0.333 (Layer 3 limitation); 2 correctly in review, not indexed | `run_ocr_gate.py` |
-| KG linkage completeness | 18/20 (90%) documents linked | `run_kg_completeness.py` |
+| OCR accuracy on paired images | 4/4 scoreable, salient-token recall 1.000 on all four (2026-10-18): both handwritten notes 3/3, scored against their own shift-log entry (0.333 against the whole log); both degraded scans 6/6 after their owner-approved release from OCR review. Token recall only: the degraded bulletin's prose is still partly garbled | `run_ocr_gate.py` |
+| KG linkage completeness | 21/21 (100%) documents linked, 0 dangling, 2026-10-18 (18/20 before the two degraded scans were released from OCR review and `sop_he_gen_11.pdf` was restored) | `run_kg_completeness.py` |
 | Cross-functional discovery | NULL on this corpus | `run_cross_functional.py` |
 
 ## 1. `verify_layers.py` — per-layer smoke + latency
@@ -52,7 +52,38 @@ history and caveats, see:
 
 ## 2. `run_benchmark.py` — domain-expert Q&A
 
-**Current — 2026-10-17, 46 questions, Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b` on NIM, back
+**Current — 2026-10-18, 46 questions, Nemotron 3 Super, golden plant (showcase hidden), checkpoint
+`run_20261018_super_golden.jsonl`** (local API on the same cloud stores, `SHOWCASE_VISIBLE_TO_ALL=false`
+for the run, then restored). After three general fixes the same day: the Copilot's evidence now carries
+the confirmed alias register for any asset the question names, document numbers in a question are
+boosted as exact phrases in search, and the synthesis prompt asks for dated occurrences on "how many"
+questions, names as each source writes them, and a first sentence that states the fact.
+
+```
+Retrieval (fact reaches context):    45/46 (97.8%) 95% CI [89–100%]
+Answer quality (correct/total):      42/46 (91.3%) 95% CI [80–97%]
+Answer provenance (sourced):         46/46 (100%) all responses · 42/42 correct answers
+Synthesis latency:                   p50 2610 ms · p95 9568 ms · avg 3768 ms
+Provider mix:                        nim 40 · refused 6
+Run validity:                        VALID — 40/46 answered by the pinned Nemotron model
+```
+
+Misses:
+- **Q27** (temporal): the golden `sop_he_gen_11.pdf` has been marked superseded since 2026-09-14, when the
+  QA sweep's `tools/e2e_flows.sh --mutate` superseded it with its own test upload (10 graph edges closed).
+  Search correctly hides superseded documents, so the fact was unreachable. Restored the same day with
+  `scripts/restore_superseded.py` (owner-approved); a targeted `--only Q27` re-run then answered
+  "2027-09-01" correctly. Not counted until the next full run; the script can no longer do this.
+- **Q41** (personnel): answered "S. Yadav", which is how the source note signs; the key expects "Suresh".
+- **Q02** (causal), **Q46** (regulatory): both answered correctly in targeted re-runs the same hour; Q02
+  named the closeout form's "rising vibration and bearing temperature" rather than the manual's "thermal
+  cycling", and Q46 named the PESO rules without the acronym. Run-to-run variance, not tuned for.
+
+Q31's retrieval reads `miss` because the harness's own context gather (not the server's evidence, which
+synthesis uses) missed the name; its answer was correct. Targeted re-runs used `--only` and are not
+quoted.
+
+**Prior — 2026-10-17, 46 questions, Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b` on NIM, back
 since Ultra stopped answering, `status.md` P31). Two runs the same afternoon, both `VALID`:
 
 *Golden plant only* (local API on the same cloud stores, `SHOWCASE_VISIBLE_TO_ALL=false` for the run, then
@@ -518,7 +549,37 @@ PASS — no leak signal over this window.
 
 ## 11. `run_ocr_gate.py` — OCR accuracy on the paired image documents
 
-**Current — 2026-08-24, after the D2 backfill:**
+**Current — 2026-10-18, each handwritten note scored against its own entry:**
+
+```
+  scanned_oem_bulletin_degraded.png      UNSCOREABLE — no OCR text indexed (nothing to score)
+  scanned_inspection_degraded.png        UNSCOREABLE — no OCR text indexed (nothing to score)
+  handwritten_shift_log.png              1.0000  (3/3 tokens, handwritten)
+  handwritten_inspection_note.png        1.0000  (3/3 tokens, handwritten)
+  handwritten          mean recall: 1.0000
+```
+
+**Same day, after the two degraded scans were released from OCR review** (owner-approved,
+`POST /documents/{id}/ocr-review/release` through the live API; the production pipeline re-extracted
+them): both score **1.0000 (6/6 salient tokens)** against their clean siblings
+(`scanned_oem_bulletin_degraded.png` vs `oem_bulletin_fp_sb_2025_04.pdf`: asset tags 3/3, measurement,
+reference, date; `scanned_inspection_degraded.png` vs `insp_he301_2025_q4.pdf`: tags 2/2, measurement,
+references 2/2, date). Scored with `ocr_gate.score_ocr` on text read from the production index through
+`GET /documents/{id}/redacted` (names redacted, salient tokens untouched; saved in
+`.benchmark_runs/released_scans_20261018.json`), because Elasticsearch is per host and the local index
+does not hold the re-extracted text, so a local `run_ocr_gate.py` still reports them unscoreable. The
+metric is token recall: the bulletin's surrounding prose is still partly garbled ("SSppersedes noee").
+
+A scoring correction, not an OCR change: the indexed text is the same as on 2026-08-24. The manifest pairs
+both notes with `shift_log.txt` ("same 2 events as files 22/23"), and each note reproduces ONE entry of it
+(row 22: 15-Jan-2026, EQ-101; row 23: 24-Jun-2026, PG-18). Scored against the whole log, which also holds
+the other note's event and a later handover entry, either note was capped at about a third, so both read
+0.3333 while transcribing their own entry correctly (dates, tags and signatures). The entry is declared
+per image in the harness (`ENTRY_DATE`), never chosen by best overlap. Three salient tokens per note is
+a small sample; pair it with a read of the transcription. The two degraded scans are still held by the
+OCR gate for human review (`POST /documents/{id}/ocr-review/release`, `status.md` P34).
+
+**Prior — 2026-08-24, against the whole shift log:**
 
 ```
 OCR ACCURACY GATE — recall of operationally salient tokens
@@ -558,7 +619,25 @@ OCR ACCURACY GATE — recall of operationally salient tokens
 
 ## 12. `run_kg_completeness.py` — document-centric linkage completeness
 
-**Current, 2026-10-16** (read-only, against the live stores; same figure as the 2026-10-03 benchmark run in §2):
+**Current, 2026-10-18** (read-only, against the live stores), after the two degraded scans were released
+from OCR review and re-extracted (§11):
+
+```
+KG LINKAGE COMPLETENESS
+  linked                 20/20  (100%)
+  excluded — test docs      2
+  unlinked — quarantined    0
+  unlinked — unexplained    0
+  dangling provenance       0
+  by document type: inspection_report 7/7, oem_manual 4/4, procedure 4/4, shift_log 2/2, ptw 1/1,
+                    regulation 1/1, pid_drawing 1/1
+```
+
+The two documents that were "unexplained" were exactly the held scans. Later the same day
+`scripts/restore_superseded.py` restored `sop_he_gen_11.pdf` (superseded by the 2026-09-14 test run) and
+reopened its 5 edges: the re-run reads **21/21 (100%)**, 0 unexplained, 0 dangling.
+
+**Prior, 2026-10-16** (read-only, against the live stores; same figure as the 2026-10-03 benchmark run in §2):
 
 ```
 KG LINKAGE COMPLETENESS

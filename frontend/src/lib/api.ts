@@ -18,6 +18,7 @@ import type {
   SlaReport,
   MocResponse,
   MocItem,
+  MocDraft,
   CircuitBreakerState,
   ModelGateHistory,
   ModelGateResult,
@@ -801,6 +802,8 @@ export async function getRcaPack(
       confidence: live.confidence ?? null,
       refused: !!live.refused,
       synthesis_available: !!live.synthesis_available,
+      investigation: live.investigation ?? [],
+      dropped_hypotheses: live.dropped_hypotheses ?? [],
     };
   } catch (e) {
     // Same live-only policy as synthesize(): an RCA pack of invented hypotheses is worse
@@ -863,6 +866,11 @@ export async function getMocList(): Promise<Fetched<MocResponse>> {
 export async function getMoc(mocId: string): Promise<Fetched<MocItem | null>> {
   const data = await getJson<MocItem>(`/governance/moc/${encodeURIComponent(mocId)}`);
   return { data, source: "live" };
+}
+
+/** Drafts the MoC's document changes. One model call, so it gets the synthesis budget, not the write default. */
+export function draftMoc(mocId: string): Promise<{ moc_id: string; draft: MocDraft; draft_generated_at: string }> {
+  return postJson(`/governance/moc/${encodeURIComponent(mocId)}/draft`, {}, SYNTHESIS_TIMEOUT_MS);
 }
 
 export async function approveMoc(mocId: string, note?: string): Promise<void> {

@@ -206,7 +206,10 @@ CREATE TABLE IF NOT EXISTS moc_items (
     approved_by         TEXT,
     approved_at         TIMESTAMPTZ,
     webhook_received_at TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    draft               JSONB,          -- 018 (applied 2026-10-18): drafted document changes, services/moc_draft.py
+    draft_generated_at  TIMESTAMPTZ,    -- 018
+    draft_generated_by  TEXT            -- 018
 );
 
 -- ── Audit log — immutable action record ─────────────────────────────────────

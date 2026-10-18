@@ -427,6 +427,9 @@ Answer the query in the user message using ONLY the documents it supplies.
 - ALWAYS cite the specific source(s) you are drawing from, by document index.
 - If evidence is incomplete or conflicting, explicitly state what is known and what is not known.
 - Do NOT present a confident answer when the evidence is insufficient.
+- For a "how many" question, list each occurrence the sources record, with its date, then give the count; if the sources may be incomplete, say so.
+- When sources write the same person's name differently (initials in one, a full name in another), give the name as each source writes it rather than choosing one.
+- Open with a full sentence that names what the question asks about and states the fact itself (the name, value, date, code or document), using the source's own terms and abbreviations.
 
 Provide your answer with mandatory source citations. Always end with all four lines of this format; an answer without a CONFIDENCE line is treated as a refusal:
 ANSWER: [your answer, citing source numbers]
@@ -805,7 +808,8 @@ class LLMService:
         for i, chunk in enumerate(context, 1):
             authority = html.escape(str(chunk.get("authority_level", "unknown")))
             doc_id = html.escape(str(chunk.get("document_id", "unknown")))
-            text = _untrusted(chunk.get("text") or chunk.get("snippet"))
+            # Server-built items (verified topology) carry their sentence in `content`.
+            text = _untrusted(chunk.get("text") or chunk.get("snippet") or chunk.get("content"))
             blocks.append(
                 f'<document index="{i}" authority_level="{authority}" document_id="{doc_id}">\n{text}\n</document>'
             )

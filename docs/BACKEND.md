@@ -465,6 +465,30 @@ Both signals are needed: hybrid search and graph facts carry `authority_level` b
 `confidence`, so a confidence-only gate read them as `0.0` and would refuse every
 safety-critical query. Covered by `tests/test_query_category.py` and `tests/test_sec_llm.py`.
 
+### MoC drafts (`services/moc_draft.py`)
+
+`draft_moc_change(moc, ...)` turns a pending MoC into a cited redline: it reads the text of the MoC's
+source documents and of the documents in its blast radius (Qdrant chunks via
+`VectorStoreService.document_text`, the showcase collection for a showcase MoC), asks for one change per
+affected document that states the old value, and parses the reply with `parse_draft`, which keeps a
+change only if it names an affected document and cites at least one of the MoC's own sources.
+`moc_documents` reads both MoC shapes (`{value, document_id}` sources with id blast radius, and the
+supersede route's `{old, new}` with edge dicts). Called by `POST /governance/moc/{moc_id}/draft`, which
+stores the result in `moc_items.draft`. Tests: `tests/test_sec_llm.py`.
+
+### `RcaAgent` (`services/rca_agent.py`)
+
+The RCA investigation behind `POST /search/rca-pack`. Starting from the route's 90-day timeline and
+document hits, the model plans up to `MAX_STEPS` (4) lookups within `PLAN_BUDGET_S` (40 s), one at a
+time, choosing from six tools: failure history, sister equipment (same class, same plant, visible
+sites), graph facts, pending changes, a scoped document search, and field notes (only when quarantine is
+included). No tool takes an asset id, so text in a document can change which lookup runs but never which
+asset it reads. After synthesis, `check()` asks the model whether each hypothesis's cited text supports
+it and drops the ones it does not, with the reason; a hypothesis citing nothing is dropped, and an
+unreadable check keeps the cited ones marked `unchecked`. A failed lookup is recorded as such and the
+investigation continues. Planning replies are parsed strictly (`parse_step`): anything malformed, a
+repeated tool or an unknown one ends planning. Tests: `tests/test_rca_timeline.py`.
+
 ### `BriefEngine` (`services/brief_engine.py`)
 
 Assembles operator briefs from 5 parallel graph+vector+ES+Supabase queries.
@@ -986,7 +1010,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `APP_SECRET_KEY` | `CHANGE_ME_IN_PRODUCTION` | Change in prod |
 | `CORS_ORIGINS` | `["http://localhost:3000","http://localhost:8000"]` | Allowed origins |
 | `INTERNAL_API_KEY` | `kairos-internal-dev-key` | Service-to-service auth token |
-| `DEMO_LLM_ACTIONS_PER_HOUR` | `120` | Hourly ceiling, shared by every demo login, on the demo role's model-backed actions (Copilot, RCA, ingest, event briefs, voice). A real account is never counted; a Redis outage fails open |
+| `DEMO_LLM_ACTIONS_PER_HOUR` | `120` | Hourly ceiling, shared by every demo login, on the demo role's model-backed actions (Copilot, RCA, ingest, event briefs, voice). An RCA investigation costs 6, the rest 1 (`dependencies._DEMO_LLM_COST`). A real account is never counted; a Redis outage fails open |
 | `SHOWCASE_AUTO_REDATE` | `false` | When true the API shifts the showcase plant's dates forward about once a day (`scripts/showcase/redate.py`); time columns of the loader's own rows only |
 | `SHOWCASE_VISIBLE_TO_ALL` | `true` | Every login reads the showcase plant as well as the real one, and a site-pinned role reads its own site plus the showcase sites (never another real site, and a write never widens). False: only the demo role sees it and real accounts see real data alone. The demo role writes only to showcase rows either way (`services/tenant.py`) |
 | `MOC_WEBHOOK_SECRET` | `None` | HMAC secret for `POST /governance/moc/webhook`. Unset is accepted only in development; **boot refuses without it outside development** |

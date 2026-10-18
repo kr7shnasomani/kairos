@@ -83,24 +83,24 @@ class BriefEngine:
         # edge internals. Authority/verification are surfaced by the source badges.
         if conflicts:
             headline = (
-                f"{event.asset_id}: {len(conflicts)} open knowledge conflict(s) — resolve before work"
-                + (f" (failure code {failure_code})" if fc_known else "")
+                f"{event.asset_id}: {_count(len(conflicts), 'open knowledge conflict')} to resolve before work"
+                + (f", failure code {failure_code}" if fc_known else "")
             )
         elif quarantine_items:
             headline = (
-                f"{event.asset_id}: {len(quarantine_items)} unverified field observation(s) on file — "
+                f"{event.asset_id}: {_count(len(quarantine_items), 'unverified field observation')} on file, "
                 "review before work"
             )
         elif graph_edges:
             headline = (
-                f"{event.asset_id}: {len(graph_edges)} knowledge record(s) on file"
-                + (f" across {len(doc_ids)} source document(s)" if doc_ids else "")
-                + (f" — work order failure code {failure_code}" if fc_known else "")
+                f"{event.asset_id}: {_count(len(graph_edges), 'knowledge record')} on file"
+                + (f" across {_count(len(doc_ids), 'source document')}" if doc_ids else "")
+                + (f", work order failure code {failure_code}" if fc_known else "")
             )
         else:
             headline = (
                 f"{event.asset_id}: no prior knowledge on file"
-                + (f" — first occurrence of failure code {failure_code}" if fc_known else " for this work order")
+                + (f", first occurrence of failure code {failure_code}" if fc_known else " for this work order")
             )
 
         lead = f"Work order {event.work_order_id} on {event.asset_id}"
@@ -206,7 +206,7 @@ class BriefEngine:
             warnings += [r.get("requirement_text", "") for r in regulations[:2]]
 
         body_lines = [
-            f"PTW {event.ptw_id} | Type: {event.ptw_type} | Area: {event.work_area}",
+            f"Permit {event.ptw_id}, {_permit_type(event.ptw_type)} in {event.work_area}",
             f"Isolation boundary: {', '.join(event.asset_ids)}",
         ]
         if topology:
@@ -228,7 +228,7 @@ class BriefEngine:
             ptw_id=event.ptw_id,
             recipient_user_id=event.issuing_engineer_id,
             priority="critical",
-            headline=f"PTW {event.ptw_id} ({event.ptw_type.upper()}) — {len(event.asset_ids)} asset(s) in boundary",
+            headline=_ptw_headline(event.ptw_id, event.ptw_type, len(event.asset_ids)),
             body="\n".join(body_lines),
             action_items=[
                 "Verify all isolation points per PTW checklist",
@@ -289,8 +289,8 @@ class BriefEngine:
             recipient_user_id=event.incoming_shift_lead_id,
             priority="high",
             headline=(
-                f"Shift handover: {len(open_wos)} open WO(s), {len(alarms)} alarm(s), "
-                f"{len(conflicts)} open conflict(s)"
+                f"Shift handover: {_count(len(open_wos), 'open work order')}, {_count(len(alarms), 'alarm')}, "
+                f"{_count(len(conflicts), 'open conflict')}"
             ),
             body="\n".join(body_lines),
             action_items=["Review open work orders", "Acknowledge active alarms", "Resolve open knowledge conflicts"],
@@ -331,8 +331,8 @@ class BriefEngine:
 
         total_occurrences = recurrence_count + 1
         headline = (
-            f"Asset {asset_id} has failed with {failure_code} "
-            f"{total_occurrences} time(s) in 90 days — recurring {failure_family} failure pattern"
+            f"{asset_id} failed with {failure_code} {_count(total_occurrences, 'time')} in 90 days, "
+            f"a recurring {failure_family} failure pattern"
         )
 
         body_lines = [
@@ -411,7 +411,10 @@ class BriefEngine:
         sources = await _resolve_source_documents(self.supabase, _sources_from_graph(graph_edges))
 
         dep_count = len(topology) + len(ptw_items) + len(moc_items)
-        headline = f"Asset {asset_id} is being tagged out — {dep_count} downstream dependencies identified"
+        headline = (
+            f"{asset_id} is being tagged out: "
+            f"{_count(dep_count, 'downstream dependency', 'downstream dependencies')} found"
+        )
 
         body_lines = [
             f"Tag-out raised by: {performed_by} | Reason: {tag_out_reason}",
@@ -480,10 +483,10 @@ class BriefEngine:
         sources = await _resolve_source_documents(self.supabase, _sources_from_graph(graph_edges))
 
         headline = (
-            f"Inspection {inspection_type} FAILED on {asset_id} — "
-            f"{len(timeline)} prior failure(s) in 90 days"
+            f"Inspection {inspection_type} failed on {asset_id}: "
+            f"{_count(len(timeline), 'prior failure')} in 90 days"
         ) if result == "failed" else (
-            f"Inspection {inspection_type} on {asset_id} — findings require review"
+            f"Inspection {inspection_type} on {asset_id}: findings to review"
         )
 
         body_lines = [
@@ -926,6 +929,29 @@ def _distinct_docs(edges: list[dict[str, Any]]) -> list[str]:
         if doc and doc not in seen:
             seen.append(doc)
     return seen
+
+
+_PERMIT_WORK = {
+    "isolation": "isolation work",
+    "hot_work": "hot work",
+    "confined_space": "confined-space entry",
+    "high_pressure_line": "high-pressure line work",
+}
+
+
+def _permit_type(code: str | None) -> str:
+    """The permit type as an operator says it: `high_pressure_line` -> "high-pressure line work"."""
+    key = (code or "").replace("-", "_").lower()
+    return _PERMIT_WORK.get(key) or (f"{key.replace('_', ' ')} work" if key else "work")
+
+
+def _count(n: int, noun: str, plural: str | None = None) -> str:
+    """`3 alarms`, `1 alarm`: a headline counts in words, never `alarm(s)`."""
+    return f"{n} {noun if n == 1 else plural or noun + 's'}"
+
+
+def _ptw_headline(ptw_id: str, ptw_type: str | None, asset_count: int) -> str:
+    return f"Permit {ptw_id}, {_permit_type(ptw_type)}: {_count(asset_count, 'asset')} in the isolation boundary"
 
 
 def _summarize_relationships(edges: list[dict[str, Any]]) -> str:

@@ -342,7 +342,14 @@ async def showcase_read_fence(request: Request, settings: SettingsDep, supabase:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
 
-async def demo_llm_budget(current_user: CurrentUserDep, redis: RedisDep, settings: SettingsDep) -> None:
+# Actions a route spends from the demo budget, where one request makes several model calls. An RCA
+# investigation plans up to four lookups, then synthesises and checks (`services/rca_agent.py`).
+_DEMO_LLM_COST = {"/search/rca-pack": 6}
+
+
+async def demo_llm_budget(
+    current_user: CurrentUserDep, redis: RedisDep, settings: SettingsDep, request: Request = None,  # type: ignore[assignment]
+) -> None:
     """Cap the demo role's model-backed actions per hour, shared by every demo login.
 
     The demo account is public, so a visitor could otherwise spend the provider quota. Only the
@@ -352,9 +359,10 @@ async def demo_llm_budget(current_user: CurrentUserDep, redis: RedisDep, setting
     if not tenant.is_demo_user(current_user):
         return
     key = f"kairos:demo_budget:{int(time.time() // 3600)}"
+    cost = _DEMO_LLM_COST.get(request.url.path, 1) if request is not None else 1
     try:
-        used = await redis.incr(key)
-        if used == 1:
+        used = await (redis.incrby(key, cost) if cost > 1 else redis.incr(key))
+        if used == cost:
             await redis.expire(key, 3600)
     except Exception as exc:  # noqa: BLE001
         log.warning("demo_budget.redis_unavailable", error=str(exc))

@@ -3,6 +3,7 @@ Search engine service — Elasticsearch exact search (Layer 11).
 Handles tag number, part number, document ID, and regulatory clause lookup.
 """
 
+import re
 from typing import Any
 
 import structlog
@@ -12,6 +13,10 @@ from api.config import Settings
 from api.services import tenant
 
 log = structlog.get_logger(__name__)
+
+
+# Hyphenated identifiers: document numbers, bulletins, permits, asset tags (FP-SB-2025-04, EQ-101).
+_DOCUMENT_NUMBER_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b")
 
 
 class SearchEngineService:
@@ -96,6 +101,15 @@ class SearchEngineService:
             must_clauses.append({"bool": {"should": scope, "minimum_should_match": 1}})
 
         bool_query: dict[str, Any] = {"must": must_clauses}
+        # A document number in the question ("SOP-HE-GEN-11") is analysed into common tokens
+        # (sop, he, gen, 11), so every procedure matched it equally and the right one could rank
+        # below the top six. The exact number as a phrase lifts the document that carries it.
+        numbers = sorted({m.group(0) for m in _DOCUMENT_NUMBER_RE.finditer(query) if any(c.isdigit() for c in m.group(0))})
+        if numbers:
+            bool_query["should"] = [
+                {"match_phrase": {field: {"query": n, "boost": boost}}}
+                for n in numbers for field, boost in (("title", 6), ("content", 4))
+            ]
         if not include_superseded:
             # must_not, not must status=active: this query also spans kairos_assets, whose
             # documents carry no `status` field at all. Requiring "active" would exclude every

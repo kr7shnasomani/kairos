@@ -201,3 +201,17 @@ async def test_inspection_brief_cites_the_assets_documents_but_never_a_test_file
 
 def test_a_date_without_an_offset_claims_no_zone():
     assert brief_engine._when("2026-10-08T18:06:00") == "8 Oct 2026, 18:06"
+
+
+def test_a_permit_brief_names_its_type_in_plain_words():
+    assert brief_engine._ptw_headline("PTW-DEMO-0801", "high_pressure_line", 2) == (
+        "Permit PTW-DEMO-0801, high-pressure line work: 2 assets in the isolation boundary")
+    assert brief_engine._ptw_headline("PTW-7", "hot_work", 1) == "Permit PTW-7, hot work: 1 asset in the isolation boundary"
+    assert brief_engine._permit_type("confined_space") == "confined-space entry"
+    assert brief_engine._permit_type("line_break") == "line break work"
+
+
+def test_a_headline_counts_in_words():
+    assert brief_engine._count(1, "alarm") == "1 alarm"
+    assert brief_engine._count(3, "open work order") == "3 open work orders"
+    assert brief_engine._count(0, "downstream dependency", "downstream dependencies") == "0 downstream dependencies"

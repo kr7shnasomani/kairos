@@ -68,6 +68,10 @@ class RCAPackResponse(BaseModel):
     failure_code: str
     timeline: list[dict[str, Any]] = Field(default_factory=list)
     hypotheses: list[dict[str, Any]] = Field(default_factory=list)
+    # Hypotheses the check against their cited text did not support, with the reason: shown, not hidden.
+    dropped_hypotheses: list[dict[str, Any]] = Field(default_factory=list)
+    # The agent's lookups in order: tool, args, why, and what it found.
+    investigation: list[dict[str, Any]] = Field(default_factory=list)
     supporting_documents: list[dict[str, Any]] = Field(default_factory=list)
     confidence: float | None = None
     refused: bool = False

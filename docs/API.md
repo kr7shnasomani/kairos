@@ -1313,7 +1313,7 @@ that did not happen.
 2. **Qdrant** — Semantic search on `failure_code + asset_class` against `kairos_knowledge`
 3. **Supabase** — `operational_events` (work orders, alarms, PTWs) in the same 90-day window
 
-Combined evidence is passed to `LLMService.rca_synthesize()`. Falls back to raw timeline + documents when LLM is unavailable.
+**Then the investigation agent** (`services/rca_agent.py`, 2026-10-18) plans up to four further lookups from six tools: `failure_history` (the asset's work orders and alarms 1 to 10 years back), `sister_assets` (the same failure code on assets of the same equipment class, same plant, sites the caller may read), `asset_knowledge` (graph facts with authority and verification), `pending_changes` (open conflicts and unapproved MoCs), `search_documents` (a scoped document search) and `field_notes` (unverified quarantine items, offered only with `include_quarantine`). No tool takes an asset id. Planning stops after 40 s or four lookups, then everything gathered goes to `LLMService.rca_synthesize()`. Each hypothesis is then checked against the text of the sources it cites: unsupported ones move to `dropped_hypotheses` with the reason, and a hypothesis citing nothing is dropped outright. The check is skipped if the run has already taken 60 s, so the response stays inside the frontend's 90 s budget. Falls back to raw timeline + documents when no model is configured. For the demo role a call costs six actions of `DEMO_LLM_ACTIONS_PER_HOUR`.
 
 **Test documents are hidden on read, never deleted** (2026-10-17). Test-artifact documents (`corpus.partition_test_artifacts`) are dropped from the evidence **before** synthesis, so no hypothesis or supporting document can rest on one; the exclusion is logged with its count (`rca_pack.test_artifacts_excluded`).
 
@@ -1347,7 +1347,26 @@ Combined evidence is passed to `LLMService.rca_synthesize()`. Falls back to raw 
     {
       "hypothesis": "Bearing wear caused by insufficient lubrication",
       "evidence_weight": 0.82,
-      "sources": ["doc-p101-maint-record"]
+      "sources": ["doc-p101-maint-record"],
+      "check": "supported",
+      "check_reason": "The maintenance record states the bearing was found dry."
+    }
+  ],
+  "dropped_hypotheses": [
+    {
+      "hypothesis": "Operator error at start-up",
+      "evidence_weight": 0.2,
+      "sources": [],
+      "check": "dropped",
+      "check_reason": "Cites no source document."
+    }
+  ],
+  "investigation": [
+    {
+      "tool": "sister_assets",
+      "args": {},
+      "why": "Check whether the same seal failure recurs on sister pumps.",
+      "found": "2 SEAL-FAIL work order(s) on 1 of 3 sister asset(s)"
     }
   ],
   "supporting_documents": [
@@ -2254,9 +2273,14 @@ Get one MoC item enriched for the detail view. The `moc_items` table stores only
   "blast_radius_count": 3,
   "status": "pending",
   "created_at": "2024-02-20T10:00:00Z",
-  "draft_content": "..."
+  "draft_content": "...",
+  "draft": null,
+  "draft_generated_at": null
 }
 ```
+
+`draft_content` is the MoC's recorded description (shown as the case summary). `draft` is the drafted
+document change from `POST /governance/moc/{moc_id}/draft`, or `null` before the first draft.
 
 **Response `404`:** `{"detail": "MoC '<id>' not found"}`
 
@@ -2273,6 +2297,45 @@ In-app MoC sign-off (engineer/admin authority — mirrors OPA `can_resolve_moc`)
 **Response `200`:** `{"status": "approved", "moc_id": "..."}`
 
 **Response `409`:** `{"detail": "MoC already approved."}` · **`404`:** `{"detail": "MoC '<id>' not found"}`
+
+---
+
+### `POST /governance/moc/{moc_id}/draft`
+
+Drafts the document changes a pending MoC implies (`services/moc_draft.py`, 2026-10-18). The model reads
+the MoC's conflicting sources and the documents in its blast radius and, for each affected document that
+states the value being changed, returns where it says it, the current and proposed wording and the
+reason. **Citations are checked in code:** a change may cite only the MoC's own source documents and must
+name an affected document; anything else is dropped. Stored on the MoC (`draft`, `draft_generated_at`,
+`draft_generated_by`), replaced by the next draft, audited as `moc_draft_generated`, and **never applied
+to a document**. One model call.
+
+**Auth required:** Yes (`engineer`, `reliability` or `admin`; the demo role only on a showcase MoC).
+Counts one action against the demo budget.
+
+**Response `200`:**
+```json
+{
+  "moc_id": "MOC-DEMO-0002",
+  "draft": {
+    "summary": "Update the minimum continuous flow for P-1101A from 120 m3/h to 150 m3/h.",
+    "changes": [{
+      "document_id": "DOC-VOHK94SBJDEE", "title": "SOP-CDU-crude-feed-pump-operation.pdf",
+      "location": "Requirement section",
+      "current": "Never run P-1101A below the minimum continuous flow of 120 m3/h.",
+      "proposed": "Never run P-1101A below the minimum continuous flow of 150 m3/h.",
+      "reason": "The manufacturer bulletin revises the minimum continuous flow to 150 m3/h.",
+      "cited": ["DOC-WQJHXNN63FD4"]
+    }],
+    "open_questions": [],
+    "model": "nim"
+  },
+  "draft_generated_at": "2026-10-18T10:06:21+00:00"
+}
+```
+
+**Response `409`:** the MoC is approved or rejected · **`502`:** no usable draft came back · **`503`:**
+the draft could not be stored · **`403`:** demo account on a real MoC · **`404`:** not found
 
 ---
 

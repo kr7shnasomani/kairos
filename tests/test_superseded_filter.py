@@ -197,3 +197,30 @@ def test_every_answer_surface_can_carry_the_moc_banner():
 
     for model in (SearchResponse, RCAPackResponse, SynthesizeResponse):
         assert "pending_moc" in model.model_fields, f"{model.__name__} cannot disclose a pending MoC"
+
+
+# ── Document numbers: the exact number outranks documents that share its pieces ──
+
+@pytest.mark.asyncio
+async def test_a_document_number_in_the_question_is_boosted_as_a_phrase():
+    es = _FakeES()
+    await SearchEngineService(es, _Settings()).search("When is the next review of SOP-HE-GEN-11 due?")
+    phrases = [c["match_phrase"] for c in es.body["query"]["bool"]["should"]]
+    assert {"title": {"query": "SOP-HE-GEN-11", "boost": 6}} in phrases
+    assert {"content": {"query": "SOP-HE-GEN-11", "boost": 4}} in phrases
+
+
+@pytest.mark.asyncio
+async def test_a_question_without_a_number_adds_no_boost():
+    es = _FakeES()
+    await SearchEngineService(es, _Settings()).search("Which standards apply to the site?")
+    assert "should" not in es.body["query"]["bool"]
+
+
+@pytest.mark.asyncio
+async def test_the_boost_never_narrows_results():
+    """`should` beside a `must` only re-ranks: a document without the number still matches."""
+    es = _FakeES()
+    await SearchEngineService(es, _Settings()).search("seal history for EQ-101")
+    q = es.body["query"]["bool"]
+    assert q["must"] and "minimum_should_match" not in q

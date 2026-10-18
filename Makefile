@@ -8,7 +8,7 @@
 .PHONY: help dev prod stop nuke logs ps sync-check deploy-backend deploy-frontend local-refresh \
         init-neo4j init-qdrant init-all \
         seed load-dataset redate-demo generate-showcase load-showcase redate-showcase reset-showcase \
-        purge-test-data wipe-local reset-local \
+        purge-test-data restore-superseded wipe-local reset-local \
         test test-api test-connectors \
         verify benchmark model-gate \
         lint format
@@ -173,6 +173,11 @@ redate-showcase:
 # Put the showcase plant's state (events, briefs, conflicts, quarantine...) back to its seed. Never touches the vault.
 reset-showcase:
 	docker compose exec -e SHOWCASE_CONFIRM kairos-backend-api python scripts/reset_showcase.py $(if $(APPLY),--apply,)
+
+# Undo a wrongful supersede (status, the edges it closed, both indexes), from its own audit row.
+# Dry run by default; APPLY=1 also needs RESTORE_CONFIRM=<document id>. Run on each host (ES is per host).
+restore-superseded:
+	docker compose exec -e RESTORE_CONFIRM kairos-backend-api python scripts/restore_superseded.py $(DOC) $(if $(APPLY),--apply,)
 
 # Delete integration-test residue (ASSET-TEST/DEDUP/EV/ACK-*, WO-*, DOC-*) from every store.
 purge-test-data:

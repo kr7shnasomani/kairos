@@ -578,6 +578,29 @@ async def test_the_demo_budget_counts_only_the_demo_role_and_stops_at_the_cap():
     assert exc.value.status_code == 429
 
 
+async def test_an_rca_investigation_spends_several_actions():
+    from api.dependencies import demo_llm_budget
+    from fastapi import HTTPException
+
+    class S:
+        DEMO_LLM_ACTIONS_PER_HOUR = 10
+
+    class R(_Redis):
+        async def incrby(self, key, n):
+            self.n += n
+            return self.n
+
+    class Req:
+        class url:
+            path = "/search/rca-pack"
+
+    r = R()
+    await demo_llm_budget(DEMO, r, S(), Req())
+    assert r.n == 6 and r.expired == 1
+    with pytest.raises(HTTPException):
+        await demo_llm_budget(DEMO, r, S(), Req())  # 12 > 10
+
+
 async def test_a_redis_outage_does_not_block_a_demo_action():
     from api.dependencies import demo_llm_budget
 
@@ -595,6 +618,7 @@ def test_every_model_backed_route_carries_the_budget():
         ("POST", "/search/rca-pack"), ("POST", "/elicitation/trigger"), ("POST", "/elicitation/{work_order_id}/voice"),
         ("POST", "/events/work-order"), ("POST", "/events/ptw"), ("POST", "/events/shift-handover"),
         ("POST", "/events/alarm"), ("POST", "/events/tag-out"), ("POST", "/events/inspection-complete"),
+        ("POST", "/governance/moc/{moc_id}/draft"),
     }
     carrying = {
         (m, p) for m, p, r in _routes() if demo_llm_budget in [d.call for d in r.dependant.dependencies]

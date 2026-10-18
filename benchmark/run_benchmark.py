@@ -254,9 +254,12 @@ def _append_checkpoint(path: str, row: dict) -> None:
         print(f"  ! checkpoint write failed ({type(e).__name__}: {e})", flush=True)
 
 
-async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpoint: str = "") -> None:
+async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpoint: str = "",
+               only: frozenset[str] = frozenset()) -> None:
     with open(QUESTIONS) as f:
         questions = json.load(f)["questions"]
+    if only:
+        questions = [q for q in questions if q["id"] in only]
     if limit:
         questions = questions[:limit]
     n = len(questions)
@@ -307,6 +310,7 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
 
             if not retrieval_only:
                 correct, sourced, prov, ms = False, False, "-", 0.0
+                answer = ""
                 if prior:
                     correct, sourced, prov, ms = bool(prior["correct"]), bool(prior["prov"]), prior["via"], float(prior["ms"])
                 else:
@@ -316,6 +320,7 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
                         syn = await c.post(f"{API}/search/synthesize", headers=h, json={"query": q["question"], "context": ctx[:8]}, timeout=SYNTH_TIMEOUT)
                         ms = (time.perf_counter() - t) * 1000
                         body = syn.json() if syn.status_code == 200 else {}
+                        answer = body.get("answer") or body.get("refusal_reason") or ""
                         refused = bool(body.get("refused"))
                         prov = body.get("model") or ("refused" if refused else "-")
                         # Correct = facts stated (not negated) AND provenance present. Refusal is a valid,
@@ -332,6 +337,8 @@ async def main(retrieval_only: bool, delay: float = 0.0, limit: int = 0, checkpo
                         "id": q["id"], "retr": int(r_hit), "correct": int(correct),
                         "prov": int(sourced), "via": prov, "ms": round(ms),
                         "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        # What the model wrote: a miss cannot be diagnosed from a 0 alone.
+                        "answer": answer,
                     })
                 syn_ms.append(ms)
                 via_counts[prov] += 1
@@ -487,6 +494,9 @@ if __name__ == "__main__":
     ap.add_argument("--limit", type=int, default=0,
                     help="grade only the first N questions — a cheap calibration run to check the "
                          "provider mix before spending a full sweep. 0 = all.")
+    ap.add_argument("--only", default="",
+                    help="comma-separated question ids to grade (e.g. Q20,Q41): re-check known misses "
+                         "for a few calls instead of a full sweep. Never a figure to quote.")
     ap.add_argument("--checkpoint", default="",
                     help="append each graded question to this JSONL and skip questions it already "
                          "holds. A full sweep is ~30 min of paced synthesis; without this, one slow "
@@ -499,4 +509,5 @@ if __name__ == "__main__":
     if args.selftest:
         _selftest()
     else:
-        asyncio.run(main(args.retrieval_only, args.delay, args.limit, args.checkpoint))
+        only = frozenset(i.strip() for i in args.only.split(",") if i.strip())
+        asyncio.run(main(args.retrieval_only, args.delay, args.limit, args.checkpoint, only))

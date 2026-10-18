@@ -10,6 +10,7 @@ import { nowMs } from "@/lib/utils";
 import { RCA_PRESETS } from "@/lib/rca";
 import type { BriefSource, RcaPack } from "@/lib/types";
 import { HypothesesPanel } from "./_components/hypotheses-panel";
+import { InvestigationCard } from "./_components/investigation-card";
 import { ResultHeader } from "./_components/result-header";
 import { SupportingDocs } from "./_components/supporting-docs";
 import { TimelineCard } from "./_components/timeline-card";
@@ -178,10 +179,11 @@ function RcaResult({ pack }: { pack: RcaPack }) {
               timeline instead of stranding blank space beside the hypotheses. */}
           <div ref={gridRef} data-testid="rca-result-grid" className={`grid items-start gap-6 lg:grid-cols-[3fr_2fr] ${revealCls(gridRevealed)}`}>
             <div className="space-y-6">
+              <InvestigationCard steps={pack.investigation ?? []} />
               <TimelineCard pack={pack} />
               <SupportingDocs docs={pack.supporting_documents ?? []} />
             </div>
-            <HypothesesPanel hypotheses={pack.hypotheses ?? []} />
+            <HypothesesPanel hypotheses={pack.hypotheses ?? []} dropped={pack.dropped_hypotheses ?? []} />
           </div>
 
           <div ref={lowerRef} className={revealCls(lowerRevealed)} style={{ transitionDelay: lowerRevealed ? "100ms" : "0ms" }}>

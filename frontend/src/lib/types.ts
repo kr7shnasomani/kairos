@@ -105,6 +105,17 @@ export interface RcaHypothesis {
   evidence_weight: number;
   sources: string[];
   refused?: boolean;
+  /** The check against the text it cites: supported, dropped, or not checked (time ran out, reply unreadable). */
+  check?: "supported" | "dropped" | "unchecked";
+  check_reason?: string;
+}
+
+/** One lookup the RCA agent chose, in order. */
+export interface RcaStep {
+  tool: string;
+  args: Record<string, unknown>;
+  why: string;
+  found: string;
 }
 
 export interface RcaSupportingDoc {
@@ -127,6 +138,8 @@ export interface RcaPack {
   confidence: number | null;
   refused: boolean;
   synthesis_available: boolean;
+  investigation?: RcaStep[];
+  dropped_hypotheses?: RcaHypothesis[];
 }
 
 // --- Compliance (GET /compliance/gaps, /dashboard) ---
@@ -402,6 +415,27 @@ export interface MocItem {
   source_b?: ConflictSource;
   blast_radius_count?: number;
   draft_content?: string | null;
+  /** Drafted document changes (`POST /governance/moc/{id}/draft`), or null before the first draft. */
+  draft?: MocDraft | null;
+  draft_generated_at?: string | null;
+}
+
+export interface MocDraftChange {
+  document_id: string;
+  title: string;
+  location: string;
+  current: string;
+  proposed: string;
+  reason: string;
+  /** Source documents of the MoC that support the change; the backend drops any other citation. */
+  cited: string[];
+}
+
+export interface MocDraft {
+  summary: string;
+  changes: MocDraftChange[];
+  open_questions: string[];
+  model?: string | null;
 }
 
 export interface MocResponse {

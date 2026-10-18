@@ -75,3 +75,23 @@ def test_offboarding_first_interview_lands_yesterday():
 def test_showcase_offboarding_programmes_are_left_to_the_showcase_redate():
     sessions = [{"id": "a", "personnel_id": "EMP-001"}, {"id": "b", "personnel_id": "DEMO-EMP-7"}, {"id": "c"}]
     assert [s["id"] for s in golden_sessions(sessions)] == ["a", "c"]
+
+
+# =============================================================================
+# restore_superseded: the supersede's own audit row says what to undo
+# =============================================================================
+
+from scripts.restore_superseded import supersede_record  # noqa: E402
+
+
+def test_the_newest_supersede_row_is_the_one_undone():
+    rows = [
+        {"action": "document_ingested", "timestamp": "2026-09-13T19:10:38+00:00"},
+        {"action": "document_superseded", "timestamp": "2026-09-14T10:25:37+00:00", "details": {"new_document_id": "DOC-B"}},
+        {"action": "document_superseded", "timestamp": "2026-09-01T08:00:00+00:00", "details": {"new_document_id": "DOC-A"}},
+    ]
+    assert supersede_record(rows)["details"]["new_document_id"] == "DOC-B"
+
+
+def test_no_supersede_row_means_nothing_to_undo():
+    assert supersede_record([{"action": "document_ingested", "timestamp": "2026-09-13T19:10:38+00:00"}]) is None

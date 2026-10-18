@@ -367,6 +367,9 @@ approved_by     TEXT
 approved_at     TIMESTAMPTZ
 webhook_received_at TIMESTAMPTZ
 created_at      TIMESTAMPTZ DEFAULT NOW()
+draft           JSONB         -- drafted document changes (018): {summary, changes[], open_questions[], model}
+draft_generated_at TIMESTAMPTZ
+draft_generated_by TEXT
 ```
 
 #### `audit_log` — Immutable action record
@@ -524,6 +527,7 @@ The table below is the **schema-evolution changelog** — what each of the 16 fo
 | `015_sla_tracking.sql` | `escalated_at` + `escalated_to` on `knowledge_conflicts`; `sla_due_at` + `escalated_at` on `quarantine_items` |
 | `016_vault_audio_mime.sql` | Allow `audio/*` MIME types on the `kairos-vault` bucket (voice-note uploads) |
 | `017_enable_rls_remaining_tables.sql` | RLS (no policies) on the 14 tables that lacked it. Lives in `db/migrations/`. Not needed live: an anonymous read of every table that holds data returned nothing on 2 October 2026, so RLS was already on. Kept as an idempotent safety net |
+| `018_moc_draft` | `moc_items.draft` (JSONB), `draft_generated_at`, `draft_generated_by`: the drafted document changes from `POST /governance/moc/{moc_id}/draft`. Applied live 2026-10-18 and folded into `schema.sql` (no file kept) |
 
 ### Maintenance & data hygiene
 

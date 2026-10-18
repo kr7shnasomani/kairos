@@ -74,7 +74,8 @@ describe("ModelGatePage", () => {
 
     render(<ModelGatePage />);
 
-    await waitFor(() => expect(screen.getAllByText("No gate runs yet.").length).toBeGreaterThanOrEqual(3));
+    await waitFor(() => expect(screen.getAllByText("No gate run recorded yet.").length).toBeGreaterThanOrEqual(2));
+    expect(screen.getByText(/No gate run is recorded yet\./)).toBeInTheDocument();
     expect(screen.queryByText("Demo data")).not.toBeInTheDocument();
   });
 

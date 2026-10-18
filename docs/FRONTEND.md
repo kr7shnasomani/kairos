@@ -100,14 +100,14 @@ frontend/
 | `/copilot` | Knowledge Q&A chat + answer rating + pending-MoC banner | Live |
 | `/assets` | Asset list — search, class/criticality filters, open work orders + compliance gaps per asset | Live |
 | `/assets/[id]` | Asset detail + aliases + knowledge + hierarchy + asset-scoped search | Live |
-| `/rca` | RCA pack generator | Live |
+| `/rca` | RCA pack generator: an Investigation card lists the agent's lookups in order, each hypothesis shows whether it was checked against its sources, and hypotheses the check dropped are listed with the reason | Live |
 | `/compliance` | Compliance gaps + audit readiness | Live |
 | `/governance` | Hub → all 8 governance surfaces | Live (hub page) |
 | `/governance/conflicts` | Conflict list + resolve | Live |
 | `/governance/conflicts/[id]` | Conflict detail — both sources, authority, SLA, blast radius, resolve / MoC | Live |
 | `/governance/quarantine` | Quarantine list + promote/dispute/request-info | Live (role-gated) |
 | `/governance/moc` | Management of Change queue | Live |
-| `/governance/moc/[id]` | MoC detail (sources joined from linked conflict) + engineer/admin sign-off | Live (`GET/POST /governance/moc/{id}` + `/approve`) |
+| `/governance/moc/[id]` | MoC detail (sources joined from linked conflict), case summary, the drafted change (Draft / Redraft: each edit with current and proposed wording, reason and citations) + engineer/admin sign-off | Live (`GET /governance/moc/{id}`, `/draft`, `/approve`) |
 | `/governance/sla` | SLA report — overdue conflicts + quarantine | Live |
 | `/governance/timestamp-drift` | Cross-system clock drift on compound events (report-only) | Live |
 | `/governance/push-volume-gate` | EEMUA 191 briefs-per-operator-hour gate, 7/30/90-day window (report-only) | Live |
@@ -338,6 +338,7 @@ export const API_BASE =
 | `submitAnswerFeedback({query, rating, …})` | `POST /search/feedback` |
 | `getMoc(id)` | `GET /governance/moc/{id}` |
 | `getMocs()` | `GET /governance/moc` |
+| `draftMoc(id)` | `POST /governance/moc/{id}/draft` (synthesis timeout, one model call) |
 | `approveMoc(id, note?)` | `POST /governance/moc/{id}/approve` |
 | `getSlaReport()` | `GET /governance/sla-report` |
 | `getCircuitBreaker()` | `GET /governance/circuit-breaker` |
@@ -696,7 +697,7 @@ All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` fro
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **374 tests / 85 files**, all passing (2026-10-17; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
+| Test suite | **380 tests / 85 files**, all passing (2026-10-18; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---

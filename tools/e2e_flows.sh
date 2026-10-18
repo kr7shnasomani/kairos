@@ -11,8 +11,10 @@
 #   ./tools/e2e_flows.sh --mutate     # also signs a PTW, raises + resolves a deviation, supersedes a doc
 #
 # Default mode changes no workflow state; Copilot and RCA calls do append audit-log rows, as every use
-# does. --mutate leaves signed briefs, a resolved deviation and a superseded document behind — run it on
-# a stack you will reset, never on the dataset you are about to demo or benchmark.
+# does. --mutate leaves signed briefs, a resolved deviation and a superseded document behind. There is
+# no local Supabase, so --mutate always writes to the shared cloud stores: it refuses to run unless
+# KAIROS_E2E_ALLOW_CLOUD_WRITES=1 is set, and it only ever supersedes a document it uploaded itself.
+# (On 2026-09-14 it superseded the golden sop_he_gen_11.pdf, which broke benchmark Q27.)
 #
 # Uses agent-browser (host-installed, like tools/capture_landing_shots.sh), one browser session per
 # persona so signed-in identities never leak into each other. Plain bash 3.2 (macOS default): no
@@ -23,6 +25,10 @@ BASE="${KAIROS_URL:-http://localhost:3000}"
 API="${KAIROS_API_URL:-http://localhost:8000}"
 MUTATE=0
 [ "${1:-}" = "--mutate" ] && MUTATE=1
+if [ "$MUTATE" = 1 ] && [ "${KAIROS_E2E_ALLOW_CLOUD_WRITES:-}" != 1 ]; then
+  echo "--mutate writes to the shared cloud stores; set KAIROS_E2E_ALLOW_CLOUD_WRITES=1 to confirm" >&2
+  exit 2
+fi
 BODY=$(mktemp -t kairos_e2e_body)
 
 pass=0
@@ -91,19 +97,24 @@ command -v agent-browser >/dev/null || { echo "agent-browser is not installed"; 
 curl -sS -m 10 -o /dev/null "$API/health/" || { echo "API not reachable at $API"; exit 2; }
 
 ADMIN=$(login admin); ENGINEER=$(login engineer); RELIABILITY=$(login reliability)
-COMPLIANCE=$(login compliance); FIELD=$(login field_worker)
-for t in "$ADMIN" "$ENGINEER" "$RELIABILITY" "$COMPLIANCE" "$FIELD"; do
+COMPLIANCE=$(login compliance); FIELD=$(login field_worker); DEMO=$(login demo)
+for t in "$ADMIN" "$ENGINEER" "$RELIABILITY" "$COMPLIANCE" "$FIELD" "$DEMO"; do
   [ -n "$t" ] || { echo "a persona login failed"; exit 2; }
 done
 
 echo "== 1. Pages and role routing"
 signin admin "$ADMIN"
-for route in /overview /briefs /copilot /assets /assets/EQ-101 /assets/register /assets/bootstrap /events /rca /graph /compliance \
-             /compliance/audit-pack /governance /governance/quarantine /governance/conflicts /governance/moc \
-             /governance/model-gate /governance/timestamp-drift /governance/push-volume-gate \
-             /overview/cross-site /audit /documents /documents/compare /offboarding /system-health; do
+for route in /overview /overview/coverage /overview/cross-site /overview/plant-state /briefs /copilot /assets \
+             /assets/EQ-101 /assets/register /assets/bootstrap /events /rca /graph /compliance /compliance/audit-pack \
+             /compliance/nonconformance /governance /governance/quarantine /governance/conflicts /governance/moc \
+             /governance/sla /governance/circuit-breaker /governance/model-gate /governance/timestamp-drift \
+             /governance/push-volume-gate /audit /documents /documents/ingest /documents/compare /offboarding \
+             /projects /settings /system-health; do
   visit "$route" "$route"
 done
+# The desktop rail is fixed: no collapse control (owner decision 2026-10-17).
+collapse=$(agent-browser eval "document.querySelectorAll('[data-rail] button[aria-label*=ollapse], [data-rail] button[aria-label*=xpand]').length" 2>/dev/null)
+[ "$collapse" = 0 ] && ok "desktop rail has no collapse control" || bad "desktop rail shows a collapse control ($collapse)"
 signin field_worker "$FIELD"
 for route in /briefs /field/deviation /field/voice; do visit "$route" "$route"; done
 visit /overview /briefs      # staff surfaces redirect field workers to their inbox
@@ -112,6 +123,14 @@ signin compliance "$COMPLIANCE"
 visit /compliance /compliance
 visit /audit /audit
 visit /governance /compliance  # compliance is read-only: governance redirects to its cockpit
+
+signin demo "$DEMO"
+for route in /overview /briefs /copilot /rca /governance/moc /documents; do visit "$route" "$route"; done
+# The rail's governor pill and the Briefs page read the same count (they drifted until 2026-10-18).
+visit /briefs /briefs
+counts=$(agent-browser eval "[document.querySelector('[data-rail] [title^=Governor]')?.innerText.match(/\\d+\\/\\d+/)?.[0], [...document.querySelectorAll('main span')].map(e=>e.innerText).find(t=>/governor/.test(t))?.match(/\\d+\\/\\d+/)?.[0]].join(' ')" 2>/dev/null | tr -d '"')
+set -- $counts
+[ -n "${2:-}" ] && [ "$1" = "$2" ] && ok "governor pill matches the Briefs page ($1)" || bad "governor pill and Briefs page disagree: '$counts'"
 
 echo "== 2. The API enforces the same boundaries"
 status=$(api "$FIELD" GET /governance/quarantine | cut -d' ' -f1)
@@ -123,6 +142,15 @@ if [ -n "$ptw" ]; then
   [ "$status" = 403 ] && ok "engineer refused a PTW countersignature" || bad "engineer countersign returned $status"
 else
   bad "no PTW brief in the engineer inbox"
+fi
+# The public demo account works the showcase plant only: a write to a real record is refused.
+real_conflict=$(api "$ADMIN" GET "/governance/conflicts?limit=50" | cut -d' ' -f2- \
+  | json 'rows=d.get("conflicts", d.get("items", [])) if isinstance(d, dict) else d; print(next((c["conflict_id"] for c in rows if not str(c.get("asset_id") or "").startswith("DEMO-")), ""))')
+if [ -n "$real_conflict" ]; then
+  status=$(api "$DEMO" POST "/governance/conflicts/$real_conflict/resolve" '{"note":"e2e"}' | cut -d' ' -f1)
+  case "$status" in 403|404) ok "demo account refused a write to a real record ($status)" ;; *) bad "demo write to a real conflict returned $status" ;; esac
+else
+  bad "no real conflict to test the demo write fence against"
 fi
 
 echo "== 3. Copilot answers with sources, and refuses a safety-critical parameter"
@@ -141,6 +169,10 @@ ask "What mechanical seal part number should be used for pump EQ-101?" \
 ask "What is the maximum operating pressure engineers should use for HE-302?" \
   | json 'sys.exit(0 if d.get("refused") else 1)' \
   && ok "HE-302 pressure limit refused" || bad "HE-302 pressure limit was answered instead of refused"
+# A refusal names no asset the question is not about: V-247 must not carry another asset's MoC notice.
+ask "Isolation points for work on V-247" \
+  | json 'sys.exit(0 if d.get("refused") and all("V-247" in str(w.get("asset_id","")) for w in d.get("pending_moc") or []) else 1)' \
+  && ok "V-247 isolation refused with no unrelated MoC notice" || bad "V-247 isolation answered, or carried another asset's MoC notice"
 
 echo "== 4. RCA pack and audit pack are well formed"
 api "$ENGINEER" POST /search/rca-pack \
@@ -179,10 +211,15 @@ if [ "$MUTATE" = 1 ]; then
   fi
 
   echo "== 7. (--mutate) Supersede a document through the UI"
+  # Never a real document: upload a test-named original first (hidden on read by services/corpus.py,
+  # the `kairos_` prefix) and supersede that.
+  original="$(mktemp -t kairos_e2e_original).txt"
   replacement="$(mktemp -t kairos_e2e_sop).txt"
-  printf 'SOP-HE-GEN-11 Rev E2E - next scheduled review due 2028-03-01.\n' > "$replacement"
-  doc=$(api "$ENGINEER" GET "/documents/?limit=100" | cut -d' ' -f2- \
-    | json 'd=d.get("documents",d.get("items",d)) if isinstance(d,dict) else d; print(next((x["document_id"] for x in d if x.get("file_name")=="sop_he_gen_11.pdf" and x.get("status")!="superseded"),""))')
+  printf 'E2E original %s - review due 2027-01-01.\n' "$(date +%s)" > "$original"
+  printf 'E2E replacement %s - review due 2028-03-01.\n' "$(date +%s)" > "$replacement"
+  doc=$(curl -sS -m 60 -X POST "$API/documents/ingest" -H "Authorization: Bearer $ENGINEER" \
+    -F "file=@$original" -F "document_type=procedure" -F "authority_level=4" | json 'print(d.get("document_id",""))')
+  sleep 20
   if [ -n "$doc" ]; then
     signin engineer "$ENGINEER"
     agent-browser open "$BASE/documents/$doc" >/dev/null
@@ -194,15 +231,15 @@ if [ "$MUTATE" = 1 ]; then
     agent-browser find role button click --name "Confirm supersede" >/dev/null 2>&1
     sleep 12
     state=$(api "$ENGINEER" GET "/documents/$doc" | cut -d' ' -f2- | json 'print(d.get("status"))')
-    [ "$state" = superseded ] && ok "sop_he_gen_11.pdf superseded through the UI" || bad "supersede left the document '$state'"
+    [ "$state" = superseded ] && ok "the run's own document superseded through the UI" || bad "supersede left the document '$state'"
   else
-    bad "no active sop_he_gen_11.pdf to supersede"
+    bad "could not upload a test document to supersede"
   fi
-  rm -f "$replacement"
+  rm -f "$original" "$replacement"
 fi
 
 rm -f "$BODY"
-for persona in admin compliance field_worker engineer; do
+for persona in admin compliance field_worker engineer demo; do
   AGENT_BROWSER_SESSION="e2e-$persona" agent-browser close >/dev/null 2>&1 || true
 done
 
