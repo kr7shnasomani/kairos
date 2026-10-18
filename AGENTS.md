@@ -23,17 +23,17 @@
 >
 > Consequence you must accept rather than fix: some numbers are pinned below their true value
 > because closing the gap needs a write. See
-> [`status.md` § Open decisions](docs/implementation/status.md#open-decisions--blocked-on-a-human-call-not-on-work) — **D2**.
+> [`status.md` § Open decisions](docs/status.md#open-decisions--blocked-on-a-human-call-not-on-work) — **D2**.
 
 > **Picking up this project fresh? Start at
-> [`status.md` § Open decisions](docs/implementation/status.md#open-decisions--blocked-on-a-human-call-not-on-work).**
+> [`status.md` § Open decisions](docs/status.md#open-decisions--blocked-on-a-human-call-not-on-work).**
 > Those items are specified and cheap — they are waiting on a human call, not on engineering, so
 > they are the wrong thing to "just implement" and the right thing to ask about. **D1 (what makes an
 > OCR extraction quarantine) is decided — any span < 0.7 holds the document — and no open item has a
 > data-integrity consequence.**
 >
 > **Hit a bug, a build failure, or something that looks wrong?** Check
-> [`docs/implementation/status.md` § Known Pitfalls](docs/implementation/status.md#known-pitfalls)
+> [`docs/status.md` § Known Pitfalls](docs/status.md#known-pitfalls)
 > **before debugging** — it is almost certainly already documented there. That file also holds open
 > work, current benchmark numbers, and CI/tooling detail. Read it when you need it, not every task.
 
@@ -88,12 +88,12 @@ Full manifest with descriptions: `.agents/SKILL_MANIFEST.md`
 
 | Purpose | Path |
 |---|---|
-| **Open work · pitfalls · benchmarks · conformance · CI detail** | **`docs/implementation/status.md`** |
+| **Open work · pitfalls · benchmarks · conformance · CI detail** | **`docs/status.md`** |
 | 13-layer architecture | `ARCHITECTURE.md` |
 | REST API reference · backend services/workers/config | `docs/API.md` · `BACKEND.md` |
 | Infra (ports, stores, dev cmds) · Docker build & run modes | `docs/INFRA.md` · `DOCKER.md` |
 | Database schemas · frontend routes & wiring | `docs/DATABASE.md` · `FRONTEND.md` |
-| Implementation plans · E2E sweep (42 routes × 5 personas) | `docs/implementation/BE.md` · `FE.md` · `e2e-sweep.md` |
+| E2E sweep (42 routes × 5 personas) · showcase plant plan | `docs/e2e-sweep.md` · `docs/demo-data.md` |
 | Tests · golden dataset · benchmarks (results → `benchmark/RESULTS.md`) | `docs/TESTS.md` · `DATASET.md` · `BENCHMARKS.md` |
 | Backend fixtures (mock-by-design) · deploy (AWS EC2 backend + Vercel frontend) | `docs/FIXTURES.md` · `DEPLOY.md` |
 
@@ -162,7 +162,7 @@ Full list: `docs/INFRA.md §9`. Reset: `make nuke → dev → init-all → seed 
 - Celery: lazy imports inside task body. 6 queues: `ingestion,extraction,attribution,transcription,elicitation,validation`.
 - Secrets: never hardcode. Seeded user passwords live only in `.env` as `KAIROS_SEED_PASSWORD_*` (gitignored); the Go connector needs `CONNECTOR_SHARED_SECRET` and refuses to start without it. All via `api/config.py` Settings → env vars. **`.env` and `.env.example` stay in sync** — same variable names, same order and section headings. Adding a setting means adding it to both: `.env.example` carries the safe default, `.env` the real value. Drifted twice before (19 variables missing locally on 2026-09-23) and it hides nothing until something silently falls back to a code default.
 - **Authz fails closed.** `_ask_opa` returns `self.debug` when OPA is unreachable — never bare `True`. Any `read_*` action added to `kairos.rego` must also go in `_sensitive_actions`, or the catch-all grants it to every role. The event ingest routes need the `ingest_event` action (engineer, reliability, admin, and the internal key, which resolves to admin). The `demo` role (public one-click demo) reads everything an admin reads and works the **showcase plant**: it holds the write actions in `kairos.rego`, but the API refuses a demo write unless the route is in `tenant.DEMO_WRITE_ALLOWED` (`dependencies.demo_write_fence`, an app-level dependency) and its handler guards the target to a showcase row (`tenant.guard_*`). It satisfies a role gate that names `engineer` or `reliability`, never one that names only `admin` (model gate, provider probes). A new write route is closed to it until someone lists it, and a test fails if a listed route has no guard. It is not in the catch-all. Never gate `OPTIONS` (CORS preflight carries no token, and this middleware is outermost). Read grants mirror `frontend/src/components/use-role.ts` — a role that can open a page but not call its API is a broken page, not a closed boundary.
-- **The showcase plant shares the real stores and is kept apart by markers, never by a second deployment** (`services/tenant.py`, plan in `docs/implementation/demo-data.md`). Showcase rows carry a `DEMO-` asset or person id, a `SITE_DEMO`/`SITE_DEMO_B` site, or a showcase `access_tags.site_id`; its documents and assets index into `<base>_demo` Qdrant collections and Elasticsearch indices. **Who sees it is one switch, `SHOWCASE_VISIBLE_TO_ALL` (default true, applied at startup as `tenant.VISIBLE_TO_ALL`): on, every login reads the showcase plant as well as the real one (and a site-pinned role reads its own site plus the showcase sites, never another real site: `site_scope`, `tenant.on_visible_site`, `tenant.pin_site`, `tenant.SITE_PIN_CYPHER`; a write never widens); off, a real account never reads a showcase row.** The demo role's WRITES are fenced to showcase rows either way. The partition is kept so the switch can go back: every list, count, aggregate and search read goes through `tenant.scope*`, `$hide_demo` in Cypher (`DEMO_VISIBLE_CYPHER`, default hide) or the `include_demo` flag on the search services, and `tests/test_tenant_isolation.py` keeps a registry of those reads. With the switch off, a real account asking for a showcase record **by id** gets the 404 a missing record gets (`dependencies.showcase_read_fence`, an app-level dependency; a test fails if a by-id GET route names a path parameter it cannot recognise). **A NULL asset means real**, so every showcase quarantine item, MoC and brief carries a showcase asset (`DEMO-GENERAL` when it has none). A demo action never feeds real statistics (`tenant.feeds_statistics`). Wildcards in PostgREST filters are `*`, never `%` (this project's edge answers 500 to `%`). Nothing creates the `_demo` Qdrant collection except `scripts/load_showcase.py` (never `ensure_collections`).
+- **The showcase plant shares the real stores and is kept apart by markers, never by a second deployment** (`services/tenant.py`, plan in `docs/demo-data.md`). Showcase rows carry a `DEMO-` asset or person id, a `SITE_DEMO`/`SITE_DEMO_B` site, or a showcase `access_tags.site_id`; its documents and assets index into `<base>_demo` Qdrant collections and Elasticsearch indices. **Who sees it is one switch, `SHOWCASE_VISIBLE_TO_ALL` (default true, applied at startup as `tenant.VISIBLE_TO_ALL`): on, every login reads the showcase plant as well as the real one (and a site-pinned role reads its own site plus the showcase sites, never another real site: `site_scope`, `tenant.on_visible_site`, `tenant.pin_site`, `tenant.SITE_PIN_CYPHER`; a write never widens); off, a real account never reads a showcase row.** The demo role's WRITES are fenced to showcase rows either way. The partition is kept so the switch can go back: every list, count, aggregate and search read goes through `tenant.scope*`, `$hide_demo` in Cypher (`DEMO_VISIBLE_CYPHER`, default hide) or the `include_demo` flag on the search services, and `tests/test_tenant_isolation.py` keeps a registry of those reads. With the switch off, a real account asking for a showcase record **by id** gets the 404 a missing record gets (`dependencies.showcase_read_fence`, an app-level dependency; a test fails if a by-id GET route names a path parameter it cannot recognise). **A NULL asset means real**, so every showcase quarantine item, MoC and brief carries a showcase asset (`DEMO-GENERAL` when it has none). A demo action never feeds real statistics (`tenant.feeds_statistics`). Wildcards in PostgREST filters are `*`, never `%` (this project's edge answers 500 to `%`). Nothing creates the `_demo` Qdrant collection except `scripts/load_showcase.py` (never `ensure_collections`).
 - **One token verifier: `dependencies.resolve_token`.** Role and `site_id` are read from `app_metadata` only (users can edit `user_metadata`; `scripts/migrate_roles_to_app_metadata.py` must run before a deploy of that change). Never decode a Supabase JWT by hand — this project issues **ES256**, so an HS256 decode silently rejects every token and degrades authz to the dev bypass. Verify by probing the live API with a restricted persona and confirming a **403**; policy tests alone cannot tell you the layer is reached.
 - **Site scope comes from the token, never the query string** — `dependencies.site_scope`. A blank `site_id` means *no* rows, not *all* rows.
 

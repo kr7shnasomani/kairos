@@ -7,7 +7,7 @@
 #
 # Steps: backup the server tree and tag the running images, rsync (never touches the server's .env),
 # rebuild and restart with `make prod`, restart OPA and Caddy (the two things `make prod` does not
-# pick up, see docs/implementation/status.md Known Pitfalls), then verify. Rollback: restore the
+# pick up, see docs/status.md Known Pitfalls), then verify. Rollback: restore the
 # backup directory it prints and re-tag the two `rollback-*` images.
 #
 # Needs: SSH on port 22 open to your current IP in the security group, and the key at $SSH_KEY.

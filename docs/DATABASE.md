@@ -92,7 +92,7 @@ Every relationship written to Neo4j uses the `KNOWLEDGE_EDGE` type. Six properti
 | `KNOWLEDGE_EDGE` | Any → Any | All domain knowledge relationships |
 | `PARENT_OF` | Asset → Asset | Physical hierarchy (Production Line → Pump) |
 | `DOCUMENTED_BY` | Asset → Document | Asset backed by a document |
-| `CAUSED_BY` | Event → Event | **Designed, not implemented** — written nowhere in the codebase, and `Event` nodes are never created either (see the L4 divergence in `implementation/status.md`). Causal chains run through `operational_events.compound_event_id` in Supabase instead. |
+| `CAUSED_BY` | Event → Event | **Designed, not implemented** — written nowhere in the codebase, and `Event` nodes are never created either (see the L4 divergence in `status.md`). Causal chains run through `operational_events.compound_event_id` in Supabase instead. |
 | `INSPECTION_RECORD` | Asset → Document | Inspection completion with result |
 
 ### Constraints and Indices

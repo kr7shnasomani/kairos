@@ -922,7 +922,7 @@ Source: `backend/connectors/cmd/connector/main.go`; auth and boot validation in 
 > live plant to connect to, they run on mock/fixture data by design — the intended state,
 > not a gap. The real paths exist (`PIWebAPIClient` built; SAP ODS + OPC-UA are stubs) and
 > would activate via `PI_WEBAPI_BASE_URL` / `EAM_ODS_ENDPOINT` if a plant were ever
-> connected. Completion status for every layer: [`docs/implementation/status.md`](./implementation/status.md).
+> connected. Completion status for every layer: [`docs/status.md`](./status.md).
 
 ### PI Web API Client (`internal/ot/client.go`)
 
@@ -1122,7 +1122,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `DEDUP_WINDOW_MINUTES` | `10` | Event dedup window + event correlation window |
 | `LATE_ARRIVAL_WINDOW_MINUTES` | `5` | Countdown before delayed brief assembly fires |
 | `PLANT_STATE_DEFAULT` | `normal` | Fallback plant state |
-| `TIMESTAMP_DRIFT_TOLERANCE_MINUTES` | `60` | Max drift before flagging. **Read by two different checks** — the ingestion-pipeline `occurred_at` vs `ingested_at` comparison, and the Layer 4 cross-source `TimestampAlignmentService`. Declared **once** in `config.py` (it used to be declared twice, and Pydantic silently kept the last one). The conflict between the two checks is tracked in `implementation/status.md` § Pending. |
+| `TIMESTAMP_DRIFT_TOLERANCE_MINUTES` | `60` | Max drift before flagging. **Read by two different checks** — the ingestion-pipeline `occurred_at` vs `ingested_at` comparison, and the Layer 4 cross-source `TimestampAlignmentService`. Declared **once** in `config.py` (it used to be declared twice, and Pydantic silently kept the last one). The conflict between the two checks is tracked in `status.md` § Pending. |
 | `TIMESTAMP_DRIFT_ENFORCE` | `False` | When false, cross-source drift is logged and surfaced but opens no conflict row. **Report-only by design — leave off unless deliberately enabled.** |
 | `MODEL_GATE_ENFORCE` | `False` | When true, a per-asset-class Layer 0 regression halts extraction for that class via the circuit breaker. **Off by default**: on a small corpus a class can fail on noise, and an enforcing gate would halt extraction mid-demo. |
 | `KAIROS_PHASE` | `3` | Layer 12 deployment phase. `1` = retrieval only (no synthesis), `2` = synthesis on / proactive push off, `3` = everything. **Default 3, so behaviour is unchanged unless a deployment deliberately steps back.** |
@@ -1239,7 +1239,7 @@ token and checking for a 403.
 
 ### Request hardening (2026-10-01 security pass)
 
-Behaviour that is easy to regress, each pinned by a `tests/test_sec_*.py` case. Detail and status per finding: `implementation/status.md` § Accepted risks and deploy checklist.
+Behaviour that is easy to regress, each pinned by a `tests/test_sec_*.py` case. Detail and status per finding: `status.md` § Accepted risks and deploy checklist.
 
 - **Documents** (`routers/documents.py`): `DOCUMENT_TYPES` (7 values), `ALLOWED_MIME_TYPES` (anything else is stored as `application/octet-stream`), `safe_filename` for the storage path, `parse_occurred_at` (not future, not older than 30 years), and `AUTHORITY_ASSERT_ROLES = {admin, reliability}`: any other role asking for authority 1 to 3 is capped to 4 and the response reports `authority_capped`. Superseding a document of authority 1 to 3 is limited to `SUPERSEDE_GATED_ROLES` and needs an approved MoC (deterministic id `supersede_moc_id`); the first request returns `202 pending_moc_approval` and a repeat after approval applies it. Signed artifact URLs carry `download=` so a stored file is never rendered in the storage origin.
 - **MoC webhook** (`routers/governance.py`): `verify_moc_webhook` checks HMAC-SHA256 over `"{X-Webhook-Timestamp}." + raw body` in `X-Webhook-Signature`, with a 5-minute skew window (`MOC_WEBHOOK_MAX_SKEW_SECONDS`), fail-closed when no secret is configured outside development, and a replay of an already approved MoC is `409`.

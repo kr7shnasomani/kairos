@@ -1,4 +1,4 @@
-"""Regression tests for the cheap fixes from docs/code-review.md (B8, B11, B12, B13 and four Low items).
+"""Regression tests for the cheap fixes from the 2026-10 code review (docs/code-review.md, now in git history) (B8, B11, B12, B13 and four Low items).
 
 Service-free: fakes only. No stack, no secrets, no network.
 """

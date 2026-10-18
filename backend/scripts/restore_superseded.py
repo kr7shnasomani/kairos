@@ -9,7 +9,7 @@ else: only edges closed at that row's timestamp reopen, and they reopen as `unve
 every edge starts with; an earlier verification is not recorded, so none is claimed).
 
 Written for 2026-09-14, when the QA sweep's `tools/e2e_flows.sh --mutate` superseded the golden
-`sop_he_gen_11.pdf` with its own test upload (`implementation/status.md` P34). A legitimate
+`sop_he_gen_11.pdf` with its own test upload (`docs/status.md` P34). A legitimate
 supersede is undone by a newer document, never by this.
 
 Elasticsearch is per host: run it once locally and once on the server. Supabase, Neo4j and Qdrant

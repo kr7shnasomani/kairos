@@ -59,7 +59,7 @@ jobs:
       #                       verifies our ES256 tokens. Re-check when upstream ships a fix.
       #   starlette 0.37.2  — pinned transitively by fastapi==0.111.1 (>=0.37.2,<0.38.0). Fixes
       #                       need 0.40.0 through 1.3.1, so this is a FastAPI major upgrade, not a
-      #                       bump. Tracked in docs/implementation/status.md, Backlog #2.
+      #                       bump. Tracked in docs/status.md, Backlog #2.
       #
       #   CLEARED 2026-08-23 — protobuf and setuptools, in one coupled change:
       #     setuptools was NOT a stale cap. OTEL 0.45b0's instrumentation imported `pkg_resources`,

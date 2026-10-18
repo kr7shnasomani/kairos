@@ -572,7 +572,7 @@ Have these bookmarked. Do **not** open them unprompted.
 
 **If someone says "you only showed us a slice":** every one of the routes has been driven
 end-to-end, five personas each, with the results written down in
-`docs/implementation/e2e-sweep.md` — including **twelve write paths** driven end-to-end, **three of
+`docs/e2e-sweep.md` — including **twelve write paths** driven end-to-end, **three of
 them with the negative case checked too** (engineer promote → 403, field_worker MoC approve → 403,
 engineer countersign → 403), meaning the role that must be blocked actually is.
 

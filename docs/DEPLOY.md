@@ -44,7 +44,7 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 (role `demo`: sees everything, every destructive action refused by policy). Its credentials are public by
 design (`NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD`, baked into the frontend at build time).
 **Still open:** the other seeded accounts' old passwords are in git history, so rotate them (see
-`docs/implementation/status.md`).
+`docs/status.md`).
 
 ---
 

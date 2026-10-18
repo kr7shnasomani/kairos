@@ -25,7 +25,7 @@ machine, not in CI.
 `--mutate` leaves signed briefs, a resolved deviation and a superseded document behind, and with no local
 Supabase it always writes to the shared cloud stores. It refuses to run without
 `KAIROS_E2E_ALLOW_CLOUD_WRITES=1`, and it supersedes only a document it uploaded itself: on 2026-09-14 it
-superseded the golden `sop_he_gen_11.pdf` (`implementation/status.md` P34).
+superseded the golden `sop_he_gen_11.pdf` (`status.md` P34).
 
 ### Tier 1 — service-free (1,005 tests, no stack, no secrets, no network)
 
@@ -45,7 +45,7 @@ document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_dem
 
 All **55** files, **1,005 tests** (counted 2026-10-18; matches the 55 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
 
-**Security pass, 2026-10-01: the five `test_sec_*.py` files.** Each is named for the review group it covers; all run against in-memory fakes, with nothing written to any store. Finding ids (H1, M4, ...) are the 2026-09-30 security review's, listed one per line in `implementation/status.md` § Accepted risks and deploy checklist.
+**Security pass, 2026-10-01: the five `test_sec_*.py` files.** Each is named for the review group it covers; all run against in-memory fakes, with nothing written to any store. Finding ids (H1, M4, ...) are the 2026-09-30 security review's, listed one per line in `status.md` § Accepted risks and deploy checklist.
 
 | File | Covers |
 |---|---|
@@ -416,7 +416,7 @@ have to hit the production project.
 > **What these cannot catch.** Every bug this project's unit suite has missed was a *query
 > semantics* bug — `.neq()` against a NULL JSONB key, `.in_()` against a set the fake ignores. Test
 > doubles implement filters as passthroughs, so a filter whose bug *is* its filtering always passes.
-> Those need a real database or a real browser; see `implementation/e2e-sweep.md`.
+> Those need a real database or a real browser; see `e2e-sweep.md`.
 
 ### `test_health.py` — Stack liveness (3 tests)
 | Test | What it verifies |

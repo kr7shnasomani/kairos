@@ -80,7 +80,8 @@ def setup_telemetry(app: FastAPI | None = None) -> None:
                 endpoint=metrics_endpoint,
                 headers=headers,
             ),
-            export_interval_millis=15_000,
+            # Grafana Cloud Free includes 1 data point per series per minute; 15 s billed every series 4x.
+            export_interval_millis=60_000,
         )
         meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
         metrics.set_meter_provider(meter_provider)

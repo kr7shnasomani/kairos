@@ -160,7 +160,7 @@ redate-demo:
 generate-showcase:
 	docker compose run --rm --no-deps -v "$(CURDIR)/dataset:/out" kairos-backend-api python scripts/generate_showcase.py /out $(ARGS)
 
-# The showcase plant the public demo login works (docs/implementation/demo-data.md). All three are dry runs
+# The showcase plant the public demo login works (docs/demo-data.md). All three are dry runs
 # unless APPLY=1, and APPLY=1 writes to the CURRENT stores, so run it yourself. A load also needs
 # SHOWCASE_CONFIRM=load-showcase-into-current-stores, a reset SHOWCASE_CONFIRM=reset-showcase-state.
 load-showcase:

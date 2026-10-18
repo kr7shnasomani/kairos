@@ -234,7 +234,7 @@ page-by-page work.
 > `/system-benchmarks` and `/system-information` were removed), which the e2e sweep numbers as **42
 > live routes** because it collapses some dynamic variants. Primitives grew by `ButtonLink` and the
 > `icon.tsx` set. Re-measure before quoting any of it; the owning session's notes are in
-> `ui-overhaul.md`.
+> `ui-overhaul.md` (now in git history).
 
 | Scope | Covers | Effort |
 |---|---|---|

@@ -39,7 +39,7 @@ describe("docs", () => {
     expect(source).toContain("<dev-internal-key>");
     expect(source).not.toMatch(/kairos\.local|kairos-internal-dev-key/);
     expect(getDoc("deploy")).toBeNull();
-    expect(getDoc("implementation/status")).toBeNull();
+    expect(getDoc("status")).toBeNull();
   });
 
   it("redacts hostnames, addresses and cloud identifiers", async () => {

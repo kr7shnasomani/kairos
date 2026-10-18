@@ -5,7 +5,7 @@ history and caveats, see:
 
 - Methodology and interpretation: [`../docs/BENCHMARKS.md`](../docs/BENCHMARKS.md)
 - Current numbers, staleness flags, caveats and fix history:
-  [`../docs/implementation/status.md` § Benchmarks — current numbers](../docs/implementation/status.md#benchmarks--current-numbers)
+  [`../docs/status.md` § Benchmarks — current numbers](../docs/status.md#benchmarks--current-numbers)
 - Root-cause writeups for numbers that changed: `status.md` § Pending
 
 ## Summary

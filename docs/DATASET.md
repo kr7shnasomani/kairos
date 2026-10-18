@@ -78,7 +78,7 @@ three generated records per piece of equipment, and a dated failure history card
 It lives in the same stores as this dataset, marked by `DEMO-` ids and showcase sites, and every login sees it
 (`SHOWCASE_VISIBLE_TO_ALL=true`; false hides it from everyone but the demo role). The benchmark graders never count it, but
 retrieval for a benchmark run should be measured with the switch off. Nothing in it is shared with the golden dataset (no tag, person, vendor or part
-number), because the graph merges those by text. Design and decisions: `docs/implementation/demo-data.md`.
+number), because the graph merges those by text. Design and decisions: `docs/demo-data.md`.
 
 ```bash
 make load-showcase                  # dry run: the plan, an audit of every row's marker, what is already loaded

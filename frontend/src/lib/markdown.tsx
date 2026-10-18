@@ -8,7 +8,7 @@ import { marked, type Token, type Tokens } from "marked";
 
 export type Heading = { id: string; text: string; depth: number };
 export type MarkdownContext = {
-  /** The document being rendered, relative to docs/ and without ".md" (e.g. "implementation/status"). */
+  /** The document being rendered, relative to docs/ and without ".md" (e.g. "api", or "guides/setup" for a nested file). */
   file: string;
   /** Slugs of every published document, for link resolution. */
   slugs: ReadonlySet<string>;

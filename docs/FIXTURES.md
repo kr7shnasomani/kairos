@@ -4,7 +4,7 @@
 > `workflows/document_pipeline.py:211` falls back to it when the NIM vision model cannot parse a
 > P&ID, and sets `topology_source: "demo_fixture"` — which the UI is required to disclose. That is
 > the mock-by-design path, and removing the file breaks P&ID fallback. `fixtures/test.wav` is
-> manual test audio for the voice-note flow (referenced from BE.md / FE.md), not used by code.
+> manual test audio for the voice-note flow (referenced from the old implementation plans, now in git history), not used by code.
 >
 > Everything below about the **frontend** fixture system is historical:
 >
