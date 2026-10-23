@@ -42,7 +42,7 @@ anyio==4.15.1
 # removes — so the `setuptools` cap in the Testing section was load-bearing, not stale as
 # previously assumed, and lifting it alone crashed `api.main` on import.
 # 0.49b0 is the first release that dropped `pkg_resources`, which is what unpins setuptools.
-opentelemetry-api==1.28.0
+opentelemetry-api==1.45.1
 opentelemetry-sdk==1.28.0
 opentelemetry-exporter-otlp-proto-http==1.28.0
 opentelemetry-instrumentation-fastapi==0.49b0
