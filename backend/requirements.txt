@@ -75,7 +75,7 @@ openpyxl==3.1.5
 # opencv/scipy/scikit-learn/pandas) was Path A (local GPU) and is intentionally NOT
 # installed here — it is pinned in requirements-cv.txt for a future GPU-backed
 # drawing-parser service. numpy + Pillow stay below for P&ID image handling.
-Pillow==12.3.0
+Pillow==13.0.0
 # Not imported by our code: kept pinned because qdrant-client 1.9.1 needs numpy and an unpinned
 # resolve would move it to 2.x, untested against that client.
 numpy==1.26.4
