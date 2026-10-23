@@ -14,11 +14,15 @@ on:
     paths:
       - "frontend/**"
       - ".github/workflows/frontend.yml"
+      - "benchmark/RESULTS.md"
+      - "docs/**"
   pull_request:
     branches: [main]
     paths:
       - "frontend/**"
       - ".github/workflows/frontend.yml"
+      - "benchmark/RESULTS.md"
+      - "docs/**"
 
 defaults:
   run:
@@ -46,6 +50,10 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint
         run: npm run lint
+      # The vitest suite never ran in CI: 380+ cases existed and nothing executed them on a push.
+      # Two suites read ../benchmark/RESULTS.md and ../docs, which the checkout provides.
+      - name: Unit tests
+        run: npm test
       - name: Build
         run: npm run build
       # Gate on PRODUCTION dependencies — the code that actually ships to a browser.

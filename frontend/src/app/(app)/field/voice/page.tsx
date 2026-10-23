@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { submitVoiceNote } from "@/lib/api";
-import { PageHeader } from "@/components/ui";
+import { Button, PageHeader } from "@/components/ui";
 import { useMe } from "@/components/use-role";
 
 import { Icon } from "@/components/icon";
@@ -63,13 +63,14 @@ export default function VoiceCapturePage() {
           <div className="flex flex-col items-center gap-6 py-4">
             <VoiceRecorder onBlob={setBlob} />
             {blob && (
-              <button
+              <Button
+                variant="primary"
                 onClick={submit}
                 disabled={!tag.trim()}
-                className="fill-sweep h-[52px] w-full bg-accent text-subtitle font-semibold text-on-accent transition-transform duration-150 ease-out active:scale-[0.99] disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-accent"
+                className="h-[52px] w-full text-subtitle focus-visible:outline-2 focus-visible:outline-accent"
               >
                 {tag.trim() ? "Submit for transcription" : "Enter a tag to submit"}
-              </button>
+              </Button>
             )}
           </div>
         </div>

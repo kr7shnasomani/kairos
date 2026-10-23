@@ -97,6 +97,23 @@ describe("strict-auth reads", () => {
     }));
   });
 
+  it("shares one refresh between requests that 401 at the same time", async () => {
+    let release!: () => void;
+    const refreshed = new Promise<Response>((resolve) => {
+      release = () => resolve(new Response(JSON.stringify({ access_token: "fresh-token" }), { status: 200 }));
+    });
+    const fetchMock = vi.fn().mockReturnValue(refreshed);
+    vi.stubGlobal("fetch", fetchMock);
+    localStorage.setItem("kairos-refresh", "refresh-token");
+
+    const { refreshAccessToken } = await import("./api");
+    const all = Promise.all([refreshAccessToken(), refreshAccessToken(), refreshAccessToken()]);
+    release();
+
+    await expect(all).resolves.toEqual([true, true, true]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("clears the session when the refreshed GET is also rejected", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(null, { status: 401 }))
@@ -224,6 +241,23 @@ describe("empty lists and the stream error frame", () => {
 
     const { synthesize } = await import("./api");
     await expect(synthesize("why", undefined, undefined, () => {})).rejects.toThrow("Synthesis stream failed.");
+  });
+
+  it("refreshes and retries the stream on a 401 instead of signing out", async () => {
+    localStorage.setItem("kairos-token", "expired-token");
+    localStorage.setItem("kairos-refresh", "refresh-token");
+    const sse = 'event: done\ndata: {"answer":"ok","sources":[],"confidence":0.9,"refused":false,"safety_critical":false}\n\n';
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json({ results: [{ document_id: "D-1", snippet: "s", title: "T" }] }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(json({ access_token: "fresh-token" }))
+      .mockResolvedValueOnce(new Response(sse, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { synthesize } = await import("./api");
+    await expect(synthesize("why", undefined, undefined, () => {})).resolves.toMatchObject({ answer: "ok" });
+    expect(fetchMock.mock.calls[3][1].headers).toMatchObject({ Authorization: "Bearer fresh-token" });
+    expect(localStorage.getItem("kairos-token")).toBe("fresh-token");
   });
 
   it("skips a frame it cannot parse and still finishes on done", async () => {

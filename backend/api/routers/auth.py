@@ -6,12 +6,14 @@ import asyncio
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from supabase import create_client
 
-from api.dependencies import CurrentUserDep, SettingsDep, SupabaseDep, _auth_cache_drop, bearer_scheme
+from api.dependencies import CurrentUserDep, RedisDep, SettingsDep, SupabaseDep, _auth_cache_drop, bearer_scheme
+from api.middleware.ratelimit import client_ip
+from api.services import login_throttle
 
 log = structlog.get_logger(__name__)
 
@@ -35,7 +37,14 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse, summary="Exchange credentials for JWT")
-async def login(payload: LoginRequest, settings: SettingsDep) -> TokenResponse:
+async def login(payload: LoginRequest, request: Request, settings: SettingsDep, redis: RedisDep) -> TokenResponse:
+    ip = client_ip(request)
+    if await login_throttle.blocked(redis, ip, payload.email):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed sign-in attempts. Try again in 15 minutes.",
+            headers={"Retry-After": str(login_throttle.WINDOW_SECONDS)},
+        )
     # Use a fresh anon client for sign-in to avoid contaminating the global service-role client session
     auth_client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
     try:
@@ -48,9 +57,12 @@ async def login(payload: LoginRequest, settings: SettingsDep) -> TokenResponse:
         # The upstream text distinguishes "no such user" from "wrong password", which lets a caller
         # enumerate accounts. Log it, answer the same thing every time.
         log.info("auth.login_failed", error=str(e))
+        await login_throttle.record_failure(redis, ip, payload.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not result.session:
+        await login_throttle.record_failure(redis, ip, payload.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    await login_throttle.clear_account(redis, ip, payload.email)
     return TokenResponse(
         access_token=result.session.access_token,
         refresh_token=result.session.refresh_token,

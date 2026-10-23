@@ -88,6 +88,10 @@ jobs:
           # produces spurious "undefined: <pkg>" typecheck errors on every import.
           version: v2.14.0
           working-directory: backend/connectors
+      # No workflow ran the Go tests before (auth and body-limit tests on the connector).
+      - name: Run go test
+        working-directory: backend/connectors
+        run: go test ./...
 
   docker-lint:
     needs: changes

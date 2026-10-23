@@ -64,8 +64,40 @@ def test_self_edited_user_metadata_cannot_grant_a_role(monkeypatch):
     monkeypatch.setattr(
         deps, "create_client", _fake_supabase(_user(app={}, meta={"role": "admin", "site_id": "SITE_X"}))
     )
-    out = asyncio.run(resolve_token("tok", _settings()))
-    assert (out["role"], out["site_id"]) == ("field_worker", "")
+    # No app_metadata role means no access at all (it used to fall back to field_worker).
+    assert asyncio.run(resolve_token("tok", _settings())) is None
+
+
+def test_a_token_supabase_calls_invalid_is_not_reverified_for_a_while(monkeypatch):
+    from gotrue.errors import AuthInvalidJwtError
+
+    deps._auth_cache.clear()
+    deps._rejected_tokens.clear()
+    calls = []
+
+    def _invalid(*a, **k):
+        def get_user(token):
+            calls.append(token)
+            raise AuthInvalidJwtError("invalid JWT")
+        return SimpleNamespace(auth=SimpleNamespace(get_user=get_user))
+
+    monkeypatch.setattr(deps, "create_client", _invalid)
+    assert asyncio.run(resolve_token("bad-tok", _settings())) is None
+    assert asyncio.run(resolve_token("bad-tok", _settings())) is None
+    assert calls == ["bad-tok"]
+    deps._rejected_tokens.clear()
+
+
+def test_a_network_failure_is_not_cached_as_a_rejection(monkeypatch):
+    deps._auth_cache.clear()
+    deps._rejected_tokens.clear()
+
+    def _down(*a, **k):
+        raise ConnectionError("supabase unreachable")
+
+    monkeypatch.setattr(deps, "create_client", _down)
+    assert asyncio.run(resolve_token("good-tok", _settings())) is None
+    assert not deps._rejected_recently("good-tok")
 
 
 def test_user_metadata_cannot_override_app_metadata(monkeypatch):
@@ -77,9 +109,11 @@ def test_user_metadata_cannot_override_app_metadata(monkeypatch):
     assert asyncio.run(resolve_token("tok", _settings()))["role"] == "compliance"
 
 
-def test_missing_app_metadata_is_least_privilege(monkeypatch):
+def test_missing_app_metadata_is_no_access(monkeypatch):
+    """Least privilege is none: a token with no role (a re-enabled signup, an anonymous sign-in, an
+    OAuth identity) used to become field_worker and could search, read briefs and synthesize."""
     monkeypatch.setattr(deps, "create_client", _fake_supabase(_user(app=None, meta=None)))
-    assert asyncio.run(resolve_token("tok", _settings()))["role"] == "field_worker"
+    assert asyncio.run(resolve_token("tok", _settings())) is None
 
 
 # =============================================================================
@@ -213,12 +247,60 @@ def _raising_client(message):
     return lambda *a, **k: SimpleNamespace(auth=auth)
 
 
+class _MemRedis:
+    """Enough of redis.asyncio for the login throttle."""
+
+    def __init__(self):
+        self.store: dict[str, int] = {}
+
+    async def mget(self, *keys):
+        return [self.store.get(k) for k in keys]
+
+    async def incr(self, key):
+        self.store[key] = self.store.get(key, 0) + 1
+        return self.store[key]
+
+    async def expire(self, *_a):
+        return True
+
+    async def delete(self, key):
+        self.store.pop(key, None)
+
+
+def _login_request():
+    return SimpleNamespace(headers={"x-forwarded-for": "203.0.113.9"}, client=None)
+
+
 def test_login_does_not_echo_upstream_error(monkeypatch):
     monkeypatch.setattr(auth_router, "create_client", _raising_client("Invalid login credentials: no such user"))
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(auth_router.login(auth_router.LoginRequest(email="a@b.c", password="x"), _settings()))
+        asyncio.run(auth_router.login(auth_router.LoginRequest(email="a@b.c", password="x"), _login_request(), _settings(), _MemRedis()))
     assert exc.value.status_code == 401
     assert exc.value.detail == "Invalid credentials"
+
+
+def test_login_is_throttled_after_repeated_failures_for_one_account(monkeypatch):
+    from api.services import login_throttle
+
+    monkeypatch.setattr(auth_router, "create_client", _raising_client("Invalid login credentials"))
+    redis = _MemRedis()
+    codes = []
+    for _ in range(login_throttle.MAX_FAILURES_PER_EMAIL + 1):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(auth_router.login(auth_router.LoginRequest(email="a@b.c", password="x"), _login_request(), _settings(), redis))
+        codes.append(exc.value.status_code)
+    # Five wrong passwords answer 401; the sixth is refused before Supabase is asked.
+    assert codes == [401] * login_throttle.MAX_FAILURES_PER_EMAIL + [429]
+
+
+def test_login_throttle_fails_open_when_redis_is_down():
+    from api.services import login_throttle
+
+    class _Down:
+        async def mget(self, *_a):
+            raise ConnectionError("redis down")
+
+    assert asyncio.run(login_throttle.blocked(_Down(), "203.0.113.9", "a@b.c")) is False
 
 
 def test_refresh_does_not_echo_upstream_error(monkeypatch):

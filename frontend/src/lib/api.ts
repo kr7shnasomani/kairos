@@ -196,7 +196,38 @@ function endSession(keepOffline: boolean): void {
   }
 }
 
-export async function refreshAccessToken(): Promise<boolean> {
+let refreshInFlight: Promise<boolean> | null = null;
+// When a refresh last succeeded in this page load (module state, so a reload starts at 0).
+let refreshedAt = 0;
+
+/** True once the session was refreshed during this page load. The shell refreshes before it renders
+ *  a page, so a server page that failed on the old cookie meets a token that already looks valid;
+ *  this is how the error boundary still knows a reload would fix it. */
+export function refreshedThisPageLoad(): boolean {
+  return refreshedAt > 0;
+}
+
+/** Single-flight: when the hourly token expires, every subscriber 401s at once, and N parallel
+ *  refreshes spent the same rotating refresh token N times; the reuse was rejected and the user
+ *  was signed out mid-click. Concurrent callers now share one refresh. */
+export function refreshAccessToken(): Promise<boolean> {
+  refreshInFlight ??= refreshOnce().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+/** True when a signed-in session's access token has (all but) expired, so a server-rendered read
+ *  went out without the cookie it carries. False with no session (development bypass). */
+export function accessTokenExpired(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const token = localStorage.getItem(TOKEN_KEY);
+    return !!token && accessTokenMaxAge(token) < 30;
+  } catch {
+    return false;
+  }
+}
+
+async function refreshOnce(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
     const refreshToken = localStorage.getItem(REFRESH_KEY);
@@ -205,10 +236,13 @@ export async function refreshAccessToken(): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
+      // Bounded: every caller now waits on this one request, so a hung refresh would hang them all.
+      signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
     });
     if (!res.ok) return false;
     const data = (await res.json()) as { access_token: string; refresh_token?: string };
     storeSession(data.access_token, data.refresh_token);
+    refreshedAt = Date.now();
     return true;
   } catch {
     return false;
@@ -291,20 +325,18 @@ async function postSse(
   timeoutMs: number,
   onEvent: (event: string, data: Record<string, unknown>) => void,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+  // Through the shared refresh path: an expired token used to bounce the presenter to /login
+  // mid-question, while every other helper refreshed silently and retried.
+  const res = await fetchWithSession(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (res.status === 401) {
-    expireSession();
-    if (typeof window !== "undefined") window.location.assign("/login");
-  }
+    timeoutMs,
+  );
+  if (res.status === 401 && typeof window !== "undefined") window.location.assign("/login");
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
   if (!res.body) throw new Error(`${path} → no response body to stream`);
 
@@ -485,7 +517,9 @@ export async function probeModel(provider: string): Promise<ModelProbe> {
 }
 
 export async function getBriefs(): Promise<Fetched<BriefsResponse>> {
-  const data = await getJson<BriefsResponse>("/briefs/?unacknowledged_only=false&limit=20");
+  // The API maximum. At 20 the inbox stopped there with nothing saying more existed; past 50 the
+  // inbox says how many it is not showing (brief-inbox.tsx).
+  const data = await getJson<BriefsResponse>("/briefs/?unacknowledged_only=false&limit=50");
   // An empty briefs list from a successful call is a VALID live state — no briefs
   // pending, or the governor has suppressed them. BriefInbox renders an honest
   // empty / "governor suppressed" panel for it, so this is never a fixture fallback.
@@ -1696,8 +1730,9 @@ export interface AssetDetailView {
   open_work_orders: number | null;
   compliance_gaps: number | null;
   last_inspection: string | null;
-  aliases: string[];
-  knowledge: KnowledgeEdge[];
+  /** `null`: the lookup failed, which is not the same as none recorded. */
+  aliases: string[] | null;
+  knowledge: KnowledgeEdge[] | null;
 }
 
 function normVerification(v: unknown): KnowledgeEdge["verification"] {
@@ -1721,7 +1756,8 @@ function factClaim(target: Record<string, unknown>, edge: Record<string, unknown
 export async function getAssetDetail(id: string): Promise<Fetched<AssetDetailView | null>> {
   const [detail, aliases, knowledge] = await Promise.all([
     getJson<AssetDetail>(`/assets/${encodeURIComponent(id)}`),
-    getJson<AssetAlias[]>(`/assets/${encodeURIComponent(id)}/aliases`).catch(() => [] as AssetAlias[]),
+    // A failed side lookup must not read as "no knowledge": null, and the page says it failed.
+    getJson<AssetAlias[]>(`/assets/${encodeURIComponent(id)}/aliases`).catch(() => null),
     getJson<AssetKnowledgeResponse>(`/assets/${encodeURIComponent(id)}/knowledge`).catch(() => null),
   ]);
   const crit = criticalityMeta(detail.criticality);
@@ -1735,8 +1771,8 @@ export async function getAssetDetail(id: string): Promise<Fetched<AssetDetailVie
     open_work_orders: detail.open_work_orders_count ?? null,
     compliance_gaps: detail.compliance_gap_count ?? null,
     last_inspection: detail.last_inspection_date ?? null,
-    aliases: (aliases ?? []).map((a) => a.alias),
-    knowledge: (knowledge?.facts ?? []).map((f) => ({
+    aliases: aliases && aliases.map((a) => a.alias),
+    knowledge: knowledge && (knowledge.facts ?? []).map((f) => ({
       claim: factClaim(f.target, f.edge),
       authority_level: ((f.edge.authority_level as AuthorityLevel) ?? 5),
       verification: normVerification(f.edge.verification_status),

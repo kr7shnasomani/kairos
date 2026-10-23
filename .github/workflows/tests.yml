@@ -79,9 +79,13 @@ jobs:
       # suites — every conformance test among them — were documented as CI-gated but never
       # actually ran on a push.
       - name: Run unit tests
+        # The policy, workflow, schema and docs checks read these from the repo root. Without the
+        # mounts they skipped on every push (30 of the tier) while the docs said CI ran them.
         run: |
           docker compose run --rm --no-deps \
             -e KAIROS_SKIP_TEST_CLEANUP=1 \
+            -v "$PWD/infra:/app/infra:ro" -v "$PWD/.github:/app/.github:ro" \
+            -v "$PWD/db:/app/db:ro" -v "$PWD/AGENTS.md:/app/AGENTS.md:ro" \
             kairos-backend-api pytest -q --timeout=120 \
               tests/test_pii.py \
               tests/test_query_category.py \

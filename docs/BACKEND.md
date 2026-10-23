@@ -179,7 +179,7 @@ All backends are injected as FastAPI dependencies. Each is a singleton (module-l
 **Auth flow in `get_current_user`:**
 1. If no `Authorization` header and `Settings.dev_bypass_allowed` (`APP_DEBUG=True` **and** `APP_ENV=development`) → returns `{user_id: "dev-user", role: "engineer"}` (dev only). `APP_ENV` is trimmed and lower-cased, and only the exact value `development` counts: `production`, `staging` or a typo are all non-development (`Settings.is_development`).
 2. If token matches `INTERNAL_API_KEY` (`hmac.compare_digest`) → returns service account `{role: "admin"}` (Go connector bypass).
-3. Otherwise → calls `supabase.auth.get_user(token)` using a fresh anon client (never the service-role client). Role and site are read from `user.app_metadata` (users can edit `user_metadata`, never `app_metadata`). `POST /auth/logout` drops the token from the verified-token cache (`_auth_cache_drop`) and revokes the session. `site_scope(user, requested)` returns the caller's own site (None for admin) and `403`s a request for another one; it is how every site-scoped read and write in the routers is bounded.
+3. Otherwise → calls `supabase.auth.get_user(token)` using a fresh anon client (never the service-role client). Role and site are read from `user.app_metadata` (users can edit `user_metadata`, never `app_metadata`). A token whose `app_metadata` has no role is rejected (it used to default to `field_worker`), and a token Supabase reports invalid is remembered for 30 s so it is not re-verified on every check; a network failure is never cached. `POST /auth/logout` drops the token from the verified-token cache (`_auth_cache_drop`) and revokes the session. `site_scope(user, requested)` returns the caller's own site (None for admin) and `403`s a request for another one; it is how every site-scoped read and write in the routers is bounded.
 
 ---
 
@@ -515,7 +515,7 @@ Redis Streams producer + EEMUA 191 push governor.
   second technician never gets a brief — routine during a turnaround. Wired on all six event routes.
 - `mark_seen(asset_id, event_type, business_id=None)` — the write half of dedup, called as the **last** step of each event route (marking at check time turned a connector's retry after a 500 into `deduplicated` and lost the event, and with it a critical PTW brief). Two identical events racing inside one request's runtime can both run; the insert is idempotent and the brief cool-down absorbs the twin.
 - `correlate_events(asset_id, event_id, occurred_at, supabase)` — assigns shared `compound_event_id` to same-asset events within the dedup window
-- `check_governor(user_id, priority, site_id, supabase)` — returns True if brief can be sent. PTW (`priority="critical"`) always passes. Checks plant state gate then hourly rolling counter.
+- `get_governor_state(user_id)` / `pushed_brief_ids(user_id)` — the rolling-hour count and the brief ids already charged; `GET /briefs/` applies the budget with `page_inbox` (PTW always passes, plant state suppresses normal briefs)
 - `get_plant_state(site_id, supabase)` — queries `plant_operating_states`, checks `expires_at`
 - `record_push(user_id)` — increments hourly counter with 3600s TTL
 - `get_governor_state(user_id)` — returns `{state, push_count_last_hour, ceiling, next_delivery_allowed_at}`
@@ -1004,13 +1004,14 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `APP_ENV` | `development` | Trimmed and lower-cased. **`development` is the only value that enables any dev convenience** (`Settings.is_development`): the unauthenticated mock user, the OPA pass-through, no rate limit, the default admin key. `production`, `staging` and a typo all count as non-development, so an unrecognised value fails closed |
-| `APP_DEBUG` | `True` | Enables dev auth bypass (no token required) only together with `APP_ENV=development` (`dev_bypass_allowed`). Must be `false` outside development |
+| `APP_ENV` | `production` | Unset means production, so a `.env` that drops it fails closed (the boot guard then refuses the dev defaults); `.env.example` sets `development` explicitly. Trimmed and lower-cased. **`development` is the only value that enables any dev convenience** (`Settings.is_development`): the unauthenticated mock user, the OPA pass-through, no rate limit, the default admin key. `production`, `staging` and a typo all count as non-development, so an unrecognised value fails closed |
+| `APP_DEBUG` | `False` | Enables dev auth bypass (no token required) only together with `APP_ENV=development` (`dev_bypass_allowed`). Must be `false` outside development |
 | `APP_VERSION` | `0.1.0` | Included in health response |
 | `APP_SECRET_KEY` | `CHANGE_ME_IN_PRODUCTION` | Change in prod |
 | `CORS_ORIGINS` | `["http://localhost:3000","http://localhost:8000"]` | Allowed origins |
 | `INTERNAL_API_KEY` | `kairos-internal-dev-key` | Service-to-service auth token |
 | `DEMO_LLM_ACTIONS_PER_HOUR` | `120` | Hourly ceiling, shared by every demo login, on the demo role's model-backed actions (Copilot, RCA, ingest, event briefs, voice). An RCA investigation costs 6, the rest 1 (`dependencies._DEMO_LLM_COST`). A real account is never counted; a Redis outage fails open |
+| *(code constants)* `_DEMO_CAPS` | uploads 10 per IP per hour and 100 per day in total; promote 30 per IP per hour | Per-IP caps on the demo role's storage and promote actions (`demo_upload_cap` on `POST /documents/ingest` and `/elicitation/{id}/voice`, `demo_promote_cap` on quarantine promote), on top of the model budget. Uploads fail closed (503) when Redis is down, promote fails open. A real account is never counted |
 | `SHOWCASE_AUTO_REDATE` | `false` | When true the API shifts the showcase plant's dates forward about once a day (`scripts/showcase/redate.py`); time columns of the loader's own rows only |
 | `SHOWCASE_VISIBLE_TO_ALL` | `true` | Every login reads the showcase plant as well as the real one, and a site-pinned role reads its own site plus the showcase sites (never another real site, and a write never widens). False: only the demo role sees it and real accounts see real data alone. The demo role writes only to showcase rows either way (`services/tenant.py`) |
 | `MOC_WEBHOOK_SECRET` | `None` | HMAC secret for `POST /governance/moc/webhook`. Unset is accepted only in development; **boot refuses without it outside development** |
@@ -1118,7 +1119,6 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `MAX_PUSH_PER_USER_PER_HOUR` | `6` | Hard ceiling per operator |
-| `BRIEF_COOLDOWN_HOURS` | `4` | Same (recipient, asset, trigger type) cool-down |
 | `DEDUP_WINDOW_MINUTES` | `10` | Event dedup window + event correlation window |
 | `LATE_ARRIVAL_WINDOW_MINUTES` | `5` | Countdown before delayed brief assembly fires |
 | `PLANT_STATE_DEFAULT` | `normal` | Fallback plant state |
@@ -1235,7 +1235,7 @@ token and checking for a 403.
 
 ### Rate-limit Middleware
 
-`RateLimitMiddleware` in `api/middleware/ratelimit.py` (outermost) caps requests per client IP using a Redis fixed-window counter (`RATE_LIMIT_PER_MINUTE`, default 120). **Enforced whenever `APP_ENV` is not `development`** (0 = off in development so bursts never trip it). Fails open if Redis is unreachable; `/health*` exempt. Trusts the first `X-Forwarded-For` hop (behind Caddy). Pairs with the `MAX_UPLOAD_MB` (25) cap on `/documents/ingest` — both are public-exposure abuse guards.
+`RateLimitMiddleware` in `api/middleware/ratelimit.py` (outermost) caps requests per client IP using a Redis fixed-window counter (`RATE_LIMIT_PER_MINUTE`, default 120). **Enforced whenever `APP_ENV` is not `development`** (0 = off in development so bursts never trip it). Fails open if Redis is unreachable. Only the liveness probe (`/health`, `/health/`) is exempt; `/health/detailed` makes five store round-trips per call, so it is counted like any other route. Trusts the first `X-Forwarded-For` hop (behind Caddy). Pairs with the `MAX_UPLOAD_MB` (25) cap on `/documents/ingest` — both are public-exposure abuse guards.
 
 ### Request hardening (2026-10-01 security pass)
 
@@ -1302,7 +1302,7 @@ These apply to every code change in this codebase. Violations are bugs.
 
 7. **Phase discipline.** Phase 2 LLM synthesis lives only in `POST /search/synthesize` (and its stream). Never auto-triggered from routers or workers. The evidence and the safety category are produced server-side; a request's `context` and `query_category` are ignored.
 
-8. **EEMUA 191 Governor.** Call `EventBusService.check_governor(user_id)` before every brief delivery. PTW (`priority="critical"`) always exempt.
+8. **EEMUA 191 Governor.** Applied at inbox read: `GET /briefs/` charges each newly delivered brief once per rolling hour and holds the rest past the budget. PTW (`priority="critical"`) always exempt.
 
 9. **Secrets via env vars.** All config through `api/config.py` Settings. Never hardcode.
 

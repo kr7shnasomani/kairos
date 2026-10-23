@@ -34,6 +34,7 @@ export function OcrReviewActions({ documentId }: { documentId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  if (role === null) return null; // role still loading: show neither the controls nor the note
   if (!visibleTo(PROMOTE_ROLES, role)) {
     return <p className="mt-2 text-caption text-muted">A reliability engineer or admin decides whether to release or reject it.</p>;
   }

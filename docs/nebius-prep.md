@@ -44,17 +44,17 @@ in section 5 is theirs; do not edit frontend files from this plan without checki
 
 ## 0. Activation, and where each item now stands
 
-Decisions taken 21 Sep 2026: this repo stays **proprietary**; the open-licensed copy lives in a
-separate open-licensed mirror repo. The demo video exists and needs refinement only. README and deployment are
+Decisions taken 21 Sep 2026, licence part superseded 24 Oct 2026: **this repo is now Apache 2.0**
+(`LICENSE`), so no mirror repo is needed. The demo video exists and needs refinement only. README and deployment are
 end-of-cycle work. The build items are the focus.
 
 | # | Item | Effort | State |
 |---|---|---|---|
-| E1 | **Open-source licence on the mirror repo.** Apache 2.0, MIT or MPL 2.0, visible in the repo's About box. This repo keeps its proprietary licence; the mirror carries the open one. Closest match to the current terms: **MPL 2.0** (see below). | minutes | Deferred to the mirror repo, by decision |
+| E1 | **Open-source licence**, visible in the repo's About box. | minutes | **Done 24 Oct 2026:** this repo relicensed to Apache 2.0 (owner decision), replacing the mirror plan |
 | E2 | **A runtime call to Nebius Token Factory.** Code path is in place as tier 1; it activates the moment `NEBIUS_TOKEN_FACTORY_API_KEY` is set. Adoption means the running project makes a runtime call to the Token Factory inference API, or is deployed on Nebius AI Cloud compute. A key sitting unused in `.env` is not adoption. | 0.5 to 1 d | **The one hard build blocker** |
 | E3 | Provider refactor. Optional for activation, worth it for reuse. See N1. | done | **Done 21 Sep 2026**: `services/model_providers.py` |
 | E4 | Demo video, public on YouTube, **under 3 minutes**, audio covering the Token Factory and Nemotron usage. | refinement only | Existing video needs a recut and new narration |
-| E5 | README: Nemotron usage, Token Factory, and what changed recently. | 0.5 d | Deferred to the end, by decision |
+| E5 | README: Nemotron usage, Token Factory, and what changed recently. | 0.5 d | **Done 24 Oct 2026:** README sections *Built on NVIDIA and Nebius*, *Changes during the hackathon* and *Feedback* |
 | E6 | Demo stays reachable (hosting). | 0 to 1 d | Deferred, by decision |
 
 ### Which licence matches the current one
@@ -72,9 +72,8 @@ away. Ranked by how much of the current licence's intent survives:
    adopters.
 3. MIT gives away the most and matches least.
 
-One thing to be clear-eyed about: the mirror repo must contain all the source needed to run the
-project, so once that copy is published under an open licence, that version of the code is open
-permanently. Keeping this repo proprietary does not change that.
+Every version pushed under Apache 2.0 stays open permanently; a later licence change only affects
+later versions.
 
 ---
 
@@ -296,8 +295,8 @@ page-by-page work.
 **Parked:** Q3 (Overview empty window, by user decision), P11 (failing offboarding test), P12
 (`ARCHITECTURE.md` cascade section).
 
-**End of cycle, in this order:** E1 licence on the mirror repo, E4 video recut under 3 minutes, E5
-README section, E6 hosting, then the pitch items D1, I1, I4. I2 (talk to a plant
+**End of cycle, in this order:** E4 video recut under 3 minutes (E1 licence and E5 README section
+done 24 Oct 2026), E6 hosting, then the pitch items D1, I1, I4. I2 (talk to a plant
 engineer) runs on calendar time and should start whenever possible.
 
 **Cut if the schedule slips:** T2, U3, I3, and anything in section 5 beyond the overhaul in progress.
@@ -325,7 +324,7 @@ Project debt found while doing this work is recorded in
 
 | Decision | Date |
 |---|---|
-| This repo stays proprietary; the open-licensed mirror carries MPL 2.0 or Apache 2.0 | 21 Sep 2026 |
+| ~~This repo stays proprietary; the open-licensed mirror carries MPL 2.0 or Apache 2.0~~ Superseded: this repo is Apache 2.0 | 21 Sep 2026, superseded 24 Oct 2026 |
 | Demo video exists, needs a recut to under 3 minutes plus Token Factory and Nemotron narration | 21 Sep 2026 |
 | README and deployment are end-of-cycle work | 21 Sep 2026 |
 | Build order runs light to heavy; the heavy items (T1, UI) come last | 22 Sep 2026 |

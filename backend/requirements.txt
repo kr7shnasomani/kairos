@@ -58,7 +58,7 @@ opentelemetry-instrumentation-httpx==0.49b0
 grpcio-tools>=1.66
 
 # --- PDF Processing ---
-PyMuPDF==1.24.5
+PyMuPDF==1.28.2
 
 # --- Spreadsheet ingestion (.xlsx/.ods: work-order exports, asset registries) ---
 # Pure-python, read-only streaming. Hand-rolling zip+XML would silently mangle date

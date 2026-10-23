@@ -64,15 +64,20 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
               <h2 className="text-sm font-semibold text-ink">Knowledge</h2>
               <p className="mt-0.5 text-caption text-muted">Operational facts linked to this asset — authority and verification status shown per fact.</p>
             </div>
-            <span className="tabular text-label font-semibold text-muted">{a.knowledge.length} facts</span>
+            {a.knowledge && <span className="tabular text-label font-semibold text-muted">{a.knowledge.length} facts</span>}
           </div>
           <div className="divide-y divide-line">
-          {a.knowledge.length === 0 && (
+          {a.knowledge === null && (
+            <p role="alert" className="px-4 py-10 text-center text-body text-danger sm:px-5">
+              Knowledge for this asset could not be loaded. Reload the page to try again.
+            </p>
+          )}
+          {a.knowledge?.length === 0 && (
             <p className="px-4 py-10 text-center text-body text-muted sm:px-5">
               No knowledge edges recorded for this asset yet.
             </p>
           )}
-          {a.knowledge.map((k, i) => (
+          {a.knowledge?.map((k, i) => (
             <article key={`${k.source_doc}-${i}`} className="px-4 py-4 transition-colors hover:bg-surface-2 sm:px-5">
               <p className="max-w-3xl text-body leading-relaxed text-ink">{k.claim}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -106,8 +111,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             <div className="py-3.5">
               <dt className="text-label text-muted">Tag aliases</dt>
               <dd className="mt-2 flex flex-wrap gap-2">
-                {a.aliases.length === 0 && <span className="text-caption text-muted">No aliases recorded</span>}
-                {a.aliases.map((al) => (
+                {a.aliases === null && <span role="alert" className="text-caption text-danger">Aliases could not be loaded</span>}
+                {a.aliases?.length === 0 && <span className="text-caption text-muted">No aliases recorded</span>}
+                {a.aliases?.map((al) => (
                   <span key={al} className="tabular rounded-md border border-line bg-surface-2 px-2 py-1 text-caption text-muted">{al}</span>
                 ))}
               </dd>

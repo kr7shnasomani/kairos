@@ -55,7 +55,7 @@ describe("LoginPage", () => {
     render(<LoginPage />);
 
     expect(screen.getByTestId("login-workspace")).toHaveClass("lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.72fr)]");
-    expect(screen.getByTestId("login-context")).toHaveTextContent("Evidence-linked operations");
+    expect(screen.getByTestId("login-context")).toHaveTextContent("Enter the workspace with the context your role needs.");
     expect(screen.getByTestId("login-form-panel")).toHaveTextContent("Sign in to Kairos");
     expect(screen.getByLabelText(/email/i)).toHaveClass("min-h-11");
   });

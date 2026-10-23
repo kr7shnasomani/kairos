@@ -179,7 +179,7 @@ describe("offline write queue", () => {
     const out = await flushQueue();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("http://x/b");
-    expect(out).toEqual({ replayed: 1, failed: 0 });
+    expect(out).toEqual({ replayed: 1, failed: 0, rejected: 0 });
     expect(rows).toEqual([]);
   });
 
@@ -191,5 +191,20 @@ describe("offline write queue", () => {
     await flushQueue();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(rows).toHaveLength(1);
+  });
+
+  it("counts a write the server rejects on replay, and never replays it twice at once", async () => {
+    rows = [{ id: 1, url: "http://x/a", method: "POST", body: "{}", user: "user-b" }];
+    localStorage.setItem("kairos-token", jwt("user-b"));
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 422 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { flushQueue } = await import("./idb");
+
+    const [a, b] = await Promise.all([flushQueue(), flushQueue()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(a).toEqual({ replayed: 0, failed: 0, rejected: 1 });
+    expect(b).toBe(a);
+    expect(rows).toEqual([]);
   });
 });

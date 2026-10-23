@@ -365,3 +365,14 @@ def test_demo_never_gated_on_preflight_or_health():
     assert action_for("GET", "/health/detailed", "demo") is None
     assert action_for("GET", "/auth/me", "demo") is None
     assert action_for("GET", "/events/plant-state/SITE_001", "demo") is None
+
+
+@_needs_rego
+def test_compliance_is_kept_out_of_the_generic_write_action():
+    """The auditor reached `write_api` through the catch-all: it could lower quarantine confidence,
+    start an LLM elicitation workflow and freeze briefs. Evaluated against OPA on 2026-10-22: compliance
+    write_api false; synthesize, rca_pack, answer_feedback, read_compliance, read_audit true."""
+    text = _REGO.read_text()
+    catch_all_roles = re.search(r'input\.user\.role in \{([^}]*)\}\s*\n\s*not input\.action in _sensitive_actions', text)
+    assert catch_all_roles and '"compliance"' not in catch_all_roles.group(1)
+    assert re.search(r'input\.user\.role == "compliance"[^}]*input\.action != "write_api"', text, re.S)

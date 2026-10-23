@@ -8,7 +8,7 @@ const jwt = (sub: string) => `h.${btoa(JSON.stringify({ sub }))}.s`;
 
 type Handler = (e: unknown) => void;
 
-function load() {
+function load(openDelayMs = 0) {
   const handlers: Record<string, Handler> = {};
   const stores = new Map<string, Map<string, Response>>();
   const store = (n: string) => stores.get(n) ?? stores.set(n, new Map()).get(n)!;
@@ -16,10 +16,14 @@ function load() {
     keys: async () => [...stores.keys()],
     delete: async (n: string) => stores.delete(n),
     match: async () => undefined,
-    open: async (n: string) => ({
+    open: async (n: string) => {
+      // A real Cache API open crosses a process boundary; the page reads the body first.
+      if (openDelayMs) await new Promise((r) => setTimeout(r, openDelayMs));
+      return {
       match: async (r: Request) => store(n).get(r.url)?.clone(),
       put: async (r: Request, res: Response) => { store(n).set(r.url, res); },
-    }),
+      };
+    },
   };
   const self = {
     location: { origin: "https://app.test" },
@@ -71,5 +75,21 @@ describe("service worker API cache", () => {
     sw.handlers.message({ data: { type: "LOGOUT" }, waitUntil: (p: Promise<unknown>) => { done = p; } });
     await done;
     expect([...sw.stores.keys()]).toEqual([]);
+  });
+});
+
+describe("service worker page shell", () => {
+  it("caches the navigation response even after the page has read its body", async () => {
+    const sw = load(5);
+    sw.fetchMock.mockResolvedValue(new Response("<html>briefs</html>"));
+    const req = new Request("https://app.test/briefs");
+    Object.defineProperty(req, "mode", { value: "navigate" });
+    let out: Promise<Response> | undefined;
+    sw.handlers.fetch({ request: req, respondWith: (p: Promise<Response>) => { out = p; } });
+
+    // The page consumes the body at once; cloning afterwards used to throw and skip the cache.
+    expect(await (await out)!.text()).toBe("<html>briefs</html>");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(await sw.stores.get("kairos-shell-v2")?.get("https://app.test/briefs")?.text()).toBe("<html>briefs</html>");
   });
 });

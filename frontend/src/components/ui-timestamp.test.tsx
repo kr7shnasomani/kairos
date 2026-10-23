@@ -5,7 +5,7 @@ import { Timestamp } from "./ui";
 describe("Timestamp", () => {
   it("renders the exact UTC value as the primary text", () => {
     render(<Timestamp value="2026-08-18T09:12:41.487511+00:00" />);
-    expect(screen.getByText("2026-08-18 09:12:41")).toBeInTheDocument();
+    expect(screen.getByText("2026-08-18 09:12:41 UTC")).toBeInTheDocument();
   });
 
   it("renders relative time as a secondary hint", () => {

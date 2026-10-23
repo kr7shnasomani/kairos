@@ -154,7 +154,7 @@ def _engine(supabase=None, **methods):
     engine = object.__new__(brief_engine.BriefEngine)
     engine.supabase = supabase
     for name, value in methods.items():
-        setattr(engine, name, lambda *_a, _v=value: _value(_v))
+        setattr(engine, name, lambda *_a, _v=value, **_k: _value(_v))
     return engine
 
 
@@ -215,3 +215,33 @@ def test_a_headline_counts_in_words():
     assert brief_engine._count(1, "alarm") == "1 alarm"
     assert brief_engine._count(3, "open work order") == "3 open work orders"
     assert brief_engine._count(0, "downstream dependency", "downstream dependencies") == "0 downstream dependencies"
+
+
+async def test_handover_conflicts_are_scoped_to_the_plant():
+    """The handover counted every open conflict in the store, showcase and real plants alike."""
+    calls: list[tuple] = []
+
+    class _Q:
+        def select(self, *_a):
+            return self
+
+        def in_(self, *_a):
+            return self
+
+        def like(self, col, val):
+            calls.append(("like", col, val))
+            return self
+
+        def or_(self, expr):
+            calls.append(("or", expr))
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": []})()
+
+    engine = object.__new__(brief_engine.BriefEngine)
+    engine.supabase = type("SB", (), {"table": lambda self, _n: _Q()})()
+    await engine._get_open_conflicts(None, plant_site="SITE_DEMO")
+    await engine._get_open_conflicts(None, plant_site="SITE_001")
+    assert calls[0] == ("like", "asset_id", "DEMO-*")
+    assert calls[1] == ("or", "asset_id.is.null,asset_id.not.like.DEMO-*")

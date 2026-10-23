@@ -108,6 +108,11 @@ export function BriefInbox({ response }: { response: BriefsResponse }) {
 
   return (
     <div className="space-y-4">
+      {briefs.length > 0 && response.total_pending > briefs.length && (
+        <p role="status" className="text-caption text-muted">
+          Showing the {briefs.length} highest-priority briefs of {response.total_pending}. Acknowledge some to see the rest.
+        </p>
+      )}
       <div data-testid="brief-toolbar" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 md:flex-row md:items-center md:justify-between">
         <FilterTabs
           tabs={filterTabs}

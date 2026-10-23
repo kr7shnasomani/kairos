@@ -15,6 +15,7 @@ import structlog
 from elasticsearch import AsyncElasticsearch
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from gotrue.errors import AuthApiError, AuthInvalidJwtError
 from neo4j import AsyncDriver, AsyncGraphDatabase
 from qdrant_client import AsyncQdrantClient
 from supabase import Client, create_client
@@ -187,6 +188,30 @@ def _auth_cache_get(token: str) -> dict | None:
     return user
 
 
+# Rejected tokens, briefly. Only successes were cached, so a garbage bearer cost a fresh Supabase
+# round-trip on every check of every request. Only a definite "invalid" from Supabase is kept, never
+# a network failure, so an outage cannot lock valid users out.
+_REJECTED_TTL_SECONDS = 30
+_rejected_tokens: dict[str, float] = {}
+
+
+def _rejected_recently(token: str) -> bool:
+    key = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = _rejected_tokens.get(key)
+    if expires_at is None:
+        return False
+    if time.monotonic() >= expires_at:
+        _rejected_tokens.pop(key, None)
+        return False
+    return True
+
+
+def _remember_rejection(token: str) -> None:
+    if len(_rejected_tokens) >= _AUTH_CACHE_MAX:
+        _rejected_tokens.clear()  # bounded worst case
+    _rejected_tokens[hashlib.sha256(token.encode()).hexdigest()] = time.monotonic() + _REJECTED_TTL_SECONDS
+
+
 def _auth_cache_drop(token: str) -> None:
     _auth_cache.pop(hashlib.sha256(token.encode()).hexdigest(), None)
 
@@ -237,6 +262,8 @@ async def resolve_token(token: str, settings: Settings) -> dict | None:
     cached = _auth_cache_get(token)
     if cached is not None:
         return cached
+    if _rejected_recently(token):
+        return None
 
     try:
         # Use a fresh client with anon key for token verification — keeps the global
@@ -245,24 +272,55 @@ async def resolve_token(token: str, settings: Settings) -> dict | None:
         result = await asyncio.to_thread(lambda: verify_client.auth.get_user(token))
         user = result.user
         if not user:
+            _remember_rejection(token)
             return None
+    except (AuthInvalidJwtError, AuthApiError) as exc:
+        if isinstance(exc, AuthInvalidJwtError) or getattr(exc, "status", None) in (401, 403):
+            _remember_rejection(token)
+        log.info("auth.token_rejected", error=str(exc))
+        return None
     except Exception as exc:
         log.info("auth.token_rejected", error=str(exc))
         return None
 
     meta = auth_metadata(user)
+    # No role, no access. A missing role used to default to field_worker, safe only while signup
+    # stays off: re-enabling signup, anonymous sign-in or an OAuth provider would have handed every
+    # new identity search, briefs and synthesis. Roles are set by `scripts/migrate_roles_to_app_metadata.py`.
+    if not meta.get("role"):
+        log.warning("auth.token_without_role", user_id=str(user.id))
+        return None
     user_dict = {
         "user_id": str(user.id),
         "email": user.email,
         # The app role lives in app_metadata. The token's top-level `role` is Supabase's
         # Postgres role ("authenticated"), which matches no entry in kairos.rego.
-        "role": meta.get("role", "field_worker"),
+        "role": meta["role"],
         "site_id": meta.get("site_id", ""),
         "name": meta.get("name"),
         "sub": str(user.id),
     }
     _auth_cache_put(token, user_dict, settings.AUTH_CACHE_TTL_SECONDS)
     return user_dict
+
+
+async def close_store_clients() -> None:
+    """Close the pooled store clients on shutdown. Each close is best effort: one failing must not
+    leave the others open. They used to be dropped with the loop, cutting live connections."""
+    global _neo4j_driver, _qdrant_client, _es_client, _redis_client
+    for name, client, close in (
+        ("neo4j", _neo4j_driver, "close"),
+        ("qdrant", _qdrant_client, "close"),
+        ("elasticsearch", _es_client, "close"),
+        ("redis", _redis_client, "aclose"),
+    ):
+        if client is None:
+            continue
+        try:
+            await getattr(client, close)()
+        except Exception as exc:  # noqa: BLE001 — shutdown must finish
+            log.warning("shutdown.client_close_failed", client=name, error=repr(exc))
+    _neo4j_driver = _qdrant_client = _es_client = _redis_client = None
 
 
 async def get_current_user(
@@ -359,7 +417,8 @@ async def demo_llm_budget(
     if not tenant.is_demo_user(current_user):
         return
     key = f"kairos:demo_budget:{int(time.time() // 3600)}"
-    cost = _DEMO_LLM_COST.get(request.url.path, 1) if request is not None else 1
+    # The routed path: `request.url.path` is rebuilt from the Host header, so a crafted Host paid 1, not 6.
+    cost = _DEMO_LLM_COST.get(request.scope["path"], 1) if request is not None else 1
     try:
         used = await (redis.incrby(key, cost) if cost > 1 else redis.incr(key))
         if used == cost:
@@ -372,6 +431,55 @@ async def demo_llm_budget(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="The demo has reached its hourly limit for AI-backed actions. Try again later.",
         )
+
+
+# Per-IP caps on the demo role's storage and promote actions (review C21). The demo password ships in
+# the public bundle, and the model budget above never counted these: a script could fill the showcase
+# vault (the shared 500 MB bucket) or promote every showcase quarantine item. Uploads fail closed when
+# Redis is down, because storage is what is at stake; promote fails open, like the model budget.
+_DEMO_CAPS = {
+    "upload": {"per_ip_hour": 10, "per_day": 100, "fail_closed": True},
+    "promote": {"per_ip_hour": 30, "per_day": None, "fail_closed": False},
+}
+
+
+def _demo_cap(kind: str):
+    cap = _DEMO_CAPS[kind]
+
+    async def _check(current_user: CurrentUserDep, redis: RedisDep, request: Request) -> None:
+        if not tenant.is_demo_user(current_user):
+            return
+        from api.middleware.ratelimit import client_ip
+
+        now = time.time()
+        windows = [(f"kairos:demo_cap:{kind}:ip:{client_ip(request)}:{int(now // 3600)}", 3600, cap["per_ip_hour"])]
+        if cap["per_day"]:
+            windows.append((f"kairos:demo_cap:{kind}:day:{int(now // 86400)}", 86400, cap["per_day"]))
+        try:
+            for key, ttl, limit in windows:
+                used = await redis.incr(key)
+                if used == 1:
+                    await redis.expire(key, ttl)
+                if used > limit:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=f"The demo has reached its limit for this action ({kind}). Try again later.",
+                    )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            log.warning("demo_cap.redis_unavailable", kind=kind, error=str(exc))
+            if cap["fail_closed"]:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Demo uploads are paused for a moment. Try again shortly.",
+                ) from None
+
+    return _check
+
+
+demo_upload_cap = _demo_cap("upload")
+demo_promote_cap = _demo_cap("promote")
 
 
 def require_role(*roles: str):

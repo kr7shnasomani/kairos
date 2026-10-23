@@ -75,6 +75,12 @@ jobs:
         if: steps.secrets-check.outputs.ready == 'true'
         run: ssh "${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}" "cd ~/kairos && make prod"
 
+      # Same as tools/deploy_backend.sh step 5: OPA and Caddy read their policy and Caddyfile only at
+      # start, so without this a policy or proxy change shipped through CI never took effect.
+      - name: Restart OPA and Caddy so the new policy and Caddyfile load
+        if: steps.secrets-check.outputs.ready == 'true'
+        run: ssh "${{ secrets.AWS_EC2_USER }}@${{ secrets.AWS_EC2_HOST }}" "docker restart kairos-opa kairos-caddy >/dev/null"
+
       - name: Verify the API is up
         if: steps.secrets-check.outputs.ready == 'true'
         run: curl -sf --max-time 15 "https://${{ secrets.AWS_EC2_HOST }}/health" > /dev/null

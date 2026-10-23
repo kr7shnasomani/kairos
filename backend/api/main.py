@@ -88,6 +88,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from api.services.http import close_shared_client
 
     await close_shared_client()
+    from api.dependencies import close_store_clients
+
+    await close_store_clients()
     log.info("kairos.shutdown")
 
 

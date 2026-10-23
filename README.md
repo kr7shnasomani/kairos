@@ -21,6 +21,8 @@ A 13-layer platform organised into five planes: **perception, knowledge, governa
 ![Docker](https://img.shields.io/badge/Docker-Local_Infra-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-OT_Connectors-00ADD8?style=flat-square&logo=go&logoColor=white)
 ![NVIDIA_NIM](https://img.shields.io/badge/NVIDIA_NIM-LLM_Synthesis-76B900?style=flat-square&logo=nvidia&logoColor=white)
+![Nebius](https://img.shields.io/badge/Nebius-Token_Factory-052B42?style=flat-square)
+![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)
 ![Grafana](https://img.shields.io/badge/Grafana-Observability-F46800?style=flat-square&logo=grafana&logoColor=white)
 
 </div>
@@ -33,8 +35,11 @@ A 13-layer platform organised into five planes: **perception, knowledge, governa
 - [How It Works](#how-it-works)
 - [Key Capabilities](#key-capabilities)
 - [Tech Stack](#tech-stack)
+- [Built on NVIDIA and Nebius](#built-on-nvidia-and-nebius)
 - [Quick Start](#quick-start)
 - [Repository Layout](#repository-layout)
+- [Changes During the Hackathon](#changes-during-the-hackathon)
+- [Feedback on Nebius and NVIDIA](#feedback-on-nebius-and-nvidia)
 - [License](#license)
 
 ---
@@ -117,9 +122,59 @@ For the full design, including the 13-layer breakdown, knowledge-graph mechanics
 |---|---|
 | **Backend** | FastAPI (Python 3.12), Temporal (durable workflows), Celery (task queues), Go (Gin) OT connectors |
 | **Datastores** | Neo4j Aura (graph, cloud), Qdrant Cloud (vector), Elasticsearch (exact), Redis (streams/cache), Supabase (Postgres · Auth · Storage · Vault) |
-| **AI models** | NVIDIA NIM (LLM · NER · OCR), Groq Whisper (STT), Jina (embeddings). Cloud-only, no local weights. Synthesis runs on NIM Nemotron 3 Super 120B and falls back to OpenRouter (Llama 3.1 70B), then Gemini |
+| **AI models** | NVIDIA NIM (LLM · NER · OCR), Groq Whisper (STT), Jina (embeddings). Cloud-only, no local weights. Synthesis runs on Nemotron 3 Super 120B through a provider cascade (`services/model_providers.py`): Nebius Token Factory when its key is set, then NVIDIA NIM, then the fallbacks OpenRouter (Llama 3.1 70B), Gemini and Ollama. A tier with no key is skipped |
 | **Frontend** | Next.js 16, React 19, Tailwind CSS v4, TypeScript (strict) |
 | **Platform** | Docker Compose, OPA (authz), Supabase Vault (secrets), OpenTelemetry → Grafana Cloud (traces + metrics) |
+
+## Built on NVIDIA and Nebius
+
+Kairos runs its reasoning on **NVIDIA Nemotron 3 Super 120B** (`nvidia/nemotron-3-super-120b-a12b`),
+served by **Nebius Token Factory** as the first tier of the synthesis cascade, with NVIDIA NIM serving
+the same model as the second tier.
+
+### Where each model is used
+
+| Task | Model | Served by |
+|---|---|---|
+| Copilot answers (plain and streamed), with citations and the safety gate | Nemotron 3 Super 120B | Nebius Token Factory, then NVIDIA NIM |
+| RCA agent: investigation plan, hypotheses, and the evidence check on each hypothesis | Nemotron 3 Super 120B | Nebius Token Factory, then NVIDIA NIM |
+| Drafting a Management of Change from a conflict | Nemotron 3 Super 120B | Nebius Token Factory, then NVIDIA NIM |
+| Off-boarding and elicitation interview questions | Nemotron 3 Super 120B | Nebius Token Factory, then NVIDIA NIM |
+| OCR on scanned and handwritten documents | Nemotron OCR v2 (`nvidia/nemotron-ocr-v2`) | NVIDIA NIM |
+| Entity extraction (NER) and P&ID vision | Llama 3.2 11B Vision | NVIDIA NIM |
+| Embeddings, speech to text | Jina `jina-embeddings-v3`, Groq `whisper-large-v3` | Jina, Groq |
+
+### How Token Factory fits in
+
+All chat-model traffic goes through one provider registry,
+[`backend/api/services/model_providers.py`](backend/api/services/model_providers.py). Each tier is an
+OpenAI-compatible `/chat/completions` endpoint. The order is Token Factory, NIM, then the fallbacks
+OpenRouter and Gemini. A tier with no API key is left out, and a tier that fails hands the request to
+the next one. Because Token Factory serves the same Nemotron build as NIM, it needed no new call path:
+it is one registry entry plus five settings. Thinking is switched off with
+`chat_template_kwargs.enable_thinking: false`, so the whole token budget goes to the answer.
+
+Every answer records which tier produced it. The Copilot shows it as an "answered by" badge (for
+example *Nebius Token Factory*), and the benchmark harness counts the mix of providers, so a run
+answered by a fallback model is marked `SUSPECT` instead of being quoted. System Health has an opt-in
+live probe for each tier.
+
+The safety rules hold whichever tier answers. The server retrieves its own evidence, so a client
+cannot supply fake context. A safety-critical question that the evidence cannot settle gets a refusal
+card instead of a hedged answer. Every claim cites its source document and authority level.
+
+### Running it on Token Factory
+
+1. Get an API key from [Nebius Token Factory](https://tokenfactory.nebius.com/).
+2. In `.env`, set `NEBIUS_TOKEN_FACTORY_API_KEY`. The defaults in `.env.example` already point at
+   `https://api.tokenfactory.nebius.com/v1` and `nvidia/nemotron-3-super-120b-a12b`.
+3. Keep `NVIDIA_NIM_API_KEY` set too. OCR and NER run on NIM, and NIM is the fallback for synthesis.
+4. Restart the API so it reads the new settings:
+   `docker compose up -d --force-recreate kairos-backend-api`.
+5. Ask the Copilot a question. The answer badge should read *Nebius Token Factory*.
+
+Every answer, RCA run and MoC draft then spends Token Factory credits. To go back to NIM, comment out
+the key and restart. No code changes are needed.
 
 ## Quick Start
 
@@ -131,7 +186,7 @@ The entire stack runs inside Docker — no local Python, Node, or Go required.
 # 1. Clone and configure
 git clone https://github.com/kr7shnasomani/kairos.git
 cd kairos
-cp .env.example .env          # add cloud keys (NIM, Groq, Supabase) when ready
+cp .env.example .env          # add cloud keys (Token Factory, NIM, Groq, Supabase) when ready
 
 # 2. Boot the full platform
 make dev
@@ -194,7 +249,70 @@ kairos/
 
 Each major area has its own deep-dive in the docs folder.
 
+## Changes During the Hackathon
+
+Kairos existed before the Submission Period. The first commit was on 27 June 2026, and 115 commits
+came before 26 August. Since 26 August there have been 32 commits, touching 1,110 files with about
+61,000 lines added and 27,500 removed. The main changes:
+
+- **Nebius Token Factory tier and the provider registry** (22 Sep). Synthesis moved from code paths
+  copied into each caller to one ordered registry of tiers, with Token Factory first.
+- **Synthesis moved to Nemotron.** NVIDIA retired the old `llama-3.1-70b` model on 13 Sep. Kairos
+  moved to Nemotron 3 Super, tried Nemotron 3 Ultra 550B in October, and went back to Super on
+  17 Oct when Ultra stopped responding. Thinking is switched off on both tiers.
+- **Governed RCA agent** (18 Oct). A tool-using agent plans an investigation, collects the
+  work-order timeline and evidence, proposes hypotheses, and checks each one against its sources
+  before it is shown. It also drafts Management of Change requests from conflicts.
+- **Deployed** (15 Sep). The backend runs on AWS EC2 behind Caddy, and the frontend runs on Vercel.
+- **Showcase plant and one-click demo** (4 Oct). A second plant with its own data, kept apart from the
+  golden dataset by markers. Demo writes are fenced to it, and since 24 Oct its uploads and promotions
+  are capped per IP.
+- **Workspace rebuilt** (23 Sep onward). The new design language, a fixed sidebar, plain-language
+  briefs, a public documentation section and a full FAQ. The frontend shows live data only; every
+  fixture fallback was removed on 14 Sep.
+- **Security** (2 Oct onward). Row-level security policies, authenticated OT connectors, a
+  security test suite, a login throttle, and roles read only from `app_metadata`.
+- **New capabilities.** Cross-site pattern alerts, table parsing for scanned forms, governance
+  reports, the OCR review and release flow, and redacted exports.
+- **Answer quality** on the 46-question golden benchmark, with deterministic grading: 42 of 46 on
+  Nemotron 3 Super through NIM (18 Oct), and the fact reaches the context in 46 of 46. See
+  [`benchmark/RESULTS.md`](benchmark/RESULTS.md).
+- **Review fixes** (24 Oct). Single-flight session refresh, a corrected EEMUA-191 governor,
+  race-safe acknowledgements, idempotent graph edges, and CI that now runs the frontend and Go tests.
+
+## Feedback on Nebius and NVIDIA
+
+**Nebius Token Factory.** Its OpenAI-compatible API, and the fact that it serves the same Nemotron
+build as NIM, made it a one-entry addition to the provider registry with no new code path. That is the
+right design for adoption. Two gaps limited how much traffic could move. The catalog has no NVIDIA OCR
+model, so `nemotron-ocr-v2` stays on NIM. It also has no NVIDIA embedding model, and switching
+embedding providers means re-embedding the corpus. A Nemotron OCR model and an NVIDIA embedding model
+on Token Factory would let a project like this run entirely on Nebius.
+
+**NVIDIA NIM model lifecycle.** This caused the most lost time:
+
+- `llama-3.1-70b` started returning `410 Gone` on 13 Sep.
+- `nemotron-3-super-120b-a12b` was announced as end of life on 3 Oct and returned 410 while the
+  playground still listed it. It was later served again.
+- From 17 Oct, `nemotron-3-ultra-550b-a55b` gave no response in 60 s or 150 s across four tries,
+  while `/v1/models` answered in 0.1 s.
+- On 22 Oct, `/v1/models` still listed Super for our key, but chat completions answered
+  `404 Function … Not found for account`.
+
+Three changes would have prevented most of this:
+
+- A `/v1/models` that reflects what the calling account can actually use.
+- Deprecation dates exposed through the API, for example in a response header.
+- A per-model status page.
+
+**Nemotron 3 Super.** It answered well and fast enough for an interactive Copilot: 4.0 s median and
+13.9 s worst over six answer-sized requests (3.4k prompt tokens, up to 350 output tokens). It needs
+`enable_thinking: false`, or hidden reasoning uses up the output budget. **Nemotron 3.5 Lightning
+30B** answered a one-line prompt in 0.4 s but took a median 51 s on answer-sized prompts, with 4 of 6
+timing out at 60 s. Routing simple questions to it would have made answers slower, so we dropped that
+plan. Published latency figures by prompt size would help with this kind of routing decision.
+
 ## License
 
-Proprietary — all rights reserved. Copyright (c) 2026 Krishna Somani. See [`LICENSE`](LICENSE); no use,
-copying or redistribution is permitted without written permission from the copyright owner.
+Apache License 2.0. Copyright 2026 Krishna Somani. See [`LICENSE`](LICENSE).
+Files under `.agents/skills/` are third-party and keep the licence stated in each one.

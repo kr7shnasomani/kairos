@@ -33,7 +33,7 @@ export function Timestamp({
   const pad = (n: number) => String(n).padStart(2, "0");
   const exact =
     `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`; // say so: an IST reader took 14:03 as local
 
   return (
     <span title={value} className={cn("inline-flex flex-col leading-tight", className)}>
@@ -313,7 +313,7 @@ type ButtonVariant = "primary" | "ghost" | "danger";
 /** One chrome for every button-shaped control, filled or not. `fill-sweep` (globals.css)
  *  paints the hover wipe; the label has to ride above it, hence `ButtonLabel`. */
 const BUTTON_CHROME =
-  "fill-sweep inline-flex h-9 items-center justify-center gap-2 px-3.5 text-body font-semibold transition-[transform,background-color,border-color] duration-150 ease-out active:scale-[0.98]";
+  "fill-sweep button-size inline-flex items-center justify-center gap-2 text-body font-semibold transition-[transform,background-color,border-color] duration-150 ease-out active:scale-[0.98]";
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   primary: "bg-accent text-on-accent",

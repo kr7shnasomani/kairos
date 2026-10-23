@@ -248,3 +248,24 @@ async def test_a_failed_stream_ends_on_error_without_exposing_the_exception(monk
     events, body = await _route_events(monkeypatch, _boom)
     assert events == ["status", "error"]
     assert "nim-internal" not in body and "RuntimeError" not in body
+
+
+async def test_a_retrieval_error_is_a_real_http_status_not_a_200_stream(monkeypatch):
+    """Retrieval ran inside the generator, after the 200 headers, so its 422 reached the client as an
+    `error` frame. It now raises before the response exists."""
+    import pytest
+    from fastapi import HTTPException
+
+    from api.models.document import SynthesizeRequest
+    from api.routers import search as search_router
+
+    async def _bad_request(*_a, **_k):
+        raise HTTPException(status_code=422, detail="as_of must be an ISO8601 timestamp")
+
+    monkeypatch.setattr(search_router, "_server_evidence", _bad_request)
+    with pytest.raises(HTTPException) as exc:
+        await search_router.synthesize_stream(
+            SynthesizeRequest(query="what failed on EQ-101?", context=[]),
+            current_user={"user_id": "u-1"}, settings=settings, supabase=None, driver=None, qdrant=None, es=None,
+        )
+    assert exc.value.status_code == 422

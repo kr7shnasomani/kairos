@@ -77,7 +77,7 @@ export default function ModelGatePage() {
   const history = state.status === "live" ? state.data : null;
   const reduced = useReducedMotion();
   const role = useRole();
-  const isAdmin = ADMIN_VIEW_ROLES.includes(role);
+  const isAdmin = role !== null && ADMIN_VIEW_ROLES.includes(role);
   // The demo role views admin pages but cannot run the gate (`DemoGate` disables the header button).
   const canRun = isAdmin && role !== "demo";
   const [running, setRunning] = useState(false);

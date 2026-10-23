@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { cn, localDateString } from "@/lib/utils";
 
 import { Icon } from "@/components/icon";
+import { Button } from "@/components/ui";
 // Web Speech API — not available in all browsers; typed as any to avoid lib conflicts.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpeechRecogAny = any;
@@ -138,14 +139,15 @@ export function Composer({
           </button>
         )}
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
           disabled={!value.trim()}
           aria-label="Send"
-          className="fill-sweep grid size-11 shrink-0 place-items-center bg-accent text-on-accent disabled:opacity-40"
+          className="size-11 shrink-0 px-0"
         >
-          <Icon name="paper-plane-right" size={17} className="relative z-10" />
-        </button>
+          <Icon name="paper-plane-right" size={17} />
+        </Button>
       </form>
     </div>
   );

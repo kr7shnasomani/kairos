@@ -159,11 +159,16 @@ class VectorStoreService:
             else None
         )
 
+        # The authority filter runs here, not in Qdrant: `authority_level` has no payload index, and
+        # Qdrant Cloud rejects a filter on an unindexed field (see scripts/init_qdrant.py). Filtering a
+        # top-`limit` window dropped authoritative chunks ranked just below it, so over-fetch first.
+        # shortcut: 4x over-fetch, until an authority_level payload index exists to filter in-query.
+        fetch = limit if authority_min >= 5 else limit * 4
         results = await self.client.search(
             collection_name=collection,
             query_vector=query_vector,
             query_filter=query_filter,
-            limit=limit,
+            limit=fetch,
             with_payload=True,
         )
 
@@ -175,4 +180,4 @@ class VectorStoreService:
             }
             for r in results
             if r.payload.get("authority_level", 5) <= authority_min
-        ]
+        ][:limit]

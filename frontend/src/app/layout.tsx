@@ -23,9 +23,6 @@ export const metadata: Metadata = {
   icons: { icon: "/logo.png", apple: "/logo.png" },
 };
 
-// Apply saved theme, contrast and devtools state before paint to avoid a flash.
-const themeInit = `(function(){try{var t=localStorage.getItem('kairos-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);var c=localStorage.getItem('kairos-contrast');if(c==='high')document.documentElement.setAttribute('data-contrast','high');var d=localStorage.getItem('kairos-devtools');if(d==='show')document.documentElement.setAttribute('data-devtools','show');}catch(e){}})();`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,7 +36,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        {/* Blocking on purpose: it sets data-theme before first paint, so the wrong palette never flashes. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/theme-init.js" />
       </head>
       <body className="min-h-full">
         <CanvasTokensProvider>{children}</CanvasTokensProvider>

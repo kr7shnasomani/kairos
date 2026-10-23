@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { submitVoiceNote } from "@/lib/api";
-import { PageHeader } from "@/components/ui";
+import { Button, PageHeader } from "@/components/ui";
 import { useMe } from "@/components/use-role";
 
 import { Icon } from "@/components/icon";
@@ -53,12 +53,13 @@ export default function VoicePage() {
         <div className="flex flex-col items-center gap-6 py-8">
           <VoiceRecorder onBlob={handleBlob} />
           {blob && (
-            <button
+            <Button
+              variant="primary"
               onClick={submit}
-              className="fill-sweep h-[52px] w-full bg-accent text-subtitle font-semibold text-on-accent transition-transform duration-150 ease-out active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-accent"
+              className="h-[52px] w-full text-subtitle focus-visible:outline-2 focus-visible:outline-accent"
             >
-              <span className="relative z-10">Submit for transcription</span>
-            </button>
+              Submit for transcription
+            </Button>
           )}
         </div>
       )}

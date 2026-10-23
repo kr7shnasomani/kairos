@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ getMe: vi.fn() }));
 
-import { ADMIN_VIEW_ROLES, PROMOTE_ROLES, roleHome, routeAllowed, visibleTo } from "./use-role";
+import { renderHook, waitFor } from "@testing-library/react";
+import { getMe } from "@/lib/auth";
+import type { User } from "@/lib/types";
+import { ADMIN_VIEW_ROLES, PROMOTE_ROLES, roleHome, routeAllowed, useRole, visibleTo } from "./use-role";
 
 describe("demo role", () => {
   it("is the demo identity and lands on the overview", () => {
@@ -30,5 +33,18 @@ describe("demo role", () => {
     expect(routeAllowed("/governance", "compliance")).toBe(false);
     expect(routeAllowed("/audit", "compliance")).toBe(true);
     expect(routeAllowed("/system-health", "engineer")).toBe(false);
+  });
+});
+
+describe("useRole while loading", () => {
+  it("is null until the profile answers, so no gated control flashes", async () => {
+    let answer!: (u: User | null) => void;
+    vi.mocked(getMe).mockReturnValueOnce(new Promise<User | null>((r) => { answer = r; }));
+    const { result } = renderHook(() => useRole());
+
+    expect(result.current).toBeNull();
+    expect(visibleTo(PROMOTE_ROLES, result.current)).toBe(false);
+    answer({ role: "field_worker" } as User);
+    await waitFor(() => expect(result.current).toBe("field_worker"));
   });
 });

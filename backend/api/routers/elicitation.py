@@ -24,10 +24,20 @@ from api.dependencies import (
     SupabaseDep,
     TemporalDep,
     demo_llm_budget,
+    demo_upload_cap,
 )
 from api.services import tenant
 
 log = structlog.get_logger(__name__)
+_AUDIO_TYPES = frozenset({"audio/wav", "audio/x-wav", "audio/wave", "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/aac"})
+
+
+def _audio_type(content_type: str | None) -> str:
+    """The stored content type: an allow-listed audio type (parameters such as `;codecs=opus` dropped),
+    else a forced download. The client's value was stored verbatim before."""
+    base = (content_type or "").split(";", 1)[0].strip().lower()
+    return base if base in _AUDIO_TYPES else "application/octet-stream"
+
 router = APIRouter()
 
 _ELICITATION_QUEUE = "kairos-elicitation"
@@ -250,7 +260,7 @@ async def submit_responses(
 
 
 @router.post(
-    "/{work_order_id}/voice", dependencies=[Depends(demo_llm_budget)],
+    "/{work_order_id}/voice", dependencies=[Depends(demo_llm_budget), Depends(demo_upload_cap)],
     summary="Ingest voice note — transcribe via Whisper, route to quarantine",
     status_code=status.HTTP_202_ACCEPTED,
 )
@@ -305,7 +315,9 @@ async def ingest_voice_note(
             lambda: supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET).upload(
                 storage_path,
                 audio_bytes,
-                {"content-type": file.content_type or "audio/wav"},
+                # Allow-listed: the client's content type was stored verbatim, so an "audio" upload
+                # could be stored as text/html and served back as a page.
+                {"content-type": _audio_type(file.content_type)},
             )
         )
     except Exception as exc:

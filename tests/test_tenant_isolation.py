@@ -297,6 +297,29 @@ async def test_the_demo_role_searches_both_and_the_better_hit_wins():
     assert [h["payload"]["tag"] for h in hits] == ["demo-hit", "real-hit"]
 
 
+async def test_an_authority_filter_does_not_hide_authoritative_chunks_below_the_window():
+    """Ten level-5 chunks outrank one level-2 chunk. Filtering a top-10 window dropped it."""
+    from api.services.vector_store import VectorStoreService
+
+    class _Ranked:
+        def __init__(self):
+            self.limits = []
+
+        async def search(self, collection_name, limit, **_kw):
+            self.limits.append(limit)
+            pts = [_Point(0.9 - i / 100, f"weak-{i}") for i in range(10)]
+            for p in pts:
+                p.payload["authority_level"] = 5
+            strong = _Point(0.5, "strong")
+            strong.payload["authority_level"] = 2
+            return (pts + [strong])[:limit]
+
+    q = _Ranked()
+    hits = await VectorStoreService(q, _Settings()).search("kairos_documents", [0.1], limit=10, authority_min=3)
+    assert [h["payload"]["tag"] for h in hits] == ["strong"]
+    assert q.limits == [40]
+
+
 async def test_a_missing_showcase_collection_degrades_to_the_real_one():
     from api.services.vector_store import VectorStoreService
 
@@ -591,8 +614,12 @@ async def test_an_rca_investigation_spends_several_actions():
             return self.n
 
     class Req:
+        # The routed path; `url.path` is rebuilt from the Host header, so a crafted Host made it
+        # "/x/search/rca-pack" and the action cost 1 instead of 6.
+        scope = {"path": "/search/rca-pack"}
+
         class url:
-            path = "/search/rca-pack"
+            path = "/x/search/rca-pack"
 
     r = R()
     await demo_llm_budget(DEMO, r, S(), Req())
@@ -624,6 +651,76 @@ def test_every_model_backed_route_carries_the_budget():
         (m, p) for m, p, r in _routes() if demo_llm_budget in [d.call for d in r.dependant.dependencies]
     }
     assert carrying == expected
+
+
+class _KeyedRedis:
+    """Counts per key, so per-IP and per-day windows are separate."""
+
+    def __init__(self, fail=False):
+        self.counts: dict[str, int] = {}
+        self.fail = fail
+
+    async def incr(self, key):
+        if self.fail:
+            raise ConnectionError("redis down")
+        self.counts[key] = self.counts.get(key, 0) + 1
+        return self.counts[key]
+
+    async def expire(self, *_a):
+        return True
+
+
+def _from_ip(ip):
+    return type("Req", (), {"headers": {"x-forwarded-for": ip}, "client": None, "scope": {"path": "/documents/ingest"}})()
+
+
+async def test_demo_uploads_are_capped_per_ip_and_a_real_account_never_is():
+    from fastapi import HTTPException
+
+    from api.dependencies import _DEMO_CAPS, demo_upload_cap
+
+    r = _KeyedRedis()
+    for _ in range(_DEMO_CAPS["upload"]["per_ip_hour"]):
+        await demo_upload_cap(DEMO, r, _from_ip("198.51.100.1"))
+    with pytest.raises(HTTPException) as exc:
+        await demo_upload_cap(DEMO, r, _from_ip("198.51.100.1"))
+    assert exc.value.status_code == 429
+    await demo_upload_cap(DEMO, r, _from_ip("198.51.100.2"))  # another visitor still can
+    for _ in range(50):
+        await demo_upload_cap(REAL, r, _from_ip("198.51.100.1"))  # real accounts are never counted
+
+
+async def test_demo_uploads_have_a_daily_total_across_ips():
+    from fastapi import HTTPException
+
+    from api.dependencies import _DEMO_CAPS, demo_upload_cap
+
+    r = _KeyedRedis()
+    with pytest.raises(HTTPException) as exc:
+        for i in range(_DEMO_CAPS["upload"]["per_day"] + 1):
+            await demo_upload_cap(DEMO, r, _from_ip(f"198.51.100.{i % 250}"))
+    assert exc.value.status_code == 429
+
+
+async def test_demo_uploads_fail_closed_and_promote_fails_open_when_redis_is_down():
+    from fastapi import HTTPException
+
+    from api.dependencies import demo_promote_cap, demo_upload_cap
+
+    with pytest.raises(HTTPException) as exc:
+        await demo_upload_cap(DEMO, _KeyedRedis(fail=True), _from_ip("198.51.100.1"))
+    assert exc.value.status_code == 503
+    await demo_promote_cap(DEMO, _KeyedRedis(fail=True), _from_ip("198.51.100.1"))  # no raise
+
+
+def test_every_upload_and_promote_route_carries_its_demo_cap():
+    from api.dependencies import demo_promote_cap, demo_upload_cap
+
+    def carrying(dep):
+        return {(m, p) for m, p, r in _routes() if dep in [d.call for d in r.dependant.dependencies]}
+
+    assert carrying(demo_upload_cap) == {("POST", "/documents/ingest"), ("POST", "/elicitation/{work_order_id}/voice")}
+    assert carrying(demo_promote_cap) == {("POST", "/governance/quarantine/{item_id}/promote")}
 
 
 # --- by-id reads: a real account asking for a showcase record by its id ----------------------------

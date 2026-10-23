@@ -18,8 +18,9 @@ RELIABILITY = {"user_id": "rel-1", "role": "reliability", "site_id": "SITE_001"}
 class _Query:
     """Chainable stand-in for the supabase-py query builder."""
 
-    def __init__(self, table: str, rows: list[dict], sink: dict):
-        self._table, self._rows, self._sink = table, rows, sink
+    def __init__(self, table: str, rows: list[dict], sink: dict, lost_race: bool = False):
+        self._table, self._rows, self._sink, self._lost_race = table, rows, sink, lost_race
+        self._updating = False
 
     def select(self, *_a, **_kw):
         return self
@@ -30,11 +31,15 @@ class _Query:
     def in_(self, *_a):
         return self
 
+    def is_(self, *_a):
+        return self
+
     def limit(self, _n):
         return self
 
     def update(self, payload):
         self._sink.setdefault("updates", []).append((self._table, payload))
+        self._updating = True
         return self
 
     def insert(self, payload):
@@ -42,17 +47,19 @@ class _Query:
         return self
 
     def execute(self):
-        return type("Result", (), {"data": self._rows})()
+        # `lost_race`: another signer's conditional update landed first, so this one matches no row.
+        rows = [] if (self._updating and self._lost_race) else self._rows
+        return type("Result", (), {"data": rows})()
 
 
 class FakeSupabase:
-    def __init__(self, brief_row: dict | None):
-        self._brief_row = brief_row
+    def __init__(self, brief_row: dict | None, lost_race: bool = False):
+        self._brief_row, self._lost_race = brief_row, lost_race
         self.sink: dict = {}
 
     def table(self, name: str):
         rows = [self._brief_row] if (name == "briefs" and self._brief_row) else []
-        return _Query(name, rows, self.sink)
+        return _Query(name, rows, self.sink, self._lost_race)
 
 
 def _brief(**overrides) -> dict:
@@ -108,6 +115,24 @@ async def test_countersigning_twice_is_rejected():
     with pytest.raises(HTTPException) as exc:
         await countersign_brief("b-1", sb, RELIABILITY)
     assert exc.value.status_code == 409
+
+
+async def test_a_concurrent_countersign_that_lost_the_race_is_409_and_unsigned():
+    sb = FakeSupabase(_brief(), lost_race=True)
+    with pytest.raises(HTTPException) as exc:
+        await countersign_brief("b-1", sb, RELIABILITY)
+    assert exc.value.status_code == 409
+    assert "inserts" not in sb.sink  # no signed audit row for the loser
+
+
+async def test_a_concurrent_ack_that_lost_the_race_is_409_and_unsigned():
+    from api.routers.briefs import ack_brief
+
+    sb = FakeSupabase(_brief(acknowledged_by=None), lost_race=True)
+    with pytest.raises(HTTPException) as exc:
+        await ack_brief("b-1", ENGINEER, sb)
+    assert exc.value.status_code == 409
+    assert "inserts" not in sb.sink
 
 
 async def test_non_ptw_brief_has_nothing_to_countersign():

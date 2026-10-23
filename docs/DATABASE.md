@@ -690,9 +690,9 @@ Redis is used for four distinct concerns, each isolated to a separate database n
 
 ### Event Streams (Redis Streams on DB 0)
 
-All streams use `XADD`. Workers and the brief engine consume via `XREAD`. Stream IDs are stored in `operational_events.redis_stream_id` for traceability.
+All streams use `XADD`. **Nothing reads them yet:** no worker, service or connector calls `XREAD`, `XREADGROUP` or `XRANGE` (checked 2026-10-22). They are an append-only trace capped at `maxlen` 1000; briefs are delivered from Postgres, not from a stream. Stream IDs are stored in `operational_events.redis_stream_id` for traceability.
 
-| Stream Key | Trigger | Consumer |
+| Stream Key | Trigger | Intended consumer (not built; see above) |
 |------------|---------|----------|
 | `kairos:events:work_orders` | `POST /events/work-order` | Brief engine, delay compensation |
 | `kairos:events:ptw` | `POST /events/ptw` | Brief engine (immediate, no delay) |
@@ -708,7 +708,7 @@ All streams use `XADD`. Workers and the brief engine consume via `XREAD`. Stream
 kairos:governor:{user_id}:hourly_count   TTL: 3600s (rolling hour)
 ```
 
-`EventBusService.check_governor(user_id)` reads this counter before every brief delivery. Hard ceiling: 6 pushes/operator/hour. PTW briefs bypass the ceiling unconditionally. Plant state (`turnaround`/`shutdown`/`emergency`) suppresses normal-priority briefs regardless of count.
+`GET /briefs/` reads this counter (`get_governor_state`, `pushed_brief_ids`) and applies the budget at inbox read (`page_inbox`); a brief already pushed this hour is not charged again. Hard ceiling: 6 pushes/operator/hour. PTW briefs bypass the ceiling unconditionally. Plant state (`turnaround`/`shutdown`/`emergency`) suppresses normal-priority briefs regardless of count.
 
 ### Delay Compensation Keys
 

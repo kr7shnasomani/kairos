@@ -52,4 +52,22 @@ describe("AssetDetailPage", () => {
     expect(screen.getByText("Pump-207")).toBeInTheDocument();
     expect(screen.getByTestId("knowledge-graph")).toHaveTextContent("P-207");
   });
+
+  it("says a failed knowledge or alias lookup failed, instead of showing none", async () => {
+    mocks.getAssetDetail.mockResolvedValue({
+      source: "live",
+      data: {
+        asset_id: "P-207", name: "Primary feed pump", equipment_class: "centrifugal_pump",
+        criticalityLabel: "Critical", criticalityColor: "#dc2626", parent: null,
+        open_work_orders: 0, compliance_gaps: 0, last_inspection: null,
+        aliases: null, knowledge: null,
+      },
+    });
+
+    render(await AssetDetailPage({ params: Promise.resolve({ id: "P-207" }) }));
+
+    expect(screen.getByText(/Knowledge for this asset could not be loaded/)).toBeInTheDocument();
+    expect(screen.getByText("Aliases could not be loaded")).toBeInTheDocument();
+    expect(screen.queryByText(/No knowledge edges recorded/)).not.toBeInTheDocument();
+  });
 });

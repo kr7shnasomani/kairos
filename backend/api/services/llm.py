@@ -222,7 +222,7 @@ _AUTHORITY_TOP_K = 3
 # Anchoring requires every tag in the question to be vouched for by same-asset evidence, so one of
 # these would refuse a question that merely cites a regulation.
 _NON_ASSET_TAG_PREFIXES = frozenset(
-    {"OISD", "PESO", "API", "ASME", "ISO", "IEC", "SOP", "WO", "PTW", "MOC", "NCR", "CAPA", "INSP"}
+    {"OISD", "PESO", "API", "ASME", "ISO", "IEC", "SOP", "WO", "PTW", "MOC", "NCR", "CAPA", "INSP", "REV"}
 )
 
 
@@ -724,12 +724,18 @@ class LLMService:
             max_confidence=max_confidence,
             best_authority=best_authority,
         )
+        # 0.0 means no credited source carries a confidence at all (hybrid search returns authority
+        # only), and "best 0.00" read as a scoring bug.
+        confidence_note = (
+            f"best {max_confidence:.2f}, threshold {confidence_threshold}" if max_confidence
+            else f"no confidence score on this evidence, threshold {confidence_threshold}"
+        )
         return {
             "answer": None,
             "refused": True,
             "refusal_reason": (
-                f"Safety-critical parameter query for '{query_category}' — the retrieved evidence is "
-                f"neither high-confidence (best {max_confidence:.2f}, threshold {confidence_threshold}) "
+                f"Safety-critical parameter query for '{query_category}': the retrieved evidence is "
+                f"neither high-confidence ({confidence_note}) "
                 f"nor from an authoritative source (best authority level {best_authority}; "
                 f"level {AUTHORITATIVE_LEVEL} or better required). "
                 "Verify directly against the source documents and consult the responsible engineering authority."

@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # App
     # -------------------------------------------------------------------------
-    APP_ENV: str = "development"
-    APP_DEBUG: bool = True
+    # Fail closed: a deployment whose .env drops these boots as production (guardrail on, no mock
+    # user, no OPA pass-through). Local development opts in explicitly, as .env.example does.
+    APP_ENV: str = "production"
+    APP_DEBUG: bool = False
     APP_VERSION: str = "0.1.0"
     APP_SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION"
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]
@@ -231,7 +233,6 @@ class Settings(BaseSettings):
     # EEMUA 191 Push Governor
     # -------------------------------------------------------------------------
     MAX_PUSH_PER_USER_PER_HOUR: int = 6
-    BRIEF_COOLDOWN_HOURS: int = 4
     DEDUP_WINDOW_MINUTES: int = 10
     LATE_ARRIVAL_WINDOW_MINUTES: int = 5
     PLANT_STATE_DEFAULT: str = "normal"

@@ -149,6 +149,16 @@ _sensitive_actions := {
 }
 
 allow if {
-    input.user.role in {"field_worker", "engineer", "reliability", "admin", "compliance"}
+    input.user.role in {"field_worker", "engineer", "reliability", "admin"}
     not input.action in _sensitive_actions
+}
+
+# The compliance auditor is read-only: the catch-all, minus the generic `write_api`. It used to get
+# `write_api` here, so it could lower quarantine confidence, start an LLM elicitation workflow and
+# freeze every unacknowledged brief on an asset. It keeps the Copilot (`synthesize`, `rca_pack`,
+# `answer_feedback`), which only appends to the audit log.
+allow if {
+    input.user.role == "compliance"
+    not input.action in _sensitive_actions
+    input.action != "write_api"
 }

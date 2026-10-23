@@ -68,6 +68,13 @@ function QuestionCard({
   );
 }
 
+/** No response at all: offline, DNS, a dropped connection (`TypeError` from fetch) or the request's
+ *  own timeout. An HTTP error status is an answer from the server, never a reason to queue. */
+function isNetworkFailure(err: unknown): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  return err instanceof TypeError || (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError"));
+}
+
 export default function ElicitationPage() {
   const { workOrderId } = useParams<{ workOrderId: string }>();
   const [session, setSession] = useState<ElicitationSession | null>(null);
@@ -78,6 +85,7 @@ export default function ElicitationPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [queued, setQueued] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -133,18 +141,24 @@ export default function ElicitationPage() {
     const responses = questions
       .map((q, question_index) => ({ question_index, question: q.question_text, answer: answers[q.question_id] ?? "" }))
       .filter((r) => r.answer.trim());
+    setSubmitError(null);
     try {
       await submitElicitationResponses(workOrderId, responses);
       setSubmitted(true);
-    } catch {
-      // Offline — queue for replay
-      await enqueueWrite(
-        `/elicitation/${workOrderId}/responses`,
-        "POST",
-        { responses },
-      ).catch(() => {});
-      setQueued(true);
-      setSubmitted(true);
+    } catch (err) {
+      // Only a request that never got an answer is queued. A 4xx used to be queued too, the replay
+      // then dropped it as unreplayable, and the worker had been told the interview was saved.
+      if (!isNetworkFailure(err)) {
+        setSubmitError("The server rejected these responses, so nothing was saved. Check the answers and submit again.");
+        return;
+      }
+      try {
+        await enqueueWrite(`/elicitation/${workOrderId}/responses`, "POST", { responses });
+        setQueued(true);
+        setSubmitted(true);
+      } catch {
+        setSubmitError("You're offline and this device could not store the responses. Keep this screen open and submit again once connected.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -229,6 +243,9 @@ export default function ElicitationPage() {
         </div>
       </div>
 
+      {submitError && (
+        <p role="alert" className="mt-4 text-caption leading-relaxed text-danger">{submitError}</p>
+      )}
       <div className="mt-6 flex items-center gap-3">
         {step > 0 && (
           <Button

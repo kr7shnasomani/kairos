@@ -212,6 +212,8 @@ The normalization layer performs three operations before any event enters the pr
 
 **Subscribed event sources (via Redis Streams):**
 
+> As built (2026-10-22): events arrive as HTTP `POST`s to the `/events/*` routes and are processed there. Each is also written to its Redis Stream as an append-only trace, but nothing consumes the streams yet (`DATABASE.md` §Event Streams).
+
 - Work order creation (CMMS/EAM): a technician is about to be assigned to work on specific equipment
 - Permit-to-Work generation: isolation work, hot work, confined space entry, or high-pressure line work is about to begin
 - Shift handover: a new crew is taking responsibility for the plant and must receive contextual knowledge about the current state

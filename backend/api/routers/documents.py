@@ -27,7 +27,9 @@ from api.dependencies import (
     SupabaseDep,
     TemporalDep,
     demo_llm_budget,
+    demo_upload_cap,
     require_role,
+    site_scope,
 )
 from api.models.document import DocumentStatus, ExtractionResult, VaultDocument
 from api.services import tenant
@@ -155,7 +157,7 @@ class TopologyVerifyRequest(BaseModel):
     decisions: list[TopologyElementDecision] = Field(min_length=1)
 
 
-@router.post("/ingest", dependencies=[Depends(demo_llm_budget)], summary="Ingest a document into the immutable vault", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/ingest", dependencies=[Depends(demo_llm_budget), Depends(demo_upload_cap)], summary="Ingest a document into the immutable vault", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_document(
     current_user: CurrentUserDep,
     supabase: SupabaseDep,
@@ -222,16 +224,20 @@ async def ingest_document(
     # Idempotency: same file ingested twice returns the existing record
     existing = await asyncio.to_thread(
         lambda: supabase.table("documents")
-        .select("document_id, sha256_hash, status")
+        .select("document_id, sha256_hash, status, access_tags")
         .eq("sha256_hash", sha256)
         .execute()
     )
     if existing.data:
         existing_doc = existing.data[0]
         log.info("ingest.duplicate", sha256=sha256, document_id=existing_doc["document_id"])
+        # Only name a record the caller may open: returning another site's document id told an
+        # uploader that site holds this exact file, and gave them its id.
+        doc_site = (existing_doc.get("access_tags") or {}).get("site_id")
+        visible = tenant.on_visible_site(current_user, doc_site, site_scope(current_user, None))
         return {
             "status": "duplicate",
-            "document_id": existing_doc["document_id"],
+            "document_id": existing_doc["document_id"] if visible else None,
             "sha256": sha256,
             "message": "Identical file already exists in the vault.",
         }

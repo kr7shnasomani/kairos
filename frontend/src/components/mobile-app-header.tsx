@@ -1,4 +1,5 @@
 import { Icon } from "@/components/icon";
+import { Button } from "@/components/ui";
 type MobileAppHeaderProps = {
   onOpenMenu: () => void;
   onOpenSearch: () => void;
@@ -19,7 +20,7 @@ export function MobileAppHeader({ onOpenMenu, onOpenSearch, onCreate, onOpenUser
         <span className="min-w-0 truncate">Search…</span>
       </button>
       {onCreate && (
-        <button type="button" onClick={onCreate} aria-label="Ingest document" className="fill-sweep grid size-10 shrink-0 place-items-center bg-accent text-on-accent sm:size-11"><Icon name="plus" className="relative z-10 size-5" /></button>
+        <Button type="button" variant="primary" onClick={onCreate} aria-label="Ingest document" className="size-10 shrink-0 px-0 sm:size-11"><Icon name="plus" className="size-5" /></Button>
       )}
       <button type="button" onClick={onOpenUser} aria-label="Open user menu" className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-2 text-label font-bold text-muted">{userInitial}</button>
     </header>

@@ -136,6 +136,17 @@ def test_governor_partial_budget_delivers_highest_priority_first():
     assert {b["brief_id"] for b in page["suppressed_held"]} == {"n2", "n3"}
 
 
+def test_refresh_keeps_briefs_already_pushed_this_hour():
+    """Six briefs delivered spend the whole budget; a page refresh must show the same six,
+    not hold them all for the budget they already used."""
+    briefs = [_b(f"n{i}") for i in range(6)] + [_b("new")]
+    page = page_inbox(briefs, governor_budget=0, plant_suppressed=False, limit=10,
+                      already_pushed={f"n{i}" for i in range(6)})
+
+    assert sorted(_ids(page["delivered"])) == [f"n{i}" for i in range(6)]
+    assert _ids(page["suppressed_held"]) == ["new"]
+
+
 def test_governor_full_budget_delivers_all_normal():
     """Budget >= briefs: all normal briefs are delivered, nothing held."""
     briefs = [_b("n1"), _b("n2"), _b("n3")]

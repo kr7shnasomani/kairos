@@ -13,7 +13,6 @@ import redis.asyncio as aioredis
 import structlog
 
 from api.config import Settings
-from api.services.metrics import governor_suppressed
 
 log = structlog.get_logger(__name__)
 
@@ -36,7 +35,7 @@ class EventBusService:
         """Publishes an event to a Redis Stream. Returns the stream entry ID."""
         # Serialize to flat dict (Redis Streams don't support nested structures)
         flat_event = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in event.items()}
-        flat_event["published_at"] = datetime.utcnow().isoformat()
+        flat_event["published_at"] = datetime.now(UTC).isoformat()
         entry_id = await self.redis.xadd(stream, flat_event, maxlen=1000)
         log.info("event_bus.published", stream=stream, event_id=flat_event.get("event_id"), entry_id=entry_id)
         return entry_id
@@ -58,51 +57,6 @@ class EventBusService:
         # Sorted-set key. Each member is a brief_id (dedup); score is the UNIX timestamp
         # of the push. Members older than 3600 s are pruned before every read.
         return f"kairos:governor:{user_id}:pushes"
-
-    async def check_governor(
-        self,
-        user_id: str,
-        priority: str = "normal",
-        site_id: str = "",
-        supabase=None,
-    ) -> bool:
-        """
-        Returns True if a brief can be delivered to this user, False if suppressed.
-        PTW briefs (priority='critical') are NEVER suppressed — always returns True.
-        Checks plant operating state first: turnaround/shutdown/emergency suppresses
-        all non-critical briefs regardless of hourly count.
-        """
-        if priority == "critical":
-            return True  # PTW briefs are never suppressed (EEMUA 191 compliance)
-
-        # Plant state gate — checked before hourly count
-        if site_id and supabase:
-            plant_state = await self.get_plant_state(site_id, supabase)
-            if plant_state in ("turnaround", "shutdown", "emergency"):
-                log.info(
-                    "governor.plant_state_suppression",
-                    user_id=user_id,
-                    site_id=site_id,
-                    plant_state=plant_state,
-                    reason="plant_state_suppression",
-                )
-                return False
-
-        count_key = self._governor_key(user_id)
-        now_ts = datetime.now(UTC).timestamp()
-        cutoff = now_ts - 3600
-        # Atomically prune expired pushes, then count the remaining ones.
-        pipe = self.redis.pipeline()
-        pipe.zremrangebyscore(count_key, "-inf", cutoff)
-        pipe.zcard(count_key)
-        _, current_count = await pipe.execute()
-
-        ceiling = self.settings.MAX_PUSH_PER_USER_PER_HOUR
-        if current_count >= ceiling:
-            governor_suppressed.add(1, {"user_id": user_id})
-            log.info("governor.suppressed", user_id=user_id, count=current_count, ceiling=ceiling)
-            return False
-        return True
 
     async def get_plant_state(self, site_id: str, supabase) -> str:
         """Returns the current plant operating state for a site (defaults to PLANT_STATE_DEFAULT)."""
@@ -170,11 +124,16 @@ class EventBusService:
             await self.record_push(user_id, brief_id)
         return not already
 
+    async def pushed_brief_ids(self, user_id: str) -> set[str]:
+        """Brief ids already counted against the governor in the rolling hour."""
+        cutoff = datetime.now(UTC).timestamp() - 3600
+        return set(await self.redis.zrangebyscore(self._governor_key(user_id), cutoff, "+inf"))
+
     async def get_governor_state(self, user_id: str) -> dict[str, Any]:
         count_key = self._governor_key(user_id)
         now_ts = datetime.now(UTC).timestamp()
         cutoff = now_ts - 3600
-        # Prune old entries then count — same logic as check_governor and record_push.
+        # Prune old entries then count, the same window `record_push` writes.
         pipe = self.redis.pipeline()
         pipe.zremrangebyscore(count_key, "-inf", cutoff)
         pipe.zcard(count_key)

@@ -79,10 +79,7 @@ export default function LoginPage() {
           className="sidebar-scope relative hidden p-10 lg:flex lg:flex-col lg:justify-between"
         >
           <div>
-            <p className="inline-flex bg-accent px-2.5 py-1 text-label font-semibold uppercase tracking-[0.08em] text-on-accent">
-              Evidence-linked operations
-            </p>
-            <h2 className="display mt-5 max-w-lg text-display text-balance text-ink">
+            <h2 className="display max-w-lg text-display text-balance text-ink">
               Enter the workspace with the context your role needs.
             </h2>
             <p className="mt-5 max-w-md text-body leading-relaxed text-muted text-pretty">

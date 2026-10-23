@@ -90,7 +90,12 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(request)
         .then((res) => {
-          if (res.ok) caches.open(SHELL).then((cache) => cache.put(request, res.clone()));
+          // Clone now, before the page takes the body: cloned inside caches.open().then, the
+          // body was usually already read, clone() threw and the offline shell never filled.
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL).then((cache) => cache.put(request, copy));
+          }
           return res;
         })
         .catch(() => caches.match(request).then((cached) => cached ?? caches.match("/briefs"))),

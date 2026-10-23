@@ -140,6 +140,26 @@ def _get_es_client():
 # Activity 1: store_in_vault
 # =============================================================================
 
+async def _quarantine_once(supabase, row: dict[str, Any], doc_key: str, document_id: str) -> bool:
+    """Insert a pipeline quarantine row unless the same one (content, source document) exists.
+
+    Temporal retries an activity up to five times, and each attempt re-inserted every row, so one
+    drawing could leave five copies of each element in the review queue. Returns True if inserted.
+    """
+    existing = await asyncio.to_thread(
+        lambda: supabase.table("quarantine_items")
+        .select("item_id")
+        .eq("content", row["content"])
+        .eq(f"session_context->>{doc_key}", document_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return False
+    await asyncio.to_thread(lambda: supabase.table("quarantine_items").insert(row).execute())
+    return True
+
+
 @activity.defn
 async def store_in_vault(
     document_id: str,
@@ -300,32 +320,28 @@ async def run_ocr(
             ctx = {k: v for k, v in elem.items() if k != "element_group"}
             ctx["source_document_id"] = document_id
             ctx["element_group"] = elem_group
-            await asyncio.to_thread(
-                lambda eid=elem_id, eg=elem_group, c=ctx: supabase.table("quarantine_items").insert({
-                    "asset_id": None,
-                    "content": f"PID element: {eid} ({eg})",
-                    "input_type": "deviation_flag",
-                    "submitted_by": "extraction_pipeline",
-                    "session_context": c,
-                }).execute()
-            )
+            await _quarantine_once(supabase, {
+                "asset_id": None,
+                "content": f"PID element: {elem_id} ({elem_group})",
+                "input_type": "deviation_flag",
+                "submitted_by": "extraction_pipeline",
+                "session_context": ctx,
+            }, "source_document_id", document_id)
             element_count += 1
 
         # One manifest item with the full topology JSON — serves GET /topology
-        await asyncio.to_thread(
-            lambda: supabase.table("quarantine_items").insert({
-                "asset_id": None,
-                "content": f"PID_TOPOLOGY_MANIFEST:{document_id}",
-                "input_type": "deviation_flag",
-                "submitted_by": "extraction_pipeline",
-                "session_context": {
-                    "source_document_id": document_id,
-                    "element_type": "topology_manifest",
-                    "topology": topology,
-                    "topology_source": topology_source,
-                },
-            }).execute()
-        )
+        await _quarantine_once(supabase, {
+            "asset_id": None,
+            "content": f"PID_TOPOLOGY_MANIFEST:{document_id}",
+            "input_type": "deviation_flag",
+            "submitted_by": "extraction_pipeline",
+            "session_context": {
+                "source_document_id": document_id,
+                "element_type": "topology_manifest",
+                "topology": topology,
+                "topology_source": topology_source,
+            },
+        }, "source_document_id", document_id)
 
         await asyncio.to_thread(
             lambda: supabase.table("extraction_jobs").update({
@@ -825,16 +841,14 @@ async def link_to_graph(
 
         # Low confidence → quarantine regardless of resolution; never touch the graph
         if confidence < 0.7:
-            await asyncio.to_thread(
-                lambda e=entity, rt=raw_tag, c=confidence: supabase.table("quarantine_items").insert({
-                    "asset_id": asset_id,
-                    "content": f"Low-confidence entity: '{rt}' (confidence={c:.2f})",
-                    "input_type": "deviation_flag",
-                    "submitted_by": "extraction_pipeline",
-                    "session_context": {"document_id": document_id, "entity": e},
-                }).execute()
-            )
-            quarantine_count += 1
+            if await _quarantine_once(supabase, {
+                "asset_id": asset_id,
+                "content": f"Low-confidence entity: '{raw_tag}' (confidence={confidence:.2f})",
+                "input_type": "deviation_flag",
+                "submitted_by": "extraction_pipeline",
+                "session_context": {"document_id": document_id, "entity": entity},
+            }, "document_id", document_id):
+                quarantine_count += 1
             continue
 
         canonical_id = ner.resolve_asset_tag(raw_tag, alias_map)

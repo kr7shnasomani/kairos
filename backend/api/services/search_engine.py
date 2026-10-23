@@ -123,6 +123,10 @@ class SearchEngineService:
             # query terms (e.g. an OISD/PESO list under a "regulatory standards" header the query
             # matched), not just the top-scoring header cluster. Feeds richer context to synthesis.
             "highlight": {
+                # The snippet is shown as plain text and fed to synthesis, so ES's default <em> markup
+                # printed literally on every source card.
+                "pre_tags": [""],
+                "post_tags": [""],
                 "fields": {
                     "content": {"fragment_size": 240, "number_of_fragments": 8},
                     "title": {},

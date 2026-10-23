@@ -8,6 +8,7 @@ import { Composer } from "./_components/composer";
 import { cn, parseLocalDate } from "@/lib/utils";
 
 import { Icon } from "@/components/icon";
+import { Button } from "@/components/ui";
 interface Turn {
   id: number;
   query: string;
@@ -183,17 +184,15 @@ export default function CopilotPage() {
     <div data-testid="copilot-workspace" className="relative flex flex-col h-[calc(100dvh-56px)] md:h-[calc(100dvh-64px)] lg:h-dvh w-full">
       {/* New chat — only meaningful once there is a conversation to leave behind */}
       {!empty && (
-        <button
+        <Button
           type="button"
           onClick={newChat}
           aria-label="Start a new chat"
-          className="fill-sweep absolute right-14 top-4 z-40 inline-flex h-8 items-center gap-1.5 border border-line px-3 text-caption font-medium text-muted"
+          className="absolute right-14 top-4 z-40 h-8 gap-1.5 px-3 text-caption font-medium text-muted"
         >
-          <span className="relative z-10 inline-flex items-center gap-1.5">
-            <Icon name="plus" size={14} />
-            New chat
-          </span>
-        </button>
+          <Icon name="plus" size={14} />
+          New chat
+        </Button>
       )}
 
       {/* ⓘ absolute top-right inside the workspace */}

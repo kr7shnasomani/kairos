@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import math
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -21,6 +22,7 @@ from api.dependencies import (
     SettingsDep,
     SupabaseDep,
     demo_llm_budget,
+    demo_promote_cap,
     require_role,
 )
 from api.models.document import PromoteQuarantineRequest, RequestQuarantineInfoRequest
@@ -245,7 +247,7 @@ async def list_quarantine(
     }
 
 
-@router.post("/quarantine/{item_id}/promote", summary="Promote quarantine item to canonical graph")
+@router.post("/quarantine/{item_id}/promote", dependencies=[Depends(demo_promote_cap)], summary="Promote quarantine item to canonical graph")
 async def promote_quarantine_item(
     item_id: QuarantineItemIdDep,
     payload: PromoteQuarantineRequest,
@@ -648,12 +650,17 @@ def verify_moc_webhook(
         sent_at = float(timestamp)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook timestamp") from None
+    # `nan` parses as a float and every comparison with it is False, so it slipped past the skew check
+    # and a signed body could be replayed forever.
+    if not math.isfinite(sent_at):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook timestamp")
     if abs((time.time() if now is None else now) - sent_at) > MOC_WEBHOOK_MAX_SKEW_SECONDS:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Stale webhook timestamp")
     expected = hmac.new(
         secret.encode(), timestamp.encode() + b"." + raw_body, hashlib.sha256
     ).hexdigest()  # hmac.new is the stdlib constructor alias
-    if not hmac.compare_digest(expected, signature):
+    # Bytes, not str: compare_digest raises TypeError on a non-ASCII str, which surfaced as a 500.
+    if not hmac.compare_digest(expected.encode(), signature.encode("utf-8", "replace")):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
 
 
@@ -1071,7 +1078,7 @@ async def timestamp_drift_report(
     compound_ids = list({r["compound_event_id"] for r in (result.data or []) if r.get("compound_event_id")})[:limit]
 
     svc = TimestampAlignmentService(supabase, settings)
-    checked = [await svc.check_compound_event(cid) for cid in compound_ids]
+    checked = list(await asyncio.gather(*(svc.check_compound_event(cid) for cid in compound_ids)))
     drifting = [c for c in checked if c.get("drift_detected")]
 
     return {

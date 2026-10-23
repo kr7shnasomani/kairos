@@ -32,9 +32,25 @@ export async function login(email: string, password: string): Promise<void> {
   await flushQueue().catch(() => {});
 }
 
-export async function getMe(): Promise<User | null> {
+let meRequest: { token: string; user: Promise<User | null> } | null = null;
+
+/** The signed-in user, fetched once per access token. About twenty components each called
+ *  /auth/me on mount, so one page load sent twenty requests and, at token expiry, twenty refreshes.
+ *  A failed lookup is not kept, so the next caller retries. */
+export function getMe(): Promise<User | null> {
   const token = getToken();
-  if (!token) return null;
+  if (!token) return Promise.resolve(null);
+  if (meRequest?.token !== token) {
+    const user = fetchMe();
+    meRequest = { token, user };
+    void user.then((u) => {
+      if (!u && meRequest?.user === user) meRequest = null;
+    });
+  }
+  return meRequest.user;
+}
+
+async function fetchMe(): Promise<User | null> {
   try {
     const res = await fetchWithSession("/auth/me", { method: "GET" });
     if (!res.ok) return null;

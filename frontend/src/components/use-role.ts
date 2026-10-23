@@ -4,14 +4,13 @@ import { useEffect, useState } from "react";
 import { getMe } from "@/lib/auth";
 import type { Role, User } from "@/lib/types";
 
-// Dev-bypass default: with no token the backend treats the caller as an engineer,
-// so an unauthenticated demo session still sees engineer-level actions.
-export function useRole(): Role {
-  const [role, setRole] = useState<Role>("engineer");
+/** The signed-in role, or `null` until `/auth/me` answers. It used to start as "engineer", so a
+ *  field worker saw engineer controls flash on every page load. With no session at all (the
+ *  development bypass, which the backend treats as an engineer) it settles on "engineer". */
+export function useRole(): Role | null {
+  const [role, setRole] = useState<Role | null>(null);
   useEffect(() => {
-    getMe().then((u) => {
-      if (u?.role) setRole(u.role);
-    });
+    getMe().then((u) => setRole(u?.role ?? "engineer"));
   }, []);
   return role;
 }
@@ -48,8 +47,8 @@ export const ADMIN_VIEW_ROLES: Role[] = ["admin", "demo"];
 
 /** Does `role` get to SEE a control that `roles` may use? The demo account sees every control an
  *  admin sees, and `DemoGate` disables the few it cannot use. Use this for visibility, never for permission. */
-export function visibleTo(roles: Role[], role: Role): boolean {
-  return role === "demo" || roles.includes(role);
+export function visibleTo(roles: Role[], role: Role | null): boolean {
+  return role === "demo" || (role !== null && roles.includes(role));
 }
 
 /** True when the signed-in role is the demo identity. */

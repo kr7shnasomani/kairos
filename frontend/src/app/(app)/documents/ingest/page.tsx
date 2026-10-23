@@ -44,7 +44,7 @@ export default function IngestPage() {
 
   const canIngest = visibleTo(RESOLVE_ROLES, role);
   // Levels 1 to 3 need reliability or admin; the backend caps anyone else to 4, so do not offer them.
-  const canAssert = AUTHORITY_ASSERT_ROLES.includes(role);
+  const canAssert = role !== null && AUTHORITY_ASSERT_ROLES.includes(role);
   const levels = canAssert ? [1, 2, 3, 4, 5] : [4, 5];
   const level = levels.includes(Number(authority)) ? authority : "4";
 

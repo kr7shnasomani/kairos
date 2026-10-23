@@ -1,6 +1,7 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getElicitationQuestions } from "@/lib/api";
+import { getElicitationQuestions, submitElicitationResponses } from "@/lib/api";
+import { enqueueWrite } from "@/lib/idb";
 import ElicitationPage from "./page";
 
 vi.mock("next/navigation", () => ({ useParams: () => ({ workOrderId: "WO-118" }) }));
@@ -43,5 +44,32 @@ describe("ElicitationPage", () => {
     render(<ElicitationPage />);
     expect(await screen.findByText("No questions available")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  async function answerAndSubmit() {
+    render(<ElicitationPage />);
+    fireEvent.click(await screen.findByRole("radio", { name: /Noise/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+    fireEvent.change(await screen.findByRole("textbox"), { target: { value: "Seal weeping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit responses" }));
+  }
+
+  it("does not queue a submission the server rejected, and says so", async () => {
+    vi.mocked(enqueueWrite).mockClear();
+    vi.mocked(submitElicitationResponses).mockRejectedValueOnce(new Error("/elicitation/WO-118/responses → HTTP 422"));
+    await answerAndSubmit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/nothing was saved/);
+    expect(enqueueWrite).not.toHaveBeenCalled();
+    expect(screen.queryByText("Responses queued")).not.toBeInTheDocument();
+  });
+
+  it("queues the submission when the network is down", async () => {
+    vi.mocked(enqueueWrite).mockClear().mockResolvedValueOnce(undefined);
+    vi.mocked(submitElicitationResponses).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await answerAndSubmit();
+
+    expect(await screen.findByText("Responses queued")).toBeInTheDocument();
+    expect(enqueueWrite).toHaveBeenCalledOnce();
   });
 });

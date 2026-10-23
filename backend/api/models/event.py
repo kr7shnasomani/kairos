@@ -4,12 +4,18 @@ Pydantic models — Events (Layer 8: Operational Event Subscription)
 
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
 
 def _gen_event_id() -> str:
     return str(uuid.uuid4())
+
+
+# Free text lands in JSONB, the Redis stream and the brief prompt; only the 30 MB proxy cap bounded it.
+FreeText = Annotated[str, Field(max_length=4000)]
+OptionalFreeText = Annotated[str | None, Field(max_length=4000)]
 
 
 def _utc_now() -> datetime:
@@ -35,17 +41,17 @@ class WorkOrderEvent(BaseEvent):
     work_order_id: str
     asset_id: str
     failure_code: str
-    description: str
+    description: FreeText
     assigned_technician_id: str | None = None
     priority: str = Field(default="normal", description="critical, high, normal, low")
     planned_start: datetime | None = None
-    close_notes: str | None = None  # CMMS work order closeout notes — used by attribution worker
+    close_notes: OptionalFreeText = None  # CMMS work order closeout notes — used by attribution worker
     event_type: str = "work_order_created"
 
 
 class PTWEvent(BaseEvent):
     ptw_id: str
-    work_area: str
+    work_area: FreeText
     asset_ids: list[str] = Field(..., description="All assets within the isolation boundary")
     ptw_type: str = Field(..., description="isolation, hot_work, confined_space, high_pressure_line")
     issuing_engineer_id: str
@@ -63,7 +69,7 @@ class AlarmEvent(BaseEvent):
     alarm_id: str
     asset_id: str
     alarm_tag: str
-    alarm_description: str
+    alarm_description: FreeText
     severity: str = Field(..., description="critical, high, medium, low")
     acknowledged_by: str
     event_type: str = "alarm_acknowledged"
@@ -77,19 +83,19 @@ class EventAck(BaseModel):
     role: str | None = None
     acknowledged_at: datetime = Field(default_factory=_utc_now)
     signature: str | None = None
-    notes: str | None = None
+    notes: OptionalFreeText = None
 
 
 class DeviationFlagEvent(BaseModel):
     asset_id: str
-    description: str
-    affected_topology_path: str | None = None
+    description: FreeText
+    affected_topology_path: OptionalFreeText = None
 
 
 class DeviationFlagResolveRequest(BaseModel):
     resolution: str = Field(..., description="'promoted' or 'disputed'")
     moc_warranted: bool = False
-    notes: str | None = None
+    notes: OptionalFreeText = None
 
 
 class PlantStateEvent(BaseModel):
@@ -100,7 +106,7 @@ class PlantStateEvent(BaseModel):
 
 class TagOutEvent(BaseEvent):
     asset_id: str
-    tag_out_reason: str
+    tag_out_reason: FreeText
     performed_by: str | None = None  # source-system claim only; the audit actor is the token's user
     expected_return_date: datetime | None = None
     event_type: str = "equipment_tag_out"
@@ -111,7 +117,7 @@ class InspectionCompleteEvent(BaseEvent):
     inspection_type: str
     result: str = Field(..., description="passed, failed, conditional")
     performed_by: str | None = None  # source-system claim only; the audit actor is the token's user
-    findings: str = ""
+    findings: FreeText = ""
     document_id: str | None = None
     # A reporter may lower this (below 0.7 routes the finding to quarantine) but cannot raise the
     # evidence edge above INSPECTION_EVIDENCE_CONFIDENCE (routers/events.py).

@@ -42,7 +42,7 @@ describe("streamed answer text", () => {
     );
 
     expect(screen.queryByText(/probably about 16 bar/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Safety-critical query — refused/i)).toBeInTheDocument();
+    expect(screen.getByText(/Safety-critical query — sources returned directly/i)).toBeInTheDocument();
   });
 
   it("does not show streamed text alongside a completed answer", () => {
@@ -54,6 +54,27 @@ describe("streamed answer text", () => {
     );
 
     expect(screen.queryByText("Final governed ans")).not.toBeInTheDocument();
+  });
+});
+
+describe("source cards and refusal heading", () => {
+  afterEach(cleanup);
+
+  const src = (id: string) => ({ document_id: id, title: `Title ${id}`, authority_level: 3 as const, excerpt: "" });
+
+  it("numbers source cards in the order the model cites them", async () => {
+    render(<Answer data={{ ...base, answer: "See (Document 2).", confidence: 0.9, sources: [src("A"), src("B")] }} />);
+    screen.getByRole("button", { expanded: false }).click();
+
+    expect(await screen.findByText("Document 2")).toBeInTheDocument();
+    expect(screen.getByText("Document 2").nextElementSibling).toHaveTextContent("Title B");
+  });
+
+  it("renders a refusal through the shared RefusalCard with its reason", () => {
+    render(<Answer data={{ ...base, refused: true, safety_critical: true, refusal_reason: "No authoritative source." }} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Safety-critical query — sources returned directly");
+    expect(screen.getByText("No authoritative source.")).toBeInTheDocument();
   });
 });
 

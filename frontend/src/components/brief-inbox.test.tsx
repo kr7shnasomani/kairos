@@ -23,6 +23,18 @@ describe("BriefInbox", () => {
     expect(screen.getByText("2/8 governor")).toBeInTheDocument();
   });
 
+  it("says when the page holds fewer briefs than are pending", () => {
+    const brief = {
+      brief_id: "b-1", asset_id: "EQ-101", recipient_user_id: "u1", priority: "normal" as const,
+      trigger_event_type: "work_order_created", headline: "Seal check", body: "", action_items: [],
+      warnings: [], sources: [], requires_countersignature: false, delivery_frozen: false,
+      delivered_at: "2026-08-22T10:00:00Z",
+    } as BriefsResponse["briefs"][number];
+    render(<BriefInbox response={{ ...response, briefs: [brief], total_pending: 60 }} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Showing the 1 highest-priority briefs of 60");
+  });
+
   it("reserves warning colors for status that needs action", () => {
     render(<BriefInbox response={{
       ...response,

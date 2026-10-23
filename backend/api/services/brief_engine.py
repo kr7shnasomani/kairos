@@ -249,7 +249,7 @@ class BriefEngine:
     async def assemble_shift_handover_brief(self, event: ShiftHandoverEvent) -> Brief:
         open_wo_task = self._get_open_work_orders(event.site_id)
         active_alarms_task = self._get_active_alarms(event.site_id)
-        conflicts_task = self._get_open_conflicts(None)  # site-wide
+        conflicts_task = self._get_open_conflicts(None, plant_site=event.site_id)  # plant-wide
 
         results = await asyncio.gather(
             open_wo_task, active_alarms_task, conflicts_task, return_exceptions=True
@@ -258,7 +258,9 @@ class BriefEngine:
             r if not isinstance(r, Exception) else [] for r in results
         ]
 
-        warnings = [c["parameter"] for c in conflicts if isinstance(c, dict) and "parameter" in c]
+        # The count below is the full figure; the warnings list is capped so a plant with hundreds of
+        # open conflicts still produces a readable brief.
+        warnings = [c["parameter"] for c in conflicts if isinstance(c, dict) and "parameter" in c][:10]
 
         # Shift leads are auth user ids; a person's name is what a handover reads by.
         leads = (event.outgoing_shift_lead_id, event.incoming_shift_lead_id)
@@ -702,10 +704,16 @@ class BriefEngine:
         )
         return result.data or []
 
-    async def _get_open_conflicts(self, asset_id: str | None) -> list[dict[str, Any]]:
+    async def _get_open_conflicts(self, asset_id: str | None, plant_site: str | None = None) -> list[dict[str, Any]]:
         query = self.supabase.table("knowledge_conflicts").select("conflict_id, parameter, track, severity").in_("status", ["open", "pending_moc"])
         if asset_id:
             query = query.eq("asset_id", asset_id)
+        elif tenant.is_demo_site(plant_site):
+            # Plant-wide (shift handover): a showcase handover counts showcase conflicts only, and a
+            # real one never counts showcase rows. It used to count every conflict in the store.
+            query = query.like("asset_id", f"{tenant.DEMO_PREFIX}*")
+        else:
+            query = query.or_(f"asset_id.is.null,asset_id.not.like.{tenant.DEMO_PREFIX}*")
         result = await asyncio.to_thread(lambda: query.execute())
         return result.data or []
 

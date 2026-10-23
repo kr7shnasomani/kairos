@@ -75,3 +75,13 @@ def test_third_party_actions_are_pinned_to_commit_shas():
             if not re.fullmatch(r"[0-9a-f]{40}", m[2]):
                 loose.append(f"{f.name}: {m[1]}@{m[2]}")
     assert loose == []
+
+
+def test_the_service_free_list_is_the_same_in_ci_and_in_agents_md():
+    """The list is kept by hand in two places. It rotted once: eleven suites were documented as
+    CI-gated and never ran on a push (TESTS.md). Fails when one copy gains or loses a file."""
+    ci = set(re.findall(r"tests/(test_\w+)\.py", _read(".github/workflows/tests.yml").split("Run unit tests", 1)[1].split("- name:", 1)[0]))
+    brace = re.search(r"tests/test_\{([^}]*)\}\.py", _read("AGENTS.md"))
+    assert brace, "AGENTS.md no longer carries the service-free command"
+    documented = {f"test_{name}" for name in brace.group(1).split(",")}
+    assert ci == documented, f"only in CI: {sorted(ci - documented)}; only in AGENTS.md: {sorted(documented - ci)}"

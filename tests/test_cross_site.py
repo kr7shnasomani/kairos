@@ -51,3 +51,27 @@ def test_the_output_carries_no_free_text_or_person():
     out = find_patterns([wo, wo, _wo("B1", "SEAL-FAIL")], ASSETS)
     assert "Sharma" not in repr(out) and "u-1" not in repr(out)
     assert set(out[0]) == {"equipment_class", "failure_family", "kind", "total_events", "sites"}
+
+
+async def test_search_with_another_sites_asset_id_is_404_before_any_read(monkeypatch):
+    """`GET /search/?asset_id=` fed that asset straight to the graph arm, so a site-pinned role could
+    read another site's facts by naming the asset."""
+    import pytest
+    from fastapi import HTTPException
+
+    from api.config import settings
+    from api.routers import search as search_router
+    from api.services.graph import GraphService
+
+    async def _asset(self, asset_id):
+        return {"asset_id": asset_id, "site_id": "SITE_B"}
+
+    monkeypatch.setattr(GraphService, "get_asset", _asset)
+    monkeypatch.setattr(search_router, "SearchService", lambda **_k: pytest.fail("no search may run"))
+    with pytest.raises(HTTPException) as exc:
+        await search_router.search(
+            settings=settings, current_user={"user_id": "e-1", "role": "engineer", "site_id": "SITE_A"},
+            driver=None, qdrant=None, es=None, supabase=None, q="seal failures", asset_id="EQ-B-7",
+            authority_min=5, include_quarantine=False, as_of=None, limit=10,
+        )
+    assert exc.value.status_code == 404

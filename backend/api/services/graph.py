@@ -11,6 +11,7 @@ from neo4j import AsyncDriver
 
 from api.services.corpus import REAL_ASSET_CYPHER
 from api.services.tenant import DEMO_VISIBLE_CYPHER, SITE_PIN_CYPHER
+from api.services.timeline import as_utc
 
 log = structlog.get_logger(__name__)
 
@@ -550,16 +551,17 @@ class GraphService:
         cypher = f"""
         MATCH (src:{source_label} {{{src_field}: $source_id}})
         MATCH (tgt:{target_label} {{{tgt_field}: $target_id}})
-        CREATE (src)-[r:KNOWLEDGE_EDGE {{
-            edge_id: $edge_id,
-            relationship_type: $relationship_type,
-            valid_from: $valid_from,
-            valid_to: $valid_to,
-            authority_level: $authority_level,
-            document_id: $document_id,
-            confidence: $confidence,
-            verification_status: $verification_status
-        }}]->(tgt)
+        MERGE (src)-[r:KNOWLEDGE_EDGE {{edge_id: $edge_id}}]->(tgt)
+        // edge_id is deterministic, so a Temporal retry of the same write finds the edge instead of
+        // adding a duplicate. ON CREATE only: a retry must not reopen a window closed since.
+        ON CREATE SET
+            r.relationship_type = $relationship_type,
+            r.valid_from = $valid_from,
+            r.valid_to = $valid_to,
+            r.authority_level = $authority_level,
+            r.document_id = $document_id,
+            r.confidence = $confidence,
+            r.verification_status = $verification_status
         RETURN r.edge_id AS edge_id
         """
         async with self.driver.session(database=self.database) as session:
@@ -713,13 +715,15 @@ class GraphService:
         view is a network rather than a star. Every list is capped, because a hub asset would otherwise
         return hundreds of nodes. Neighbouring assets honour `hide_demo` like every other asset read.
         """
-        now = (as_of or datetime.now(UTC)).isoformat()
+        # UTC, compared as datetimes: an as_of with an offset (or none) compared as a string
+        # against stored `+00:00` values put the cut-off hours away from the moment asked for.
+        now = (as_utc(as_of) or datetime.now(UTC)).isoformat()
         asset_cypher = "MATCH (a:Asset {asset_id: $id}) RETURN a"
         parent_cypher = "MATCH (p:Asset)-[:PARENT_OF]->(a:Asset {asset_id: $id}) RETURN p LIMIT 1"
         children_cypher = "MATCH (a:Asset {asset_id: $id})-[:PARENT_OF]->(c:Asset) RETURN c ORDER BY c.asset_id LIMIT $n"
         documents_cypher = """
         MATCH (a:Asset {asset_id: $id})-[r:KNOWLEDGE_EDGE]->(d:Document)
-        WHERE r.valid_from <= $now AND (r.valid_to IS NULL OR r.valid_to > $now)
+        WHERE datetime(r.valid_from) <= datetime($now) AND (r.valid_to IS NULL OR datetime(r.valid_to) > datetime($now))
         WITH d, r ORDER BY r.authority_level ASC, r.valid_from DESC
         WITH d, head(collect(r)) AS r
         RETURN d, r ORDER BY r.authority_level ASC, r.valid_from DESC LIMIT $n
@@ -794,11 +798,12 @@ class GraphService:
         it needs `asset_id_unique` present, or this plans as a NodeByLabelScan
         over every Asset. See db/neo4j/init_schema.cypher.
         """
-        as_of_str = as_of.isoformat() if as_of else datetime.now(UTC).isoformat()
+        # Same UTC normalisation and datetime comparison as `get_asset_neighbourhood`.
+        as_of_str = (as_utc(as_of) or datetime.now(UTC)).isoformat()
         cypher = """
         MATCH (a:Asset {asset_id: $asset_id})-[r:KNOWLEDGE_EDGE]->(target)
-        WHERE r.valid_from <= $as_of
-          AND (r.valid_to IS NULL OR r.valid_to > $as_of)
+        WHERE datetime(r.valid_from) <= datetime($as_of)
+          AND (r.valid_to IS NULL OR datetime(r.valid_to) > datetime($as_of))
           AND r.authority_level <= $authority_min
         RETURN r, target
         ORDER BY r.authority_level ASC, r.valid_from DESC

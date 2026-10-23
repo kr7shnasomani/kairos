@@ -46,8 +46,25 @@ export async function enqueueWrite(path: string, method: string, body: unknown):
 // Bounded so one hung endpoint can't stall the whole sequential replay loop.
 const REPLAY_TIMEOUT_MS = 8000;
 
-export async function flushQueue(): Promise<{ replayed: number; failed: number }> {
-  if (typeof indexedDB === "undefined") return { replayed: 0, failed: 0 };
+export interface FlushResult {
+  replayed: number;
+  /** Still queued: network, 5xx or an unrefreshed 401. Retried on the next flush. */
+  failed: number;
+  /** Rejected by the server (4xx) and removed: never saved. The user must be told. */
+  rejected: number;
+}
+
+let flushInFlight: Promise<FlushResult> | null = null;
+
+/** Single-flight: login and every `online` event call this, and two overlapping flushes read the
+ *  same items and replayed each write twice. */
+export function flushQueue(): Promise<FlushResult> {
+  flushInFlight ??= flushOnce().finally(() => { flushInFlight = null; });
+  return flushInFlight;
+}
+
+async function flushOnce(): Promise<FlushResult> {
+  if (typeof indexedDB === "undefined") return { replayed: 0, failed: 0, rejected: 0 };
   const db = await open();
   try {
     const items = await new Promise<QueuedWrite[]>((res, rej) => {
@@ -78,9 +95,10 @@ export async function flushQueue(): Promise<{ replayed: number; failed: number }
 
     let replayed = 0;
     let failed = 0;
+    let rejected = 0;
     let refreshTried = false;
     // Nobody signed in: keep everything for whoever signs in next (their own entries only).
-    if (!getToken()) return { replayed, failed: items.length };
+    if (!getToken()) return { replayed, failed: items.length, rejected };
     const me = tokenUserId(getToken());
 
     for (const item of items) {
@@ -104,7 +122,7 @@ export async function flushQueue(): Promise<{ replayed: number; failed: number }
           // Client error: replaying the same payload can never succeed. Drop it so
           // one bad write can't poison the queue and inflate the badge forever.
           await remove(item.id!);
-          failed++;
+          rejected++;
         } else {
           failed++; // network/5xx/unrefreshed 401: keep for the next flush
         }
@@ -112,7 +130,7 @@ export async function flushQueue(): Promise<{ replayed: number; failed: number }
         failed++;
       }
     }
-    return { replayed, failed };
+    return { replayed, failed, rejected };
   } finally {
     db.close();
   }

@@ -29,6 +29,10 @@ CASES=(
   "compliance:read_events:true"           # ...and events, on the same page
   "compliance:read_governance:false"      # but NOT model gate / MoC / circuit breaker
   "compliance:read_documents:false"
+  "compliance:write_api:false"            # read-only: no deviation flags, elicitation or brief freezes
+  "compliance:synthesize:true"            # ...but the Copilot stays (it only appends to the audit log)
+  "compliance:answer_feedback:true"
+  "field_worker:write_api:true"           # the catch-all still serves every other role
   # --- staff -----------------------------------------------------------------
   "engineer:read_governance:true"
   "engineer:read_nonconformance:true"

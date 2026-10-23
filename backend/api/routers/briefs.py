@@ -17,6 +17,7 @@ from api.models.brief import BriefFeedback
 from api.services import tenant
 from api.services.event_bus import EventBusService
 from api.services.identity import display_names
+from api.services.metrics import governor_suppressed
 
 log = structlog.get_logger(__name__)
 
@@ -53,6 +54,7 @@ def page_inbox(
     governor_budget: int,
     plant_suppressed: bool,
     limit: int,
+    already_pushed: frozenset[str] | set[str] = frozenset(),
 ) -> dict:
     """
     Pure inbox paging: split, suppress, rank, trim. No I/O — the caller resolves
@@ -95,9 +97,14 @@ def page_inbox(
     elif normal:
         # Governor partial suppression: rank normal briefs and release only up to
         # `governor_budget` of them. When budget >= len(normal) all are released.
+        # A brief already pushed this hour was paid for when it was first delivered
+        # (`governor_budget` already excludes it), so it stays delivered: charging it
+        # again emptied the inbox on a page refresh once six briefs were out.
         ranked_normal = sorted(normal, key=_priority_rank)
-        deliverable = ranked_normal[:governor_budget]
-        held = ranked_normal[governor_budget:]
+        repeat = [b for b in ranked_normal if b["brief_id"] in already_pushed]
+        fresh = [b for b in ranked_normal if b["brief_id"] not in already_pushed]
+        deliverable = repeat + fresh[:governor_budget]
+        held = fresh[governor_budget:]
         if held:
             suppressed_count = len(held)
             suppressed_held = held[:limit]
@@ -217,12 +224,16 @@ async def get_my_briefs(
         governor_budget=gov["remaining_budget"],
         plant_suppressed=plant_suppressed,
         limit=limit,
+        already_pushed=await bus.pushed_brief_ids(user_id),
     )
     delivered = page["delivered"]
     frozen_page = page["frozen_page"]
     suppressed_count = page["suppressed_count"]
 
     if suppressed_count:
+        # The governor is applied here, at inbox read, so this is where the dashboard's
+        # `kairos_governor_suppressed_total` is counted (it used to sit in an uncalled helper).
+        governor_suppressed.add(suppressed_count, {"reason": "plant_state" if plant_suppressed else "rate_ceiling"})
         log.info(
             "governor.suppressed_briefs",
             user_id=user_id,
@@ -369,9 +380,16 @@ async def ack_brief(
     if not requires_cs:
         update["acknowledged_at"] = now
 
-    await asyncio.to_thread(
-        lambda: supabase.table("briefs").update(update).eq("brief_id", brief_id).execute()
+    # Conditional on the row still being unacknowledged: two concurrent acks both passed the check
+    # above, the second overwrote the first and both wrote a signed audit row.
+    won = await asyncio.to_thread(
+        lambda: supabase.table("briefs").update(update).eq("brief_id", brief_id)
+        .is_("acknowledged_by", "null").execute()
     )
+    if not won.data:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=f"Brief '{brief_id}' is already acknowledged."
+        )
     signature = _sign_acknowledgment(app_settings.APP_SECRET_KEY, brief_id, user_id, "acknowledged", now)
     await asyncio.to_thread(
         lambda: supabase.table("audit_log").insert({
@@ -460,13 +478,19 @@ async def countersign_brief(
                    "the acknowledging user cannot countersign their own brief.",
         )
 
-    await asyncio.to_thread(
+    # Conditional, like `ack`: a second concurrent countersign must not overwrite the first.
+    won = await asyncio.to_thread(
         lambda: supabase.table("briefs").update({
             "countersigned_by": user_id,
             "countersigned_at": now,
             "acknowledged_at": now,  # both signatures now present
-        }).eq("brief_id", brief_id).execute()
+        }).eq("brief_id", brief_id).is_("countersigned_by", "null").execute()
     )
+    if not won.data:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Brief '{brief_id}' is already countersigned.",
+        )
     countersignature = _sign_acknowledgment(
         app_settings.APP_SECRET_KEY, brief_id, user_id, "countersigned", now
     )

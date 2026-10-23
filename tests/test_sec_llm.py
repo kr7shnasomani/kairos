@@ -386,6 +386,15 @@ def test_alias_named_asset_is_not_cleared_by_the_top_ranked_other_asset():
     assert llm.evidence_gate("torque for Feed Pump A", ctx, "torque_specification") is None
 
 
+def test_refusal_names_missing_confidence_instead_of_printing_zero():
+    llm = LLMService(settings)
+    unscored = llm.evidence_gate("torque for P-101", [_ev("P-101", 5, 0.05)], "torque_specification")
+    assert "no confidence score" in unscored["refusal_reason"]
+    assert "0.00" not in unscored["refusal_reason"]
+    scored = llm.evidence_gate("torque for P-101", [_ev("P-101", 5, 0.05, 0.4)], "torque_specification")
+    assert "best 0.40" in scored["refusal_reason"]
+
+
 # =============================================================================
 # M8: RCA pack site scope
 # =============================================================================
@@ -550,3 +559,8 @@ def test_a_drafted_change_keeps_only_real_citations_and_affected_documents():
 
 def test_an_unreadable_draft_is_none():
     assert parse_draft("Here is the redline you asked for", {"A"}, {"A"}) is None
+
+
+def test_a_document_revision_is_not_read_as_an_asset_tag():
+    """"REV-01" fits the tag shape; read as an asset, no evidence could vouch for it and the gate refused."""
+    assert query_asset_tags("torque for P-101 per SOP-114 REV-01") == {"P-101"}

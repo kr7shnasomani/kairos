@@ -29,6 +29,7 @@ from api.models.document import (
     SynthesizeRequest,
     SynthesizeResponse,
 )
+from api.routers.assets import scoped_asset
 from api.services import tenant
 from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.graph import GraphService
@@ -130,6 +131,11 @@ async def search(
         as_of_dt = datetime.fromisoformat(as_of) if as_of else None
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="as_of must be an ISO8601 timestamp") from exc
+    if asset_id:
+        # The graph arm reads that asset's facts directly, so the asset must be one the caller may see:
+        # a site-pinned role could otherwise read another site's (or, with the showcase hidden, the
+        # showcase plant's) graph by naming it. Same 404 as every asset route.
+        await scoped_asset(GraphService(driver, settings.NEO4J_DATABASE), asset_id, current_user)
 
     svc = SearchService(
         graph=GraphService(driver, settings.NEO4J_DATABASE),
@@ -382,7 +388,8 @@ def _synthesis_payload(result: dict, category: str | None) -> dict:
     return {
         "answer": parsed.get("answer") or result.get("answer"),
         "sources": sources,
-        "confidence": parsed.get("confidence") or result.get("confidence"),
+        # `is not None`, not `or`: a parsed confidence of 0.0 is a real score, not a missing one.
+        "confidence": parsed["confidence"] if parsed.get("confidence") is not None else result.get("confidence"),
         "refused": bool(result.get("refused")),
         "refusal_reason": result.get("refusal_reason"),
         "safety_critical": category in SAFETY_CRITICAL_CATEGORIES if category else False,
@@ -499,11 +506,14 @@ async def synthesize_stream(
     def _sse(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
+    # Before the response starts: a 422 or 500 from retrieval must be a real HTTP status. Inside the
+    # generator it arrived as HTTP 200 plus an `error` frame, after the headers were already sent.
+    evidence, category, aliases = await _server_evidence(
+        payload, settings, supabase, driver, qdrant, es, include_demo=tenant.sees_showcase(current_user)
+    )
+
     async def _events():
         try:
-            evidence, category, aliases = await _server_evidence(
-                payload, settings, supabase, driver, qdrant, es, include_demo=tenant.sees_showcase(current_user)
-            )
             # The phase gate is repeated rather than shared with `synthesize()` because that handler
             # returns a response model and this one returns a byte stream; the *condition* is one
             # line and the divergence risk is lower than the coupling would be.

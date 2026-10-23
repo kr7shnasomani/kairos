@@ -96,7 +96,7 @@ Exchange email + password for a JWT pair.
 }
 ```
 
-**Errors:** `401` invalid credentials (the same generic `Invalid credentials` whether the account exists or not; the upstream reason is logged, never returned), `400` malformed payload
+**Errors:** `401` invalid credentials (the same generic `Invalid credentials` whether the account exists or not; the upstream reason is logged, never returned), `429` after 5 failed attempts for one account or 20 from one IP within 15 minutes (`services/login_throttle.py`; fails open if Redis is down; a success clears the account's count), `400` malformed payload
 
 > **Critical:** This handler uses a fresh anon Supabase client (never the service-role client). Using the service-role client for auth operations contaminates its session and causes RLS violations on all subsequent table writes.
 
@@ -563,7 +563,7 @@ disposable.
 **Query params:**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `as_of` | ISO8601 datetime | `now` | Time-travel: return facts valid at this timestamp |
+| `as_of` | ISO8601 datetime | `now` | Time-travel: return facts valid at this timestamp. An offset is honoured and a naive value is read as UTC |
 | `include_test_data` | bool | `false` | Include facts whose source document is a test artifact |
 
 **Response `200`:**
@@ -1249,7 +1249,7 @@ answer-quality figure attached, so this adds a surface instead of altering one.
 | `delta` | A chunk of answer text — `{"text": "…"}`. **Never sent for a safety-critical category.** |
 | `restart` | Discard everything received so far. The answer was re-synthesized by the fallback cascade; concatenating would splice two different answers. |
 | `done` | Terminal, always sent. Same fields as `POST /search/synthesize`. |
-| `error` | Terminal, only on unexpected failure. |
+| `error` | Terminal, only on an unexpected failure during synthesis. Retrieval runs before the response starts, so a retrieval error (a bad `as_of` is `422`) is a real HTTP status, never a 200 with an `error` frame. |
 
 > **`done` is authoritative; `delta` text is provisional.** `CONFIDENCE:` arrives *after* `ANSWER:`,
 > and the post-synthesis safety gate can convert a finished answer into a refusal based on it. The
@@ -1803,7 +1803,7 @@ Operator intelligence briefs assembled from 5 parallel queries (Neo4j graph + Qd
 
 ### `GET /briefs/`
 
-Get pending briefs for the current user. Also returns site-wide briefs. Calls `record_push` per returned brief (counts against governor).
+Get pending briefs for the current user. Also returns site-wide briefs. Counts each newly delivered brief once against the governor (`record_push_once`); a brief already pushed in the rolling hour stays delivered on the next read without spending budget again, so a page refresh never empties the inbox.
 
 Scoped by recipient, **with no role override**: an admin sees only briefs addressed to them or to `site-{site_id}`. The demo loader addresses its briefs to `engineer@`, `reliability@` and `field_worker@`, so an admin login shows an empty list; that is the scoping working, not missing data.
 
@@ -1857,7 +1857,7 @@ Scoped by recipient, **with no role override**: an admin sees only briefs addres
 ```
 
 **Suppression rules (in priority order):**
-1. **EEMUA 191 governor:** If `push_count_last_hour >= ceiling`, all non-critical briefs suppressed.
+1. **EEMUA 191 governor:** Non-critical briefs not yet pushed this hour are delivered up to the remaining budget (`ceiling - push_count_last_hour`) and the rest are held. Briefs already pushed this hour are always delivered.
 2. **Plant state gate:** If plant state for the user's `site_id` is `turnaround`, `shutdown`, or `emergency`, non-critical briefs suppressed. Critical (PTW) briefs always pass.
 3. **Frozen briefs:** Briefs with `delivery_frozen=true` (set by deviation flag) are included with `frozen=true` and `freeze_reason` but excluded from governor push counting.
 
@@ -1917,7 +1917,7 @@ For PTW briefs (`requires_countersignature: true`) this records the **first** si
 `acknowledged_at` is deliberately left null and the response status is `pending_countersignature` —
 the brief is not complete until a second, distinct authority countersigns (see below).
 
-**An acknowledgement is final.** A second `POST /briefs/{brief_id}/ack` on an already acknowledged brief is **`409`** `Brief '<id>' is already acknowledged.` Re-acking used to overwrite `acknowledged_by` (for a PTW, swapping the acknowledger the countersigner is checked against) and replace the signed audit row.
+**An acknowledgement is final.** A second `POST /briefs/{brief_id}/ack` on an already acknowledged brief is **`409`** `Brief '<id>' is already acknowledged.` Re-acking used to overwrite `acknowledged_by` (for a PTW, swapping the acknowledger the countersigner is checked against) and replace the signed audit row. The write is conditional on `acknowledged_by` still being null, so of two concurrent acks exactly one wins and the other gets the same `409` with no audit row; `countersign` is conditional on `countersigned_by` the same way.
 
 **Response `200`:**
 ```json
@@ -2206,7 +2206,7 @@ Layer 6's fourth review action — a reviewer asks for clarification instead of 
 
 ### `GET /governance/sla-report`
 
-SLA escalation report for all overdue conflicts and quarantine items. Runs lazy escalation then returns full overdue inventory.
+SLA escalation report for all overdue conflicts and quarantine items. Runs lazy escalation then returns full overdue inventory. Escalation is one conditional batch update per table with audit rows only for the rows it changed, so overlapping reads escalate a row once.
 
 **Auth required:** Yes
 
@@ -3340,10 +3340,10 @@ curl http://localhost:8000/assets/P-101
 | `field_worker` | Read search, read briefs, ack briefs, flag deviations, read plant state. **403 on audit-log, compliance, governance, documents, the events feed and every event-ingest route** |
 | `engineer` | Above + ingest documents and events (`ingest_event`), write assets, read/resolve governance, read documents + events + audit + compliance, start offboarding |
 | `reliability` | Engineer's reads and ingests + promote quarantine, countersign briefs, assert authority 1 to 3 at ingest, supersede authority 1 to 3 documents (no asset write) |
-| `compliance` | Read search, compliance, audit, non-conformance (conflicts + quarantine) and events. **Not** the model gate, MoC, circuit breaker or documents |
+| `compliance` | Read search, compliance, audit, non-conformance (conflicts + quarantine) and events, and use the Copilot. **Read-only:** no generic write (`write_api`), so no deviation flags, elicitation or brief freezes. **Not** the model gate, MoC, circuit breaker or documents |
 | `admin` | Everything, including the cross-site view |
 
-Verify the policy's decisions with `tools/verify_authz_policy.sh` (39 cases against a throwaway
+Verify the policy's decisions with `tools/verify_authz_policy.sh` (67 cases against a throwaway
 OPA, safe to run while the stack is up). That checks the policy is *correct*; to check it is
 *reached*, probe the live API with a restricted persona and confirm a 403 —
 `curl -H "Authorization: Bearer $FIELD_TOKEN" localhost:8000/audit-log/` must not return 200.

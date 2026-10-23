@@ -182,6 +182,14 @@ def test_store_event_accepts_an_identical_retry():
     asyncio.run(events_router._store_event(db, _event_row(received_at="later")))  # same event, a retry
 
 
+def test_store_event_accepts_a_retry_whose_payload_has_a_new_received_at():
+    """`received_at` lives in the payload and is stamped per request, so every honest retry differed."""
+    db = _EventsDB()
+    asyncio.run(events_router._store_event(db, _event_row(payload={"work_order_id": "WO-1", "received_at": "t1"})))
+    asyncio.run(events_router._store_event(db, _event_row(payload={"work_order_id": "WO-1", "received_at": "t2"})))
+    assert db.rows["ev-1"]["payload"]["received_at"] == "t1"
+
+
 def test_store_event_refuses_to_overwrite_another_event_and_changes_nothing():
     import pytest
     from fastapi import HTTPException

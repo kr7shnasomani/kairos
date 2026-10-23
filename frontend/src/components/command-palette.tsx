@@ -59,6 +59,9 @@ function PaletteDialog({ onClose, items }: { onClose: () => void; items: Palette
     else if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
     else if (e.key === "Enter" && results[active]) { e.preventDefault(); run(results[active]); }
+    // Focus trap: a modal combobox keeps focus in its input (arrows move the selection), so Tab
+    // must not walk out of the dialog into the page behind it.
+    else if (e.key === "Tab") e.preventDefault();
   }
 
   let lastGroup = "";

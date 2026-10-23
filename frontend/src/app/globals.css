@@ -681,6 +681,13 @@ button:not(:disabled),
     overflow: hidden;
     isolation: isolate;
   }
+  /* Button's default size. Layered below utilities so a call-site `h-7 px-2.5` or `size-11 p-0`
+     wins: as utilities, Tailwind emits heights and paddings by value, so any override smaller
+     than h-9 / px-3.5 silently lost to the default. */
+  .button-size {
+    height: calc(var(--spacing) * 9);
+    padding-inline: calc(var(--spacing) * 3.5);
+  }
 }
 @media (hover: hover) {
   .fill-sweep::after {

@@ -34,34 +34,17 @@ class SLAService:
             .neq("status", "resolved")
             .execute()
         )
-        conflict_rows = overdue_conflicts.data or []
+        # One conditional batch update per table, and audit rows only for what that update changed.
+        # It ran one update and one audit insert per row, on every list GET, so two concurrent reads
+        # escalated the same row twice and wrote two audit rows for it.
+        conflict_rows = await _escalate(
+            supabase, "knowledge_conflicts", "conflict_id", overdue_conflicts.data or [],
+            {"escalated_at": now, "escalated_to": _ESCALATION_ROLE},
+        )
+        await _audit(supabase, "knowledge_conflict", "conflict_id", conflict_rows, lambda r: {
+            "track": r["track"], "asset_id": r["asset_id"], "sla_deadline": r["sla_deadline"],
+        })
 
-        for row in conflict_rows:
-            cid = row["conflict_id"]
-            await asyncio.to_thread(
-                lambda r=row: supabase.table("knowledge_conflicts").update({
-                    "escalated_at": now,
-                    "escalated_to": _ESCALATION_ROLE,
-                }).eq("conflict_id", r["conflict_id"]).execute()
-            )
-            await asyncio.to_thread(
-                lambda r=row: supabase.table("audit_log").insert({
-                    "action": "sla_escalated",
-                    "entity_type": "knowledge_conflict",
-                    "entity_id": r["conflict_id"],
-                    "performed_by": "system",
-                    "details": {
-                        "track": r["track"],
-                        "asset_id": r["asset_id"],
-                        "sla_deadline": r["sla_deadline"],
-                        "escalated_to": _ESCALATION_ROLE,
-                        **tenant.audit_marker(r["asset_id"]),
-                    },
-                }).execute()
-            )
-            log.info("sla.conflict_escalated", conflict_id=cid, track=row["track"])
-
-        # --- quarantine_items overdue ---
         overdue_quarantine = await asyncio.to_thread(
             lambda: supabase.table("quarantine_items")
             .select("item_id, asset_id, input_type, sla_due_at")
@@ -70,33 +53,41 @@ class SLAService:
             .eq("review_status", "pending")
             .execute()
         )
-        quarantine_rows = overdue_quarantine.data or []
-
-        for row in quarantine_rows:
-            await asyncio.to_thread(
-                lambda r=row: supabase.table("quarantine_items").update({
-                    "escalated_at": now,
-                }).eq("item_id", r["item_id"]).execute()
-            )
-            await asyncio.to_thread(
-                lambda r=row: supabase.table("audit_log").insert({
-                    "action": "sla_escalated",
-                    "entity_type": "quarantine_item",
-                    "entity_id": r["item_id"],
-                    "performed_by": "system",
-                    "details": {
-                        "asset_id": r["asset_id"],
-                        "input_type": r["input_type"],
-                        "sla_due_at": r["sla_due_at"],
-                        "escalated_to": _ESCALATION_ROLE,
-                        **tenant.audit_marker(r["asset_id"]),
-                    },
-                }).execute()
-            )
-            log.info("sla.quarantine_escalated", item_id=row["item_id"])
+        quarantine_rows = await _escalate(
+            supabase, "quarantine_items", "item_id", overdue_quarantine.data or [], {"escalated_at": now},
+        )
+        await _audit(supabase, "quarantine_item", "item_id", quarantine_rows, lambda r: {
+            "asset_id": r["asset_id"], "input_type": r["input_type"], "sla_due_at": r["sla_due_at"],
+        })
 
         return {
             "conflicts_escalated": len(conflict_rows),
             "quarantine_escalated": len(quarantine_rows),
             "checked_at": now,
         }
+
+
+async def _escalate(supabase, table: str, key: str, rows: list[dict], values: dict) -> list[dict]:
+    """Mark `rows` escalated in one update, only where still unescalated. Returns the rows it changed."""
+    import asyncio
+    if not rows:
+        return []
+    by_id = {r[key]: r for r in rows}
+    changed = await asyncio.to_thread(
+        lambda: supabase.table(table).update(values).in_(key, list(by_id)).is_("escalated_at", "null").execute()
+    )
+    return [by_id[r[key]] for r in (changed.data or []) if r.get(key) in by_id]
+
+
+async def _audit(supabase, entity_type: str, key: str, rows: list[dict], details) -> None:
+    import asyncio
+    if not rows:
+        return
+    await asyncio.to_thread(lambda: supabase.table("audit_log").insert([{
+        "action": "sla_escalated",
+        "entity_type": entity_type,
+        "entity_id": r[key],
+        "performed_by": "system",
+        "details": {**details(r), "escalated_to": _ESCALATION_ROLE, **tenant.audit_marker(r["asset_id"])},
+    } for r in rows]).execute())
+    log.info("sla.escalated", entity_type=entity_type, count=len(rows))

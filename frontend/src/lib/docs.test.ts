@@ -11,7 +11,7 @@ beforeEach(() => {
   process.env.KAIROS_DOCS_DIR = dir;
   mkdirSync(path.join(dir, "implementation"));
   writeFileSync(path.join(dir, "API.md"), "# API\n\nSign in as admin@kairos.local with the key kairos-internal-dev-key.\n");
-  writeFileSync(path.join(dir, "DEPLOY.md"), "# Deployment\n\nssh ubuntu@3.7.186.159\n");
+  writeFileSync(path.join(dir, "DEPLOY.md"), "# Deployment\n\nssh ubuntu@203.0.113.7\n");
   writeFileSync(path.join(dir, "implementation", "status.md"), "# Status\n");
   writeFileSync(path.join(dir, "zzz-new.md"), "# A new document\n");
   writeFileSync(path.join(dir, "notes.txt"), "not markdown");
@@ -42,9 +42,11 @@ describe("docs", () => {
     expect(getDoc("status")).toBeNull();
   });
 
+  // Made-up values in the patterns' shapes (203.0.113.0/24 is the documentation range): the real
+  // EC2 address, instance id and Vercel project id used to sit here in a public repo.
   it("redacts hostnames, addresses and cloud identifiers", async () => {
     const { redact } = await import("./docs");
-    const text = redact("api kairos-deterium.duckdns.org web kairos-deterium.vercel.app 3.7.186.159 and 127.0.0.1 i-012800d81f549557b prj_4XwxHOCZDI4Ioir6XEj4pubr3zhC");
+    const text = redact("api example-api.duckdns.org web example-web.vercel.app 203.0.113.7 and 127.0.0.1 i-0123456789abcdef0 prj_ExampleProjectId0000000000");
     expect(text).toBe("api <api-host> web <web-host> <ip> and 127.0.0.1 <instance-id> <vercel-id>");
   });
 

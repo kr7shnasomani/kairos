@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { getArtifactUrl, submitAnswerFeedback } from "@/lib/api";
 import { META_MODEL, type CopilotAnswer } from "@/lib/copilot";
-import { AuthorityBadge, SourceChip, StatusBadge, ConfidenceMeter } from "@/components/ui";
+import { AuthorityBadge, ConfidenceMeter, RefusalCard, SourceChip, StatusBadge } from "@/components/ui";
 import { cn, providerName } from "@/lib/utils";
 
 import { Icon } from "@/components/icon";
@@ -185,29 +185,11 @@ export function Answer({ data, query = "", streaming }: {
         </div>
       )}
 
-      {/* Safety-critical refusal — no synthesized prose, sources returned directly */}
+      {/* Safety-critical refusal: the one shared RefusalCard, never a copilot-local variant. The
+          backend refuses only safety-critical categories, so its heading always applies. The
+          sources render below, collapsed, under "verify directly". */}
       {data.refused ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-[color-mix(in_srgb,var(--danger)_35%,var(--line))] bg-[color-mix(in_srgb,var(--danger)_8%,var(--surface))] p-3.5"
-        >
-          <div className="flex items-start gap-2.5">
-            <Icon name="warning" className="mt-0.5 size-4 shrink-0 text-danger" />
-            <div>
-              <p className="text-body font-semibold text-danger">
-                Safety-critical query — refused
-              </p>
-              {data.refusal_reason && (
-                <p className="mt-1 text-caption leading-relaxed text-muted">
-                  {data.refusal_reason}
-                </p>
-              )}
-              <p className="mt-2 text-caption text-muted">
-                Confirm the value directly with the responsible engineer before acting.
-              </p>
-            </div>
-          </div>
-        </div>
+        <RefusalCard reason={data.refusal_reason} escalateTo="the responsible engineer, before acting" />
       ) : data.is_synthesizing ? (
         /* Streamed text while synthesis is still running. Deliberately styled as in-progress,
            not as an answer: the safety gate can still replace the whole thing with a refusal,
@@ -271,12 +253,15 @@ export function Answer({ data, query = "", streaming }: {
           </button>
           {sourcesOpen && (
           <div className="mt-2 space-y-2">
-            {data.sources.map((s) => (
+            {/* Numbered in the order the backend sent them, which is the `<document index>` order the
+                model cites by, so "(Document 4)" in the answer is the fourth card. */}
+            {data.sources.map((s, i) => (
               <div
                 key={s.document_id}
                 className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2 p-3"
               >
                 <div className="flex flex-wrap items-center gap-2">
+                  <span className="tabular text-label font-semibold text-muted">Document {i + 1}</span>
                   <span className="text-body font-semibold">{s.title}</span>
                   <AuthorityBadge level={s.authority_level} />
                   {s.is_quarantine && <StatusBadge tone="caution">Unverified</StatusBadge>}

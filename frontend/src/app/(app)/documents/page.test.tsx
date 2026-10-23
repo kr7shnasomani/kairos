@@ -50,7 +50,8 @@ describe("DocumentsPage", () => {
 
     expect(screen.getByTestId("documents-summary")).toHaveTextContent("Active");
     expect(screen.getByText("2 linked assets")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ingest document" })).toHaveAttribute("href", "/documents/ingest");
+    // The action renders once the role has loaded (no session here, so it settles on engineer).
+    expect(await screen.findByRole("link", { name: "Ingest document" })).toHaveAttribute("href", "/documents/ingest");
 
     fireEvent.click(screen.getByRole("button", { name: /Superseded/ }));
     await waitFor(() => expect(screen.queryByText("file-1.pdf")).not.toBeInTheDocument());
@@ -105,7 +106,7 @@ describe("DocumentsPage", () => {
 
     render(await open());
 
-    expect(screen.getByText("2026-07-12 10:00:00")).toBeInTheDocument();
+    expect(screen.getByText("2026-07-12 10:00:00 UTC")).toBeInTheDocument();
   });
 
   it("does not render the raw ingested_by UUID", async () => {

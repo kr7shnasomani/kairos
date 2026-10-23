@@ -28,7 +28,7 @@ export function SupersedeAction({ documentId, assetId }: { documentId: string; a
 
   if (!visibleTo(RESOLVE_ROLES, role)) return null;
   // Levels 1 to 3 need reliability or admin; the backend caps anyone else to 4 at ingest.
-  const levels = AUTHORITY_ASSERT_ROLES.includes(role) ? [1, 2, 3, 4, 5] : [4, 5];
+  const levels = role !== null && AUTHORITY_ASSERT_ROLES.includes(role) ? [1, 2, 3, 4, 5] : [4, 5];
   const level = levels.includes(authority) ? authority : 4;
 
   async function handleSubmit(e: React.FormEvent) {

@@ -22,10 +22,16 @@ class _Result:
     async def single(self):
         return self._record
 
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
 
 class _Session:
-    def __init__(self, record, seen):
-        self._record, self._seen = record, seen
+    def __init__(self, record, seen, params=None):
+        self._record, self._seen, self._params = record, seen, params if params is not None else []
 
     async def __aenter__(self):
         return self
@@ -35,15 +41,16 @@ class _Session:
 
     async def run(self, cypher, **params):
         self._seen.append(cypher)
+        self._params.append(params)
         return _Result(self._record)
 
 
 class _Driver:
     def __init__(self, record=None):
-        self.record, self.seen = record, []
+        self.record, self.seen, self.params = record, [], []
 
     def session(self, **_k):
-        return _Session(self.record, self.seen)
+        return _Session(self.record, self.seen, self.params)
 
 
 def test_last_inspection_query_matches_the_knowledge_edge_property_not_a_relationship_type():
@@ -58,6 +65,38 @@ def test_last_inspection_query_matches_the_knowledge_edge_property_not_a_relatio
     # `[r:INSPECTION_RECORD]` pattern matches no edge, so the field was always null.
     assert "[r:KNOWLEDGE_EDGE {relationship_type: 'INSPECTION_RECORD'}]" in cypher
     assert "[r:INSPECTION_RECORD]" not in cypher
+
+
+# --- 2026-10-22 review: edge retries and time travel ----------------------------------------------
+
+
+def test_knowledge_edge_write_is_idempotent_on_edge_id():
+    from api.services.graph import GraphService
+
+    driver = _Driver()
+    asyncio.run(GraphService(driver, "neo4j").create_knowledge_edge(
+        "EQ-101", "Asset", "DOC-1", "Document", "DOCUMENTED_BY",
+        valid_from=datetime(2026, 1, 1, tzinfo=UTC), authority_level=3, document_id="DOC-1", confidence=0.9,
+    ))
+
+    write = driver.seen[-1]
+    # A Temporal retry re-runs the same write; CREATE added a second copy of the edge every time.
+    assert "MERGE (src)-[r:KNOWLEDGE_EDGE {edge_id: $edge_id}]->(tgt)" in write
+    assert "CREATE (src)" not in write
+    for prop in ("valid_from", "valid_to", "authority_level", "document_id", "confidence", "verification_status"):
+        assert f"r.{prop} = ${prop}" in write
+
+
+def test_time_travel_cutoff_is_the_same_instant_whatever_the_offset():
+    from api.services.graph import GraphService
+
+    driver = _Driver()
+    graph = GraphService(driver, "neo4j")
+    asyncio.run(graph.get_asset_knowledge_at("EQ-101", as_of=datetime.fromisoformat("2026-05-01T10:00:00+05:30")))
+    asyncio.run(graph.get_asset_knowledge_at("EQ-101", as_of=datetime.fromisoformat("2026-05-01T04:30:00")))
+
+    assert driver.params[0]["as_of"] == driver.params[1]["as_of"] == "2026-05-01T04:30:00+00:00"
+    assert "datetime(r.valid_from) <= datetime($as_of)" in driver.seen[0]
 
 
 def test_last_inspection_is_none_when_there_is_no_record():
@@ -322,3 +361,100 @@ def test_run_with_client_closes_the_shared_client_even_when_the_task_fails():
         assert http.run_with_client(asyncio.sleep(0, result=7)) == 7
     finally:
         http.close_shared_client = original
+
+
+def test_pipeline_quarantine_row_is_inserted_once_across_retries():
+    from workflows.document_pipeline import _quarantine_once
+
+    rows: list[dict] = []
+
+    class _Q:
+        def __init__(self):
+            self.filters: dict = {}
+
+        def select(self, *_a):
+            return self
+
+        def eq(self, col, val):
+            self.filters[col] = val
+            return self
+
+        def limit(self, _n):
+            return self
+
+        def insert(self, row):
+            self.row = row
+            return self
+
+        def execute(self):
+            if hasattr(self, "row"):
+                rows.append(self.row)
+                return SimpleNamespace(data=[self.row])
+            hit = [r for r in rows if r["content"] == self.filters["content"]
+                   and r["session_context"].get("source_document_id") == self.filters["session_context->>source_document_id"]]
+            return SimpleNamespace(data=hit)
+
+    sb = SimpleNamespace(table=lambda _n: _Q())
+    row = {"content": "PID element: XV-1 (valve)", "session_context": {"source_document_id": "D-1"}}
+    # A Temporal retry re-runs the activity; the second attempt must not add a second review item.
+    assert asyncio.run(_quarantine_once(sb, row, "source_document_id", "D-1")) is True
+    assert asyncio.run(_quarantine_once(sb, row, "source_document_id", "D-1")) is False
+    assert len(rows) == 1
+
+
+def test_sla_escalation_runs_once_per_row_even_when_two_reads_overlap():
+    from api.services.sla_service import SLAService
+
+    conflicts = {"C-1": {"conflict_id": "C-1", "track": "engineering", "asset_id": "EQ-101",
+                         "sla_deadline": "2026-01-01T00:00:00+00:00", "status": "open", "escalated_at": None}}
+    audits: list = []
+
+    class _T:
+        def __init__(self, name):
+            self.name, self.op, self.values, self.ids = name, "select", None, None
+
+        def select(self, *_a):
+            return self
+
+        def lt(self, *_a):
+            return self
+
+        def neq(self, *_a):
+            return self
+
+        def eq(self, *_a):
+            return self
+
+        def is_(self, *_a):
+            return self
+
+        def in_(self, _col, ids):
+            self.ids = ids
+            return self
+
+        def update(self, values):
+            self.op, self.values = "update", values
+            return self
+
+        def insert(self, rows):
+            self.op = "insert"
+            audits.extend(rows if isinstance(rows, list) else [rows])
+            return self
+
+        def execute(self):
+            if self.name != "knowledge_conflicts" or self.op == "insert":
+                return SimpleNamespace(data=[])
+            pending = [r for r in conflicts.values() if r["escalated_at"] is None]
+            if self.op == "select":
+                return SimpleNamespace(data=[dict(r) for r in pending])
+            hit = [r for r in pending if r["conflict_id"] in self.ids]
+            for r in hit:
+                r.update(self.values)
+            return SimpleNamespace(data=[dict(r) for r in hit])
+
+    sb = SimpleNamespace(table=lambda n: _T(n))
+    first = asyncio.run(SLAService.check_and_escalate(sb))
+    second = asyncio.run(SLAService.check_and_escalate(sb))
+
+    assert first["conflicts_escalated"] == 1 and second["conflicts_escalated"] == 0
+    assert [a["entity_id"] for a in audits] == ["C-1"]

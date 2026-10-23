@@ -512,3 +512,59 @@ def test_names_first_mentioned_late_in_a_long_document_are_masked():
 def test_operational_content_is_still_untouched():
     text = "Pump EQ-101 seal P/N MS-4471-B per OISD-117. Engineer: signoff required. Valve XV-203, loop 1234-56."
     assert PIIService().redact(text)["redacted_text"] == text
+
+
+def test_voice_note_content_type_is_allow_listed():
+    from api.routers.elicitation import _audio_type
+
+    assert _audio_type("audio/webm;codecs=opus") == "audio/webm"
+    assert _audio_type("text/html") == "application/octet-stream"
+    assert _audio_type(None) == "application/octet-stream"
+
+
+def test_event_free_text_is_bounded():
+    import pytest
+    from pydantic import ValidationError
+
+    from api.models.event import WorkOrderEvent
+
+    base = dict(source_system="SAP_PM", site_id="SITE_001", work_order_id="WO-1", asset_id="EQ-101", failure_code="SEAL")
+    WorkOrderEvent(**base, description="x" * 4000)
+    with pytest.raises(ValidationError):
+        WorkOrderEvent(**base, description="x" * 4001)
+
+
+async def test_a_duplicate_upload_does_not_name_another_sites_document():
+    """The same bytes uploaded on site A returned site B's document id: an existence oracle."""
+    import io
+    from types import SimpleNamespace
+
+    from fastapi import UploadFile
+
+    from api.routers import documents as documents_router
+
+    stored = {"document_id": "DOC-SITE-B", "sha256_hash": "x", "status": "active", "access_tags": {"site_id": "SITE_B"}}
+
+    class _Q:
+        def select(self, *_a):
+            return self
+
+        def eq(self, *_a):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[stored])
+
+    sb = SimpleNamespace(table=lambda _n: _Q())
+
+    async def upload(user):
+        return await documents_router.ingest_document(
+            current_user=user, supabase=sb, temporal=None,
+            file=UploadFile(io.BytesIO(b"%PDF-1.4 same bytes"), filename="a.pdf"),
+            asset_id=None, document_type="procedure", source_system="manual_upload", authority_level=4, occurred_at=None,
+        )
+
+    other = await upload({"user_id": "e-a", "role": "engineer", "site_id": "SITE_A"})
+    same = await upload({"user_id": "e-b", "role": "engineer", "site_id": "SITE_B"})
+    assert other["status"] == "duplicate" and other["document_id"] is None
+    assert same["document_id"] == "DOC-SITE-B"

@@ -7,16 +7,20 @@ import { BrandLink } from "./brand-link";
 import { MobileAppHeader } from "./mobile-app-header";
 import { CommandPalette, ShortcutsHelp, type PaletteItem } from "./command-palette";
 import { getMe, logout } from "@/lib/auth";
-import { GOVERNOR_UPDATED, getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
-import { flushQueue } from "@/lib/idb";
+import { GOVERNOR_UPDATED, expireSession, getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
+import { flushQueue, type FlushResult } from "@/lib/idb";
 import { getUserInitials } from "@/lib/user-initials";
 import { ADMIN_VIEW_ROLES, routeAllowed, roleHome } from "./use-role";
 import type { Role, User, GovernorEventState, GovernorState, PlantState } from "@/lib/types";
 import { capitalize, cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+import { Button } from "./ui";
 import { PageSkeleton } from "./skeleton";
 import { Icon as SharedIcon, isIconName, type IconName as SharedIconName } from "./icon";
 import { getSearchShortcut } from "@/lib/search-shortcut";
+
+// Flush results already counted into the rejected-writes notice (see `onOnline`).
+const countedFlushes = new WeakSet<FlushResult>();
 
 // Staff surfaces (Assure group + RCA) are hidden from field workers. Dev-bypass (no session)
 // defaults to engineer, so an unauthenticated demo still sees everything.
@@ -157,15 +161,16 @@ export function SidebarContent({ onNavigate, role, user, actions }: { onNavigate
             <kbd className="border border-line px-1.5 font-sans text-micro text-muted">{shortcut}</kbd>
           </button>
           {actions.onCreate && (
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={actions.onCreate}
               aria-label="Ingest document"
               title="Ingest document"
-              className="fill-sweep grid size-9 shrink-0 place-items-center bg-accent text-on-accent"
+              className="size-9 shrink-0 px-0"
             >
-              <SharedIcon name="plus" className="relative z-10 size-4" />
-            </button>
+              <SharedIcon name="plus" className="size-4" />
+            </Button>
           )}
         </div>
       )}
@@ -264,6 +269,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [plantState, setPlantState] = useState<PlantState | null>(null);
+  // Offline writes the server refused on replay. They were removed from the queue, so the person who
+  // made them has to hear about it: the screen had told them the write was saved.
+  const [rejectedWrites, setRejectedWrites] = useState(0);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -290,7 +298,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         const profile = await getMe();
         if (!alive) return;
         if (!profile) {
-          logout();
+          // expireSession, not logout: a failed profile lookup must not wipe the offline queue.
+          expireSession();
           router.replace("/login");
           return;
         }
@@ -303,7 +312,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           // Don't silently fall back to the engineer dev-default — that reads as a
           // surprise account switch (field_worker → engineer) and hides field nav.
           // Re-authenticate instead; the anonymous no-token demo bypass is untouched.
-          logout();
+          // expireSession, not logout, so the offline queue survives a failed lookup.
+          expireSession();
           router.replace("/login");
           return;
         }
@@ -324,7 +334,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     // Flush write queue on reconnect
     async function onOnline() {
-      await flushQueue();
+      const result = await flushQueue();
+      // flushQueue is single-flight: overlapping `online` events share one result, so count it once.
+      if (!alive || !result.rejected || countedFlushes.has(result)) return;
+      countedFlushes.add(result);
+      setRejectedWrites((n) => n + result.rejected);
     }
     window.addEventListener("online", onOnline);
     return () => {
@@ -551,6 +565,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="size-2 shrink-0 animate-pulse rounded-full bg-current" aria-hidden="true" />
             {capitalize(plantState.state)} mode active
             {" — only critical briefs are being delivered"}
+          </div>
+        )}
+        {rejectedWrites > 0 && (
+          <div role="alert" className="flex items-center gap-3 bg-[color-mix(in_srgb,var(--danger)_10%,var(--surface))] px-5 py-2.5 text-body text-danger">
+            <span className="min-w-0 flex-1">
+              {rejectedWrites === 1 ? "1 offline submission was" : `${rejectedWrites} offline submissions were`} rejected by
+              the server when it synced and not saved. Enter {rejectedWrites === 1 ? "it" : "them"} again.
+            </span>
+            <Button className="h-8 text-caption" onClick={() => setRejectedWrites(0)}>Dismiss</Button>
           </div>
         )}
         {/* Shell owns page padding; /copilot opts out (full-bleed sticky composer).

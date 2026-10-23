@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, Timeline } from "@/components/ui";
+import { Button, PageHeader, Timeline } from "@/components/ui";
 import { KnowledgeGraph } from "@/components/knowledge-graph";
 import type { KnowledgeGraphData } from "@/lib/types";
 import { getKnowledgeGraph } from "@/lib/api";
@@ -120,12 +120,9 @@ export default function GraphPage() {
               placeholder="e.g. P-1101A"
               className="h-11 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-body outline-none focus-visible:border-accent sm:max-w-xs"
             />
-            <button
-              type="submit"
-              className="fill-sweep h-11 bg-accent px-4 text-body font-semibold text-on-accent transition-transform duration-150 ease-out active:scale-[0.98]"
-            >
-              <span className="relative z-10">View</span>
-            </button>
+            <Button type="submit" variant="primary" className="h-11 px-4">
+              View
+            </Button>
           </form>
         </div>
 

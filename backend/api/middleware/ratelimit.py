@@ -17,7 +17,17 @@ from starlette.responses import JSONResponse
 
 log = structlog.get_logger(__name__)
 
-_EXEMPT = {"/health", "/health/detailed"}  # uptime probes must never be throttled
+# Liveness only: uptime probes must never be throttled. `/health` redirects to `/health/`, so both.
+# `/health/detailed` is NOT exempt: each call makes five store round-trips, so an unthrottled loop
+# drained the free cloud quotas and turned readiness to 503.
+_EXEMPT = {"/health", "/health/"}
+
+
+def client_ip(request: Request) -> str:
+    """The caller's IP. Behind Caddy, request.client is the proxy, so trust the first X-Forwarded-For
+    hop (the API is bound to loopback, so only Caddy can set it)."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -30,10 +40,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if self._limit <= 0 or request.scope["path"] in _EXEMPT:
             return await call_next(request)
 
-        # Behind Caddy, request.client is the proxy — trust the first X-Forwarded-For hop.
-        fwd = request.headers.get("x-forwarded-for", "")
-        ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
-        key = f"ratelimit:{ip}:{int(time.time()) // 60}"
+        key = f"ratelimit:{client_ip(request)}:{int(time.time()) // 60}"
 
         try:
             count = await self._redis.incr(key)

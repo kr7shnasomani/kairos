@@ -825,6 +825,31 @@ def test_ratelimit_exemption_cannot_be_forged_through_the_host_header(monkeypatc
     assert len(hits) == 1, "a Host-poisoned request must still be counted"
 
 
+def test_detailed_health_is_rate_limited_and_liveness_is_not(monkeypatch):
+    import api.middleware.ratelimit as rl
+
+    counts: dict[str, int] = {}
+
+    class Redis:
+        async def incr(self, key):
+            counts[key] = counts.get(key, 0) + 1
+            return counts[key]
+
+        async def expire(self, *_a):
+            return True
+
+    monkeypatch.setattr(rl.aioredis, "from_url", lambda *a, **k: Redis())
+    app = FastAPI()
+    app.get("/health/")(lambda: {"ok": True})
+    app.get("/health/detailed")(lambda: {"ok": True})
+    app.add_middleware(rl.RateLimitMiddleware, redis_url="redis://unused", limit_per_minute=1)
+    client = TestClient(app)
+
+    # Five store round-trips per call: a loop on it drained the free cloud quotas.
+    assert [client.get("/health/detailed").status_code for _ in range(2)] == [200, 429]
+    assert all(client.get("/health/").status_code == 200 for _ in range(3))
+
+
 # =============================================================================
 # C1: the demo identity, through the real OPAMiddleware
 # =============================================================================
@@ -893,3 +918,24 @@ def test_the_demo_user_resolves_from_app_metadata_with_the_demo_role(monkeypatch
     resolved = asyncio.run(deps.resolve_token("demo-token", Settings(AUTH_CACHE_TTL_SECONDS=0)))
     deps._auth_cache.clear()
     assert resolved["role"] == "demo" and resolved["site_id"] == "SITE_001"
+
+
+@pytest.mark.parametrize("ts", ["nan", "NaN", "inf", "-inf"])
+def test_moc_webhook_rejects_a_non_finite_timestamp(ts):
+    """`nan` passed the skew check (every comparison with nan is False), so a body signed over it
+    replayed forever."""
+    import hashlib
+    import hmac as hmac_mod
+
+    sig = hmac_mod.new(b"s3cret", ts.encode() + b"." + b"{}", hashlib.sha256).hexdigest()
+    with pytest.raises(HTTPException) as exc:
+        governance_router.verify_moc_webhook("s3cret", b"{}", sig, ts, dev_unsigned_ok=False)
+    assert exc.value.status_code == 401
+
+
+def test_moc_webhook_non_ascii_signature_is_401_not_500():
+    import time
+
+    with pytest.raises(HTTPException) as exc:
+        governance_router.verify_moc_webhook("s3cret", b"{}", "sïgnature", str(int(time.time())), dev_unsigned_ok=False)
+    assert exc.value.status_code == 401

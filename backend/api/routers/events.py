@@ -98,7 +98,16 @@ async def _store_event(supabase, row: dict) -> None:
         .limit(1)
         .execute()
     )
-    if not stored.data or any(stored.data[0].get(k) != row[k] for k in ("event_type", "asset_id", "site_id", "payload")):
+    # `received_at` is stamped per request (models/event.py), so a retry of the same event always
+    # differed there and a connector's honest retry got a 409. Compare everything except it.
+    def _same(stored_row: dict) -> bool:
+        def strip(p: object) -> object:
+            return {k: v for k, v in p.items() if k != "received_at"} if isinstance(p, dict) else p
+        return all(stored_row.get(k) == row[k] for k in ("event_type", "asset_id", "site_id")) and (
+            strip(stored_row.get("payload")) == strip(row["payload"])
+        )
+
+    if not stored.data or not _same(stored.data[0]):
         log.warning("events.event_id_conflict", event_id=row["event_id"])
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An event with this event_id already exists.")
 
@@ -540,7 +549,7 @@ async def flag_deviation(
     # every unacknowledged brief for the asset and only an engineer can lift it.
     reported_by = current_user.get("user_id", "unknown")
 
-    deviation_sla = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+    deviation_sla = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
     insert_result = await asyncio.to_thread(
         lambda: supabase.table("quarantine_items").insert({
             "asset_id": payload.asset_id,

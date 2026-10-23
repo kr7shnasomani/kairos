@@ -403,11 +403,7 @@ function GraphToolbar({ full, layoutKey, onToggleFull, onRearrange }: { full: bo
 
 // ── Public component ─────────────────────────────────────────────────────────
 
-export function KnowledgeGraph(props: { assetId: string; asOf?: string; height?: number }) {
-  return <KnowledgeGraphInner {...props} />;
-}
-
-function KnowledgeGraphInner({
+export function KnowledgeGraph({
   assetId,
   asOf,
   height = 480,
