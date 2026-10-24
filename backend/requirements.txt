@@ -1719,9 +1719,9 @@ strenum==0.4.15 \
     --hash=sha256:878fb5ab705442070e4dd1929bb5e2249511c0bcf2b0eeacf3bcd80875c82eff \
     --hash=sha256:a30cda4af7cc6b5bf52c8055bc4bf4b2b6b14a93b574626da33df53cf7740659
     # via postgrest
-structlog==24.2.0 \
-    --hash=sha256:0e3fe74924a6d8857d3f612739efb94c72a7417d7c7c008d12276bca3b5bf13b \
-    --hash=sha256:983bd49f70725c5e1e3867096c0c09665918936b3db27341b41d294283d7a48a
+structlog==26.1.0 \
+    --hash=sha256:e081a26d6c373e6d201eca24eede26d8ffab07f88f477822e679183428d3d91e \
+    --hash=sha256:f63a716cbd1b1291cf7661de7794b455acfa4c43c5bcf1630e6ad5ddc1adb3b7
     # via -r requirements.in
 supabase==2.5.3 \
     --hash=sha256:71570226d0399d7f7203a08c44b734d6b873c7c3cc0dbe74fd9cdc8b4513c2bb \
