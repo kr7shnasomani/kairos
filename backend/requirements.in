@@ -23,7 +23,7 @@ pydantic-settings==2.3.4
 python-dotenv==1.2.4
 
 # --- Database Clients ---
-neo4j==5.21.0
+neo4j==6.4.1
 qdrant-client==1.9.1
 elasticsearch==8.13.1
 redis==5.0.6
