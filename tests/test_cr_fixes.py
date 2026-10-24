@@ -500,3 +500,62 @@ def test_a_malformed_id_is_a_404_not_a_500():
     request = SimpleNamespace(url="https://api/briefs/governor")
     resp = asyncio.run(handler(request, APIError({"code": "22P02", "message": "invalid input syntax for type uuid"})))
     assert resp.status_code == 404
+
+
+def _deviation_payload(resolution):
+    from api.models.event import DeviationFlagResolveRequest
+
+    return DeviationFlagResolveRequest(resolution=resolution)
+
+
+class _NoFlag:
+    """A Supabase stand-in whose deviation-flag lookup finds nothing (the route then answers 404)."""
+
+    def table(self, _name):
+        return self
+
+    def select(self, *_a):
+        return self
+
+    def eq(self, *_a):
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=[])
+
+
+def test_an_engineer_cannot_promote_through_the_deviation_resolve_route():
+    """Review C17: confirming a deviation marks its quarantine item `promoted`, and promotion is
+    reliability/admin only. The route allowed an engineer to do it."""
+    from api.routers import events
+
+    engineer = {"user_id": "u-eng", "role": "engineer"}
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(events.resolve_deviation_flag("3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+                                                  _deviation_payload("promoted"), _NoFlag(), engineer))
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.parametrize("user,resolution", [
+    ({"user_id": "u-eng", "role": "engineer"}, "disputed"),     # an engineer can still dismiss
+    ({"user_id": "u-rel", "role": "reliability"}, "promoted"),  # reliability can now confirm
+    ({"user_id": "u-adm", "role": "admin"}, "promoted"),
+])
+def test_allowed_deviation_resolutions_reach_the_lookup(user, resolution):
+    from api.routers import events
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(events.resolve_deviation_flag("3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+                                                  _deviation_payload(resolution), _NoFlag(), user))
+    assert exc.value.status_code == 404  # past the role check, stopped only by the empty fake
+
+
+def test_reliability_may_open_the_deviation_resolve_route():
+    """The route's role gate names reliability; it used to stop at engineer and admin, so the role
+    allowed to promote could not resolve a deviation flag at all."""
+    import inspect
+
+    from api.routers import events
+
+    gate = inspect.signature(events.resolve_deviation_flag).parameters["current_user"].default.dependency
+    asyncio.run(gate({"role": "reliability"}))

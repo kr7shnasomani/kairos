@@ -617,14 +617,23 @@ async def resolve_deviation_flag(
     item_id: QuarantineItemIdDep,
     payload: DeviationFlagResolveRequest,
     supabase: SupabaseDep,
-    current_user: dict = Depends(require_role("engineer", "admin")),
+    current_user: dict = Depends(require_role("engineer", "reliability", "admin")),
 ) -> dict:
     """
-    Engineer resolves the deviation flag: promotes or disputes the quarantine item,
-    unfreezes affected briefs, and optionally creates a MoC item if a topology change is confirmed.
+    Resolve a deviation flag: confirm it (`promoted`) or dismiss it (`disputed`), unfreeze the
+    asset's briefs, and optionally draft a MoC when a topology change is confirmed.
     """
     if payload.resolution not in ("promoted", "disputed"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="resolution must be 'promoted' or 'disputed'")
+    # Confirming marks the quarantine item `promoted`, and promotion is reliability/admin only, as on
+    # POST /governance/quarantine/{id}/promote. An engineer could promote through here before (review C17);
+    # dismissing stays open to engineers.
+    if payload.resolution == "promoted" and not tenant.has_role(current_user, "reliability", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Confirming a deviation promotes the quarantine item, which only reliability or admin may do. "
+                   "An engineer can dismiss it as not a deviation.",
+        )
     await tenant.guard_row(supabase, current_user, "quarantine_items", item_id)
 
     result = await asyncio.to_thread(

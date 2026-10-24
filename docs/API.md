@@ -1062,7 +1062,7 @@ Parallel hybrid search: ES exact + Qdrant 1024-dim semantic + Neo4j graph.
 | `asset_id` | string | — | Scope to one asset: documents filed under it **or** linked to it in the knowledge graph (a work-order log filed under EQ-102 that records EQ-101 failures matches EQ-101). Within an authority level, the asset's own documents rank first. |
 | `limit` | int | `10` | Max results per engine |
 | `include_quarantine` | bool | `false` | Include unverified quarantine items |
-| `as_of` | ISO8601 datetime | `now` | Time-travel: return only facts valid at this time |
+| `as_of` | ISO8601 date or datetime | `now` | Time-travel: graph facts valid at this time, and only documents whose own date (`documents.occurred_at`) is on or before it; an undated document is kept. A bare date (`2025-01-15`) means the end of that day in UTC. Superseded documents are included, since they were current then |
 | `authority_min` | int 1–5 | `1` | Exclude sources below this authority level |
 
 **Response `200`:**
@@ -1122,7 +1122,7 @@ Search within a specific asset's knowledge. Same engines but asset pre-filtered.
 }
 ```
 
-`query` is required (max 2000 characters). `as_of` is optional (ISO8601, max 64 characters; a bad value is `422`) and time-travels the retrieval. **`context` and `query_category` are still accepted (so older clients keep working, `context` capped at 50 items) but are ignored.** The server runs its own hybrid search for the query (top 6, quarantine excluded, `_server_evidence` in `routers/search.py`), derives the safety category itself with `LLMService.classify_query_category`, and for isolation questions adds engineer-verified P&ID topology. The gate used to read `authority_level`, `confidence` and the category from the request body, so any signed-in role could clear it with a made-up document. A client category that differs from the derived one is logged (`synthesis.client_category_ignored`) and not used. The classifier fails closed: a question that reads like a safety parameter but fits no named category (a number with an engineering unit, "can HE-302 handle 45 bar?", "how tight should the flange bolts be?") lands in `safety_parameter_unspecified` and is gated like the rest.
+`query` is required (max 2000 characters). `as_of` is optional (an ISO8601 date or timestamp, max 64 characters; a bad value is `422`; a bare date means the end of that day in UTC) and time-travels the retrieval: documents dated after it are left out, the same rule as `GET /search`. **`context` and `query_category` are still accepted (so older clients keep working, `context` capped at 50 items) but are ignored.** The server runs its own hybrid search for the query (top 6, quarantine excluded, `_server_evidence` in `routers/search.py`), derives the safety category itself with `LLMService.classify_query_category`, and for isolation questions adds engineer-verified P&ID topology. The gate used to read `authority_level`, `confidence` and the category from the request body, so any signed-in role could clear it with a made-up document. A client category that differs from the derived one is logged (`synthesis.client_category_ignored`) and not used. The classifier fails closed: a question that reads like a safety parameter but fits no named category (a number with an engineering unit, "can HE-302 handle 45 bar?", "how tight should the flange bolts be?") lands in `safety_parameter_unspecified` and is gated like the rest.
 
 Prompt-injection hardening: the rules go in a system message, and the query and every retrieved document are escaped and wrapped in tags as untrusted data. A document's index, authority and id come only from its tag attributes, never from text inside it. When the model echoes several `CONFIDENCE:` lines the lowest wins, and `sources_used` citing a source number the answer was not given is dropped.
 
@@ -1673,7 +1673,7 @@ Report a physical deviation from the last known state for an asset. Freezes all 
 
 Resolve a physical deviation flag. Unfreezes briefs and optionally creates an MoC record.
 
-**Auth required:** Yes — `engineer` or `admin` (OPA enforced)
+**Auth required:** Yes. `engineer`, `reliability` or `admin` (role gate; OPA `write_api`). **`promoted` (confirm) needs `reliability` or `admin`**, because it marks the quarantine item promoted, the same rule as `POST /governance/quarantine/{id}/promote`; an engineer gets `403` and may only send `disputed` (since 2026-10-25, review C17). The demo role may confirm only on showcase rows.
 
 **Request body:**
 ```json

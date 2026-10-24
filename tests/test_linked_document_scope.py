@@ -148,3 +148,102 @@ async def test_graph_outage_degrades_to_primary_asset_scope():
 
     assert results == []
     assert calls["es"]["document_ids"] == []
+
+
+# --- Time-travel (review C8): documents dated after `as_of` leave the text-search arms ------------
+
+class _DocsTable:
+    """`documents` rows by id for `corpus.document_rows`; `asset_alias_map` answers empty."""
+
+    def __init__(self, rows):
+        self.rows, self.ids, self.name = rows, None, None
+
+    def table(self, name):
+        self.name = name
+        return self
+
+    def select(self, *_a):
+        return self
+
+    def eq(self, *_a):
+        return self
+
+    def in_(self, _col, ids):
+        self.ids = ids
+        return self
+
+    def execute(self):
+        from types import SimpleNamespace
+
+        if self.name != "documents":
+            return SimpleNamespace(data=[])
+        return SimpleNamespace(data=[r for r in self.rows if r["document_id"] in (self.ids or [])])
+
+
+def _dated_service(rows):
+    calls = {}
+    es_hits = [{"document_id": d, "score": 1.0} for d in ("DOC-OLD", "DOC-NEW", "DOC-UNDATED")]
+    qdrant_hits = [{"payload": {"document_id": d}, "score": 0.9} for d in ("DOC-OLD", "DOC-NEW", "DOC-UNDATED")]
+
+    class Engine:
+        async def search(self, query, **kw):
+            calls["es_limit"] = kw["limit"]
+            return list(es_hits)
+
+    class Vector:
+        async def search(self, collection, vector, **kw):
+            calls["qdrant_limit"] = kw["limit"]
+            return list(qdrant_hits)
+
+    class LLM:
+        async def embed(self, text, task=None):
+            return [0.1]
+
+    svc = SearchService.__new__(SearchService)
+    svc.engine, svc.vector, svc.graph, svc.llm, svc.supabase = Engine(), Vector(), None, LLM(), _DocsTable(rows)
+    return svc, calls
+
+
+_ROWS = [
+    {"document_id": "DOC-OLD", "file_name": "old.pdf", "occurred_at": "2024-06-01T00:00:00+00:00"},
+    {"document_id": "DOC-NEW", "file_name": "new.pdf", "occurred_at": "2025-01-15T00:00:00+00:00"},
+    {"document_id": "DOC-UNDATED", "file_name": "undated.pdf", "occurred_at": None},
+]
+
+
+async def test_time_travel_drops_documents_dated_after_as_of():
+    """A question "as of 2024" could cite a 2025 bulletin: ES and Qdrant ignored `as_of`."""
+    from datetime import UTC, datetime
+
+    svc, calls = _dated_service(_ROWS)
+    results = await svc.hybrid_search("seal", "docs", None, 5, False, datetime(2024, 12, 31, tzinfo=UTC), 6)
+
+    ids = {r.document_id for r in results}
+    assert "DOC-NEW" not in ids
+    assert {"DOC-OLD", "DOC-UNDATED"} <= ids  # earlier, and unknown date, both stay
+    assert calls == {"es_limit": 18, "qdrant_limit": 18}  # over-fetch so the filter cannot starve
+
+
+async def test_without_as_of_nothing_is_dropped_by_date_and_no_over_fetch():
+    svc, calls = _dated_service(_ROWS)
+    results = await svc.hybrid_search("seal", "docs", None, 5, False, None, 6)
+
+    assert {r.document_id for r in results} == {"DOC-OLD", "DOC-NEW", "DOC-UNDATED"}
+    assert calls == {"es_limit": 6, "qdrant_limit": 6}
+
+
+def test_a_date_only_as_of_means_the_end_of_that_day():
+    """The Copilot's picker sends YYYY-MM-DD, which parsed to midnight and dropped that day's documents."""
+    from datetime import UTC, datetime
+
+    import pytest
+    from fastapi import HTTPException
+
+    from api.routers.search import parse_as_of
+
+    assert parse_as_of("2025-01-15") == datetime(2025, 1, 15, 23, 59, 59, 999999, tzinfo=UTC)
+    assert parse_as_of("2025-01-15T08:30:00+00:00") == datetime(2025, 1, 15, 8, 30, tzinfo=UTC)
+    assert parse_as_of(None) is None and parse_as_of("") is None
+    with pytest.raises(HTTPException) as exc:
+        parse_as_of("15/01/2025")
+    assert exc.value.status_code == 422

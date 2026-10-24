@@ -68,7 +68,7 @@ export function ItemPanel({
   item: QuarantineItem;
   nowMs: number;
   canPromote: boolean;
-  /** Engineer/admin — matches `require_role` on POST /events/deviation-flag/{id}/resolve. */
+  /** Engineer, reliability, admin (and demo): matches `require_role` on POST /events/deviation-flag/{id}/resolve. */
   canResolveDeviation?: boolean;
   busy: boolean;
   /** Suspends the Esc handler while an action Modal is stacked on top. */
@@ -159,8 +159,8 @@ export function ItemPanel({
                       so a flagged asset's briefs stayed frozen with no way out of the UI. */}
                   <p className="text-sm leading-relaxed text-danger/80">
                     {canResolveDeviation
-                      ? "Briefs for this asset are frozen until an engineer confirms or dismisses the flag."
-                      : "Briefs for this asset are frozen until an engineer or admin resolves this flag."}
+                      ? "Briefs for this asset are frozen until reliability or admin confirms the flag, or an engineer dismisses it."
+                      : "Briefs for this asset are frozen until an engineer, reliability or admin resolves this flag."}
                   </p>
                 </div>
               </div>

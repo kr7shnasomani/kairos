@@ -27,7 +27,7 @@ Supabase it always writes to the shared cloud stores. It refuses to run without
 `KAIROS_E2E_ALLOW_CLOUD_WRITES=1`, and it supersedes only a document it uploaded itself: on 2026-09-14 it
 superseded the golden `sop_he_gen_11.pdf` (`status.md` P34).
 
-### Tier 1 — service-free (1,042 tests, no stack, no secrets, no network)
+### Tier 1 — service-free (1,050 tests, no stack, no secrets, no network)
 
 These need nothing running. This is what CI's `unit` job executes on every push. The container run is **786 passed and 3 skipped** (2026-10-01): the Docker test image mounts only `./backend`, `./tests` and `./db`, so the checks in `test_sec_infra.py` that read `infra/`, `docker-compose*.yml` and `.github/` skip there (they run on a full checkout, and in CI, which has the whole repo).
 
@@ -43,7 +43,7 @@ ner_fallback,asset_tag_filter,linked_document_scope,nim_retry,rca_timeline,audit
 document_extraction_view,image_utils,ocr_review_release,supabase_http,redate_demo,sec_auth,sec_authz,sec_documents,sec_infra,sec_llm,cr_fixes,tenant_isolation,showcase_dataset}.py
 ```
 
-All **55** files, **1,042 tests** (counted 2026-10-24; matches the 55 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
+All **55** files, **1,050 tests** (counted 2026-10-24; matches the 55 `tests/test_*.py` entries in `.github/workflows/tests.yml`). Recent additions:
 
 **Security pass, 2026-10-01: the five `test_sec_*.py` files.** Each is named for the review group it covers; all run against in-memory fakes, with nothing written to any store. Finding ids (H1, M4, ...) are the 2026-09-30 security review's, listed one per line in `status.md` § Accepted risks and deploy checklist.
 
@@ -193,7 +193,7 @@ docker exec kairos-backend-api python scripts/seed_users.py
 
 | Job | Needs | Behaviour |
 |---|---|---|
-| `unit` | nothing | Runs the 1,042 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
+| `unit` | nothing | Runs the 1,050 service-free tests on every push and fork PR, plus the benchmark grader selftest. Must stay green. |
 | `integration` | `--profile local-stores` + a **throwaway** `CI_SUPABASE_*` project | Runs the full suite. **Skips with exit 0** when `CI_SUPABASE_URL` is unset, so a missing optional credential is never a red build. |
 
 Neo4j, Qdrant, Elasticsearch and Redis run as local containers in CI, so Aura and Qdrant Cloud
@@ -217,7 +217,7 @@ gh secret set GROQ_API_KEY
 > Token Factory → NIM → OpenRouter → Gemini cascade, and elicitation calls the LLM. Gemini's free tier is a few hundred requests/day and
 > is shared with the benchmark harnesses, so a busy day of pushes exhausts it; once it 429s,
 > synthesis silently returns no answer and *measured answer quality collapses* (observed:
-> 24/25 → 13/25). Tier-1 gives 1,042 service-free tests with **zero** provider calls, which is the
+> 24/25 → 13/25). Tier-1 gives 1,050 service-free tests with **zero** provider calls, which is the
 > signal CI should be providing. Enable tier 2 only for a deliberate pre-release run, against
 > a throwaway Supabase project.
 
@@ -287,7 +287,7 @@ tests/                        ← project root (NOT inside backend/)
 pytest.ini                    ← project root
 ```
 
-Suite size: **1,283 tests collected** across 70 files for the full suite (counted 2026-10-18 plus the 33 2026-10-22 review-fix tests and 4 from the 2026-10-24 final review and live deploy, after the RCA agent, alias-evidence, document-number, OCR-entry, demo-budget and headline-count tests; 1,216 on 2026-10-17; on 2026-10-09 it was 1,210: 1,194 after the 8 legacy-role-fallback tests went and 1 re-date test came, plus the 7 cross-site and 9 form tests (table layout and the extract-form route); 1,042 are service-free, the rest need the stack). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
+Suite size: **1,291 tests collected** across 70 files for the full suite (counted 2026-10-18 plus the 33 2026-10-22 review-fix tests 4 from the 2026-10-24 final review and live deploy, 5 for the C17 fix and 3 for the C8 fix on 2026-10-25, after the RCA agent, alias-evidence, document-number, OCR-entry, demo-budget and headline-count tests; 1,216 on 2026-10-17; on 2026-10-09 it was 1,210: 1,194 after the 8 legacy-role-fallback tests went and 1 re-date test came, plus the 7 cross-site and 9 form tests (table layout and the extract-form route); 1,050 are service-free, the rest need the stack). The last full green run was **412 passed · 0 failed** (2026-08-22) and is **superseded**. **There is no current full-suite pass count**: re-run tier 2 against local stores
 to get one, and do not quote 412 as a pass figure for the present tree. **1 known transient flake**
 (`test_briefs.py::test_attribution_worker_queues_recheck` — a work-order POST occasionally 500s under
 concurrent load; passes deterministically in isolation).

@@ -16,7 +16,9 @@ import { Icon } from "@/components/icon";
 export default function QuarantinePage() {
   const role = useRole();
   const canPromote = visibleTo(PROMOTE_ROLES, role);
-  const canResolveDeviation = role === "engineer" || role === "admin" || role === "demo";
+  // Mirrors require_role on POST /events/deviation-flag/{id}/resolve. Confirming promotes the item, so it
+  // takes canPromote (reliability, admin, demo); an engineer may only dismiss.
+  const canResolveDeviation = role === "engineer" || role === "reliability" || role === "admin" || role === "demo";
 
   const [reload, setReload] = useState(0);
   const state = useFetch(() => getQuarantine(), [reload]);
@@ -187,6 +189,7 @@ export default function QuarantinePage() {
       )}
       {panelItem && modal && (
         <ActionModals
+          canConfirmDeviation={canPromote}
           item={panelItem}
           mode={modal}
           busy={busy === panelItem.item_id}

@@ -14,12 +14,15 @@ export function ActionModals({
   item,
   mode,
   busy,
+  canConfirmDeviation = false,
   onClose,
   run,
 }: {
   item: QuarantineItem;
   mode: ActionMode;
   busy: boolean;
+  /** Confirming a deviation promotes the item: reliability, admin and demo only (the API enforces it). */
+  canConfirmDeviation?: boolean;
   onClose: () => void;
   /** Page-owned mutation runner: busy/notice/error/refetch lifecycle. */
   run: (mutate: () => Promise<unknown>, success: string, failure: string) => void;
@@ -69,6 +72,7 @@ export function ActionModals({
       <Modal title="Resolve deviation flag" onClose={onClose}>
         <ResolveDeviationForm
           busy={busy}
+          canConfirm={canConfirmDeviation}
           onCancel={onClose}
           onSubmit={(resolution, mocWarranted, notes) =>
             run(
@@ -76,7 +80,7 @@ export function ActionModals({
               resolution === "promoted"
                 ? `Deviation confirmed${mocWarranted ? " and a Management of Change drafted" : ""}. Briefs for ${item.asset_id ?? "the asset"} are released.`
                 : `Deviation dismissed. Briefs for ${item.asset_id ?? "the asset"} are released.`,
-              "Could not resolve the deviation — only an engineer or admin can, and it must still be pending.",
+              "Could not resolve the deviation. It must still be pending, and confirming it needs reliability or admin.",
             )
           }
         />
@@ -185,8 +189,9 @@ function DisputeForm({ busy, onCancel, onSubmit }: {
   );
 }
 
-function ResolveDeviationForm({ busy, onCancel, onSubmit }: {
+function ResolveDeviationForm({ busy, canConfirm, onCancel, onSubmit }: {
   busy: boolean;
+  canConfirm: boolean;
   onCancel: () => void;
   onSubmit: (resolution: "promoted" | "disputed", mocWarranted: boolean, notes: string) => void;
 }) {
@@ -195,13 +200,16 @@ function ResolveDeviationForm({ busy, onCancel, onSubmit }: {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-caption text-muted">
-        Briefs for this asset are frozen until you decide. Confirm it if the physical condition really differs
-        from the drawing or procedure; dismiss it if it does not.
+        {canConfirm
+          ? "Briefs for this asset are frozen until you decide. Confirm it if the physical condition really differs from the drawing or procedure; dismiss it if it does not."
+          : "Briefs for this asset are frozen until it is resolved. You can dismiss it if the condition matches the drawing or procedure. Confirming it promotes the item, so it needs reliability or admin."}
       </p>
-      <label className="flex items-center gap-2 text-caption text-ink">
-        <input type="checkbox" checked={mocWarranted} onChange={(e) => setMocWarranted(e.target.checked)} className="size-4" />
-        Confirmed change needs a Management of Change
-      </label>
+      {canConfirm && (
+        <label className="flex items-center gap-2 text-caption text-ink">
+          <input type="checkbox" checked={mocWarranted} onChange={(e) => setMocWarranted(e.target.checked)} className="size-4" />
+          Confirmed change needs a Management of Change
+        </label>
+      )}
       <input
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
@@ -210,9 +218,11 @@ function ResolveDeviationForm({ busy, onCancel, onSubmit }: {
         className="h-8 rounded-lg border border-line bg-surface px-2 text-caption outline-none focus:border-accent"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" type="button" disabled={busy} onClick={() => onSubmit("promoted", mocWarranted, notes)}>
-          {busy ? "Saving…" : "Confirm deviation"}
-        </Button>
+        {canConfirm && (
+          <Button variant="primary" type="button" disabled={busy} onClick={() => onSubmit("promoted", mocWarranted, notes)}>
+            {busy ? "Saving…" : "Confirm deviation"}
+          </Button>
+        )}
         <Button variant="danger" type="button" disabled={busy} onClick={() => onSubmit("disputed", false, notes)}>
           Not a deviation
         </Button>

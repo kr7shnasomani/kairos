@@ -33,7 +33,7 @@ This guide uses the project's DuckDNS name, `kairos-deterium.duckdns.org`. If yo
 | API | **https://kairos-deterium.duckdns.org** (`/health`, `/docs`, `/health/detailed` needs a sign-in) |
 | Server | EC2 `i-012800d81f549557b` · `c7i-flex.large` (resized down from `m7i-flex.large` on 28 September 2026, see §2) · Ubuntu 24.04 · 30 GB gp3 · Mumbai `ap-south-1` |
 | Address | Elastic IP `3.7.186.159` ← DuckDNS `kairos-deterium` |
-| Security group | 22 (one IP: the deployer's current address), 80, 443 |
+| Security group | 80, 443 only (port 22 removed 2026-10-25; SSH goes through Session Manager, §17) |
 | Certificate | Let's Encrypt, renewed automatically by Caddy |
 | Code | the working tree of the 9 October 2026 redeploy (cross-site patterns and form extraction; earlier, 2 October: security update, role migration applied, `MOC_WEBHOOK_SECRET` and `CONNECTOR_SHARED_SECRET` set). `make sync-check` compares it with local, GitHub and Vercel (section 14b) |
 | Running | the 11 services started by `make prod`; memory about 2.1 GiB of 3.7 GiB. Elasticsearch runs the 512 MB heap (`-Xms512m -Xmx512m`) |
@@ -560,8 +560,7 @@ curl -s https://kairos-deterium.duckdns.org/health/
 ```
 
 Docker starts at boot and every container restarts on its own (`restart: unless-stopped`), so nothing needs
-to be run. If SSH is refused, your home IP has probably changed: edit the security group's SSH rule and choose
-**My IP** again, or use the `kairos-ssm` alias from §17, which needs no IP rule.
+to be run. Reach the server with `ssh kairos-ssm` (§17); port 22 is closed to the internet.
 
 **Before starting again after a long pause, check:**
 
@@ -625,7 +624,7 @@ Everything else, including `NEXT_PUBLIC_AUTH_STRICT` and the demo login, should 
 | Elasticsearch restarts or is killed | Check `free -h` and `dmesg | tail`. Confirm swap is on and `vm.max_map_count` is 262144. |
 | Copilot answers arrive all at once instead of streaming | Something is buffering Server-Sent Events. Keep `infra/caddy/Caddyfile` without an `encode` block. |
 | Many `429` responses during a demo | Raise `RATE_LIMIT_PER_MINUTE` in `.env`, then recreate `kairos-backend-api`. |
-| `ssh` to the server hangs and times out (not "refused") | Use `ssh kairos-ssm` (§17), which goes through Session Manager and ignores the IP rule. Otherwise: your current IP isn't the one on the security group's SSH rule — this can happen any time your IP changes, not only after a stop/start. HTTPS still works because 80/443 stay open to everyone; only 22 is IP-locked. Fix: EC2 console → Security Groups → the group attached to the instance (may be named `launch-wizard-1`, not `kairos-backend-sg` — see section 6) → Inbound rules → edit the SSH rule → source **My IP** → Save. |
+| `ssh` to the server hangs and times out (not "refused") | Port 22 is closed to the internet since 2026-10-25: use `ssh kairos-ssm` (§17). If that fails, check `aws sts get-caller-identity --profile kairos-deploy` and that the instance is Online in Systems Manager → Fleet Manager. Historically: your current IP wasn't the one on the security group's SSH rule — this can happen any time your IP changes, not only after a stop/start. HTTPS still works because 80/443 stay open to everyone; only 22 is IP-locked. Fix: EC2 console → Security Groups → the group attached to the instance (may be named `launch-wizard-1`, not `kairos-backend-sg` — see section 6) → Inbound rules → edit the SSH rule → source **My IP** → Save. |
 
 ---
 
@@ -679,8 +678,10 @@ AWS instead, so no inbound port or IP rule is involved.
 so `make deploy-backend` and `tools/deploy_backend.sh` need no IP change. SSH still needs `~/.ssh/kairos-aws.pem`:
 the tunnel only replaces the network path.
 
-Once `ssh kairos-ssm` works, the security group's port 22 rule can be deleted, which closes SSH to the internet
-entirely. Keep the rule if you still need direct SSH from a machine without the alias.
+Port 22 was removed from the security group (`launch-wizard-1`, `sg-0426a5cbbe87e062d`) on 2026-10-25, after
+`ssh kairos-ssm` and the deploy script were confirmed working; four stale one-IP SSH rules went with it. SSH is
+now closed to the internet, so a machine without the alias and the `kairos-deploy` profile cannot reach the
+server. To open direct SSH temporarily, add an SSH rule with source **My IP** and delete it afterwards.
 
 To revoke access: deactivate the access key on `kairos-deploy` in IAM (or delete the user). Rotate the key by
 creating a second one, running `aws configure --profile kairos-deploy` with it, then deleting the first.

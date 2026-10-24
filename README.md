@@ -254,8 +254,9 @@ Go modules are verified against `go.sum` and the Go checksum database on every b
 
 Working rules:
 
-- Install with `npm ci`. Add or bump an npm package with `npm install <name>`, so `.npmrc` still
-  applies. Do not pass `--ignore-scripts=false` or `--dangerously-allow-all-scripts` to get past an
+- Everything runs in Docker, installs included: the host keeps no `node_modules` or Python packages.
+  Install with `npm ci` and add or bump an npm package with `npm install <name>` inside the container,
+  so `.npmrc` still applies. Do not pass `--ignore-scripts=false` or `--dangerously-allow-all-scripts` to get past an
   error. Find out why it failed first.
 - Python: edit `backend/requirements.in`, then regenerate the lock with the pip-compile command in
   the header of `backend/requirements.txt`. Never edit the lock by hand.

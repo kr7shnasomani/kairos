@@ -305,6 +305,15 @@ records EQ-101's seal failures; SOP-HE-GEN-11 is filed under no asset). Without 
 asset-scoped search could never reach them. If the graph lookup fails, search degrades to the
 primary-asset scope rather than failing.
 
+**Time-travel (`as_of`).** The graph arm filters edges by `valid_from`/`valid_to`. The text arms are
+filtered after retrieval, before fusion: the `documents` rows already fetched for the test-artifact
+filter (`corpus.document_rows`, now with `occurred_at`) drop every document dated after `as_of`, and an
+undated one is kept. ES and Qdrant are asked for `3 × limit` when `as_of` is set so the filter does not
+starve the result set (shortcut until the indexes carry a document date). `routers/search.parse_as_of`
+turns a bare date into the end of that day (UTC). `documents.occurred_at` is the date of the version
+Kairos holds; the 19 golden-plant documents that had none were dated from the canon and their own text
+on 2026-10-25 (`status.md` P42). Their graph edges still carry their load date, 2026-09-13.
+
 **Fusion — Reciprocal Rank Fusion (`_RRF_K = 60`), then authority ordering.** Each source's
 results are scored `1/(60 + rank)` and summed, so a document more than one source agrees on
 ranks higher. RRF replaced a direct comparison of ES relevance against Qdrant cosine

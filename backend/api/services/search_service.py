@@ -16,6 +16,7 @@ from api.services.corpus import document_rows, partition_test_artifacts
 from api.services.graph import GraphService
 from api.services.llm import LLMService
 from api.services.search_engine import SearchEngineService
+from api.services.timeline import as_utc
 from api.services.vector_store import VectorStoreService
 
 log = structlog.get_logger(__name__)
@@ -90,6 +91,10 @@ class SearchService:
         # excluding it would answer the wrong question. Only the default (as_of=None, "what is
         # true now") filters superseded out.
         include_superseded = as_of is not None
+        # Time-travel also drops documents dated after `as_of` (below, before fusion), so ask each
+        # text search for more than `limit` or the filter can leave too few to rank.
+        # shortcut: fixed 3x over-fetch, until the indexes carry a document date to filter in-query.
+        fetch = limit * 3 if as_of is not None else limit
 
         # A document is indexed under one primary `asset_id`, but often concerns several assets: the
         # EQ-1xx work-order CSV is filed under EQ-102 yet holds EQ-101's own seal-failure history, and
@@ -107,11 +112,11 @@ class SearchService:
 
         coros: list[Any] = [
             self.engine.search(
-                query, asset_id=asset_id, limit=limit, include_superseded=include_superseded,
+                query, asset_id=asset_id, limit=fetch, include_superseded=include_superseded,
                 document_ids=linked_ids,
             ),
             self.vector.search(
-                collection, query_vector, limit=limit, asset_id=asset_id,
+                collection, query_vector, limit=fetch, asset_id=asset_id,
                 authority_min=authority_min, include_superseded=include_superseded,
                 document_ids=linked_ids,
             ),
@@ -119,7 +124,7 @@ class SearchService:
         if include_quarantine:
             coros.append(
                 self.vector.search(
-                    collection, query_vector, limit=limit, asset_id=asset_id,
+                    collection, query_vector, limit=fetch, asset_id=asset_id,
                     authority_min=authority_min, quarantine_only=True,
                     include_superseded=include_superseded, document_ids=linked_ids,
                 )
@@ -152,19 +157,28 @@ class SearchService:
                 + [h.get("edge", {}).get("document_id") for h in graph_raw]
                 + [h.get("payload", {}).get("document_id") for h in quarantine_raw]
             )
-            rows = await document_rows(self.supabase, all_ids)
+            rows = await document_rows(self.supabase, all_ids, columns="document_id, file_name, occurred_at")
             file_names = {r["document_id"]: r["file_name"] for r in rows if r.get("file_name")}
             artifact_ids = partition_test_artifacts(rows)
-            if artifact_ids:
+            # Review C8: the text searches ignore `as_of`, so a question "as of 2024" could cite a 2025
+            # bulletin. Time-travel drops documents whose own date (`documents.occurred_at`) is after
+            # it. An undated document is kept: unknown is not "later".
+            later_ids: set[str] = set()
+            if as_of is not None:
+                cutoff = as_utc(as_of)
+                later_ids = {r["document_id"] for r in rows if (d := as_utc(r.get("occurred_at"))) and d > cutoff}
+            excluded_ids = artifact_ids | later_ids
+            if excluded_ids:
                 before = len(es_raw) + len(qdrant_raw) + len(graph_raw) + len(quarantine_raw)
-                es_raw = [h for h in es_raw if h.get("document_id") not in artifact_ids]
-                qdrant_raw = [h for h in qdrant_raw if h.get("payload", {}).get("document_id") not in artifact_ids]
-                graph_raw = [h for h in graph_raw if h.get("edge", {}).get("document_id") not in artifact_ids]
+                es_raw = [h for h in es_raw if h.get("document_id") not in excluded_ids]
+                qdrant_raw = [h for h in qdrant_raw if h.get("payload", {}).get("document_id") not in excluded_ids]
+                graph_raw = [h for h in graph_raw if h.get("edge", {}).get("document_id") not in excluded_ids]
                 quarantine_raw = [
-                    h for h in quarantine_raw if h.get("payload", {}).get("document_id") not in artifact_ids
+                    h for h in quarantine_raw if h.get("payload", {}).get("document_id") not in excluded_ids
                 ]
                 after = len(es_raw) + len(qdrant_raw) + len(graph_raw) + len(quarantine_raw)
-                log.info("search.test_artifacts_excluded", excluded=before - after, remaining=after)
+                log.info("search.documents_excluded", hits_removed=before - after, remaining=after,
+                         test_artifacts=len(artifact_ids), dated_after_as_of=len(later_ids))
 
         results = self._fuse(
             [

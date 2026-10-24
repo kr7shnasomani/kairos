@@ -5,7 +5,7 @@ Hybrid retrieval: exact match (ES) + semantic vector (Qdrant) + graph traversal 
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -49,6 +49,20 @@ from api.services.vector_store import VectorStoreService
 log = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+
+def parse_as_of(value: str | None) -> datetime | None:
+    """The time-travel point. A bare date (the Copilot's picker sends `YYYY-MM-DD`) means the end of
+    that day in UTC, so "valid on 15 Jan" includes documents dated 15 Jan; it parsed to midnight and
+    dropped them. A full timestamp is used as given. Anything else is a 422."""
+    if not value:
+        return None
+    try:
+        if len(value) == 10:
+            return datetime.combine(date.fromisoformat(value), time.max, tzinfo=UTC)
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="as_of must be an ISO8601 date or timestamp") from exc
 
 
 async def pending_moc_warnings(supabase, sources: list[dict]) -> list[dict]:
@@ -127,10 +141,7 @@ async def search(
     Results are authority-ranked: regulatory requirements (level 1) outrank field observations (level 5).
     Phase 1: retrieval only. synthesis=None until Phase 2.
     """
-    try:
-        as_of_dt = datetime.fromisoformat(as_of) if as_of else None
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="as_of must be an ISO8601 timestamp") from exc
+    as_of_dt = parse_as_of(as_of)
     if asset_id:
         # The graph arm reads that asset's facts directly, so the asset must be one the caller may see:
         # a site-pinned role could otherwise read another site's (or, with the showcase hidden, the
@@ -323,10 +334,7 @@ async def _server_evidence(
     value, so any signed-in role could clear it with a made-up document (security review H4). The
     request's `context` and `query_category` are accepted for compatibility and ignored.
     """
-    try:
-        as_of = datetime.fromisoformat(payload.as_of) if payload.as_of else None
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="as_of must be an ISO8601 timestamp") from exc
+    as_of = parse_as_of(payload.as_of)
 
     svc = SearchService(
         graph=GraphService(driver, settings.NEO4J_DATABASE),
