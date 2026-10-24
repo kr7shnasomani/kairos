@@ -18,7 +18,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Docker
 | Auth | Supabase-backed via `POST /auth/login` |
 | API (browser) | `fetch` against `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`) |
 | API (SSR) | `fetch` against `API_INTERNAL_URL` (`http://kairos-backend-api:8000` in Docker) |
-| Container | `node:20-alpine`; `npm ci` at build time; `src/` + `public/` hot-reloaded via volume mount |
+| Container | `node:24-alpine` (pinned by digest); `npm ci` at build time; `src/` + `public/` hot-reloaded via volume mount |
 
 ---
 
@@ -83,7 +83,7 @@ frontend/
 │       ├── idb.ts                   # IndexedDB offline write-queue (OfflineQueue) — flushed on reconnect
 │       ├── utils.ts · format.ts · motion.ts · labels.ts · user-initials.ts · search-shortcut.ts · graph-theme.tsx
 │       └── copilot.ts · rca.ts      # live types + real constants (SUGGESTIONS, RCA_PRESETS); rca.ts `rcaFor` is TEST-ONLY
-├── Dockerfile                       # node:20-alpine; NEXT_TELEMETRY_DISABLED=1; npm ci at build
+├── Dockerfile                       # node:24-alpine; NEXT_TELEMETRY_DISABLED=1; npm ci at build
 └── package.json
 ```
 
@@ -670,21 +670,17 @@ docker compose up -d --no-deps --build kairos-frontend
 
 | Step | Command | What it checks |
 |-----|---------|----------------|
-| Type check | `npx tsc --noEmit` | TypeScript strict — zero errors required |
-| Lint | `npm run lint` | ESLint (Next.js config) — zero errors required |
-| Build | `npm run build` | Full Next.js production build — catches missing imports, invalid RSC boundaries |
+| Install | `npm ci` | Exactly the committed lockfile, with install scripts blocked by `frontend/.npmrc` |
+| Signatures | `npm audit signatures` | Every package carries a valid npm registry signature |
+| Type check | `npx tsc --noEmit` | TypeScript strict, zero errors required |
+| Lint | `npm run lint` | ESLint (Next.js config), zero errors required |
+| Unit tests | `npm test` | The Vitest suite |
+| Build | `npm run build` | Full Next.js production build: catches missing imports, invalid RSC boundaries |
 | Audit (production) | `npm audit --audit-level=high --omit=dev` | CVEs at high/critical severity in what ships to a browser |
 | Audit (dev) | `npm audit --audit-level=high` | Report only (`continue-on-error`) |
 
-No secrets are needed. **Vitest is not a CI step**: run it with the command in §14.
-
------|---------|----------------|
-| `typecheck` | `npx tsc --noEmit` | TypeScript strict — zero errors required |
-| `lint` | `npm run lint` | ESLint (Next.js config) — zero errors required |
-| `build` | `npm run build` | Full Next.js production build — catches missing imports, invalid RSC boundaries |
-| `audit` | `npm audit --audit-level=high` | Dependency CVEs at high/critical severity |
-
-All four jobs run in parallel on `ubuntu-latest` with `node:20` and `npm ci` from the lockfile. No secrets are needed for these checks.
+The job runs on `ubuntu-latest` with Node 24 (npm 11). No secrets are needed. Supply-chain rules:
+README § Supply-Chain Security.
 
 ---
 

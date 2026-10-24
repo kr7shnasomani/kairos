@@ -38,14 +38,19 @@ jobs:
       NEXT_PUBLIC_API_URL: "http://localhost:8000"   # stub so next build resolves config
       NEXT_PUBLIC_KAIROS_PHASE: "3"
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "20"
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
+      # Every installed package must carry a valid npm registry signature (and attestation, where published).
+      - name: Verify registry signatures
+        run: npm audit signatures
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint

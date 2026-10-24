@@ -5,12 +5,14 @@ sections an idea round asks for, with Innovation, Feasibility and Scalability
 added because they are named evaluation criteria.
 
 ```bash
-npm install
+npm ci
 ./build.sh              # rebuild the deck
 ./build.sh --assets     # also regenerate gradients, diagram and logo
 ```
 
-`assets/` is committed, so the plain form does not need mermaid-cli's Chromium.
+`assets/` is committed, so the plain form does not need mermaid-cli's Chromium. `.npmrc` blocks
+install scripts, so `--assets` needs that browser fetched once with `npx puppeteer browsers install`
+(see the root README, Supply-Chain Security).
 The PDF is the only output; the pptx is an intermediate and stays in `build/`.
 
 ## First run on a new machine

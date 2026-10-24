@@ -24,7 +24,7 @@ All services run as Docker containers. Start with `make dev` (or `docker compose
 
 | Container | Image | Port(s) | Purpose |
 |-----------|-------|---------|---------| 
-| `kairos-frontend` | node:20-alpine (local build) | `3000` | Next.js web app (App Router, dev server) |
+| `kairos-frontend` | node:24-alpine (local build) | `3000` | Next.js web app (App Router, dev server) |
 | `kairos-backend-api` | Python 3.12 (local build) | `8000` | FastAPI REST API |
 | `kairos-celery-worker` | Python 3.12 (local build) | — | Celery workers (ingestion, extraction, attribution, elicitation, transcription, validation) |
 | `kairos-temporal-activity-worker` | Python 3.12 (local build) | — | Temporal activity worker (document pipeline) |

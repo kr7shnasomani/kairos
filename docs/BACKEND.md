@@ -112,7 +112,8 @@ kairos/                          # repo root
 │   │   │                             # files.py writes and reads the showcase files in dataset/ and binds it to load time
 │   │   ├── purge_test_data.py       # Delete test-prefixed rows from all stores (`make purge-test-data`)
 │   │   └── wipe_local_stores.py     # Empty Neo4j + ES + Qdrant entirely (`make wipe-local` / `reset-local`)
-│   └── requirements.txt
+│   ├── requirements.in
+│   └── requirements.txt   # hashed lock of requirements.in (pip-compile)
 ├── benchmark/                   # Evaluation harness + evidence (mounted at /app/benchmark)
 │   ├── run_benchmark.py         # Retrieval · answer quality · provenance · KG-linkage · time-to-answer (`make benchmark`)
 │   ├── verify_layers.py         # Per-layer smoke + latency (`make verify`)
@@ -1247,7 +1248,7 @@ Behaviour that is easy to regress, each pinned by a `tests/test_sec_*.py` case. 
 - **Annotations**: only `reliability` and `admin` feed `validation_corpus`; 60 corrections per user per hour; repeat corrections on one document count once toward the circuit breaker.
 - **Elicitation**: the submitter is always the token's user; off-boarding programmes are visible to staff and the person concerned only (`_require_staff_or_subject`); voice-note storage paths are sanitised (`_safe_segment`) and read in 1 MB chunks against `MAX_UPLOAD_MB`.
 - **Site scope**: asset routes use `scoped_asset` (one `404` for missing or other-site), events, the RCA pack, the audit pack and the coverage and pending-alias lists filter by `site_scope`.
-- **Dependencies** (`requirements.txt`): `fastapi==0.135.1` with `starlette>=1.3.1` (fastapi 0.111.1 capped starlette at 0.37.x, which carries a BadHost advisory and multipart DoS advisories; 0.135.1 is the newest that still accepts the pinned pydantic 2.7.4) and `anyio==4.14.2`. Removed as unused: `python-jose` (and its `ecdsa`), `passlib`, `flower`, `rich`, `tenacity`, `python-dateutil`, `pytz`. `numpy` stays pinned only because `qdrant-client` 1.9.1 needs it. The CI `pip-audit` step now ignores nothing.
+- **Dependencies** (`requirements.in`; `requirements.txt` is its hash-locked pip-compile output, installed with `--require-hashes`): `fastapi==0.135.1` with `starlette>=1.3.1` (fastapi 0.111.1 capped starlette at 0.37.x, which carries a BadHost advisory and multipart DoS advisories; 0.135.1 is the newest that still accepts the pinned pydantic 2.7.4) and `anyio==4.14.2`. Removed as unused: `python-jose` (and its `ecdsa`), `passlib`, `flower`, `rich`, `tenacity`, `python-dateutil`, `pytz`. `numpy` stays pinned only because `qdrant-client` 1.9.1 needs it. The CI `pip-audit` step now ignores nothing.
 
 ### Internal Service Auth
 

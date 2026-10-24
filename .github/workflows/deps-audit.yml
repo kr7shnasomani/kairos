@@ -15,6 +15,7 @@ on:
     branches: [main]
     paths:
       - 'backend/requirements.txt'
+      - 'backend/requirements.in'
       - 'backend/connectors/go.mod'
       - 'backend/connectors/go.sum'
       - 'frontend/package.json'
@@ -24,6 +25,7 @@ on:
     branches: [main]
     paths:
       - 'backend/requirements.txt'
+      - 'backend/requirements.in'
       - 'backend/connectors/go.mod'
       - 'backend/connectors/go.sum'
       - 'frontend/package.json'
@@ -41,8 +43,10 @@ jobs:
     name: pip-audit (backend)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
       - run: pip install pip-audit
@@ -73,16 +77,18 @@ jobs:
       # the removal of python-jose). Do not add an --ignore-vuln without a reason on the same line.
       - name: Audit backend/requirements.txt
         run: |
-          pip-audit --requirement backend/requirements.txt --strict --progress-spinner off
+          pip-audit --requirement backend/requirements.txt --require-hashes --disable-pip --strict --progress-spinner off
 
   node:
     name: npm audit (frontend)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: '20'
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       # `--audit-level=high` on purpose, and `--omit=dev` for what blocks. The frontend tree carries
@@ -103,8 +109,10 @@ jobs:
     name: govulncheck (OT connector)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26'
           # The runner's cached 1.26.x can lag the patch that carries a fix (1.26.8 was served when

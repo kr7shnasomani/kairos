@@ -14,6 +14,10 @@
 #   in it for weeks. A group is now minor + patch, which should stay green and mergeable; a major
 #   arrives as its own PR and is a decision, not a chore.
 #
+# COOLDOWN (2026-10-24, supply-chain guards, README.md > Supply-Chain Security):
+#   A version update is proposed only once the release is 7 days old (14 for a major), by which
+#   time a hijacked release is usually pulled. Security updates ignore the cooldown by design.
+#
 # WHY NEW PRs MAY NOT APPEAR EVEN THOUGH IT IS RUNNING:
 #   Every ecosystem below groups all patterns into ONE PR. While that group PR is open, Dependabot
 #   REBASES it in place rather than opening another — so a working setup looks idle from the PR
@@ -21,6 +25,8 @@
 version: 2
 updates:
   # --- Python (backend API + workers) ---
+  # requirements.in is the source; requirements.txt is its hashed pip-compile lock, which
+  # Dependabot recompiles (hashes included) from the command in the lock's header.
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule:
@@ -28,6 +34,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       python:
         patterns: ["*"]
@@ -41,6 +50,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       npm:
         patterns: ["*"]
@@ -54,6 +66,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       go:
         patterns: ["*"]
@@ -70,9 +85,12 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     ignore:
-      # The frontend image stays on the Node 20 LTS line (CI and Vercel run 20 too). Moving the
-      # runtime is a decision made in all three places at once, not a base-image bump.
+      # The frontend image stays on the Node 24 LTS line, as CI and Vercel do. Moving the runtime is
+      # one decision for all three places, not a base-image bump.
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
     groups:
@@ -88,6 +106,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       actions:
         patterns: ["*"]

@@ -37,6 +37,7 @@ A 13-layer platform organised into five planes: **perception, knowledge, governa
 - [Tech Stack](#tech-stack)
 - [Built on NVIDIA and Nebius](#built-on-nvidia-and-nebius)
 - [Quick Start](#quick-start)
+- [Supply-Chain Security](#supply-chain-security)
 - [Repository Layout](#repository-layout)
 - [Changes During the Hackathon](#changes-during-the-hackathon)
 - [Feedback on Nebius and NVIDIA](#feedback-on-nebius-and-nvidia)
@@ -223,6 +224,56 @@ Passwords are not in the repository. Set one per role in your gitignored `.env`
 role-based governance is the point of the product, and it only *shows* when you log in as someone
 who cannot do everything: an engineer resolves conflicts but is **refused** quarantine promotion,
 while reliability is allowed.
+
+## Supply-Chain Security
+
+Compromised packages usually attack in one of three ways: through an install script, through a
+malicious version installed within hours of its release, or by swapping the contents of a version
+already in use. Kairos is set up so that none of these reach a developer machine, CI, Docker, Vercel
+or the server.
+
+| Guard | Where | Effect |
+|---|---|---|
+| No install scripts | `.npmrc` `ignore-scripts=true`, `strict-allow-scripts=true` (frontend, deck) | npm dependencies cannot run code during install. |
+| 7-day minimum age | `.npmrc` `min-release-age=7` | npm will not pick a version published less than a week ago. |
+| Exact versions | `package.json` (no `^` ranges), `.npmrc` `save-exact=true` | Versions change only through a reviewed commit. |
+| Lockfile installs only | `npm ci` in the Dockerfile, in CI and on Vercel (`frontend/vercel.json`) | Every install gets exactly the committed versions. |
+| Hash-locked Python | `backend/requirements.txt`, compiled from `requirements.in` by pip-compile | Every Python package, transitive ones included, is pinned with its sha256. The image installs with `--require-hashes`, so an unlisted or altered package fails the build. |
+| Signature check | CI step `npm audit signatures` | Every npm package must carry a valid registry signature. |
+| Vulnerability gates | `deps-audit.yml` (pip-audit, npm audit, govulncheck), `dependency-review.yml` on pull requests, Dependabot | A known high or critical advisory fails CI or blocks the pull request. |
+| Update cooldown | `.github/dependabot.yml` `cooldown` | Dependabot proposes a version 7 days after release, or 14 days for a major. Security updates skip it. |
+| Pinned base images | `FROM image:tag@sha256:...` in every Dockerfile | A re-pushed tag cannot change what we build on. Dependabot moves the digest. |
+| Pinned CI actions | `.github/workflows/*.yml` | Actions are pinned to commit SHAs, checkout does not keep the GitHub token, and every workflow defaults to a read-only token. |
+| Image attestations | `docker-publish.yml`, `release.yml` | Published images carry SLSA provenance and an SBOM. `docker-publish.yml` also signs them with cosign. |
+
+Node 24 (npm 11) runs everywhere: in Docker, in CI and on Vercel, so every `.npmrc` setting applies.
+Go modules are verified against `go.sum` and the Go checksum database on every build.
+
+Working rules:
+
+- Install with `npm ci`. Add or bump an npm package with `npm install <name>`, so `.npmrc` still
+  applies. Do not pass `--ignore-scripts=false` or `--dangerously-allow-all-scripts` to get past an
+  error. Find out why it failed first.
+- Python: edit `backend/requirements.in`, then regenerate the lock with the pip-compile command in
+  the header of `backend/requirements.txt`. Never edit the lock by hand.
+- The deck's `./build.sh --assets` needs puppeteer's browser, which install scripts used to
+  download. Fetch it once with `npx puppeteer browsers install` (see `deck/README.md`).
+- Keep the dependency list short. Every package is code that runs on your machine.
+
+**Exception: security patches.** A fix for a published advisory can be newer than 7 days, as Next.js
+16.4.3 was: it was one day old when Kairos moved to it on 24 October 2026 to clear a critical remote
+code execution advisory. Such a version may be installed before the 7 days are up only when all of
+these hold:
+
+1. It fixes a published advisory (a GHSA or CVE, reported by `npm audit`, pip-audit or Dependabot)
+   that affects a version we ship or build with.
+2. It is the smallest bump that contains the fix, from the package's own registry entry.
+3. The override applies to that one command and that one package:
+   `npm install <name>@<version> --min-release-age=0`. Never change `.npmrc` for it.
+4. The commit message and `docs/status.md` name the advisory ID.
+
+Dependabot security updates skip the cooldown on their own, so they need no exception. To report a
+vulnerability in Kairos itself, see [`SECURITY.md`](SECURITY.md).
 
 ## Repository Layout
 
