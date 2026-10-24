@@ -67,6 +67,7 @@ design (`NEXT_PUBLIC_DEMO_EMAIL` and `NEXT_PUBLIC_DEMO_PASSWORD`, baked into the
     - [14b. Staying in sync (local, GitHub, EC2, Vercel)](#14b-staying-in-sync-local-github-ec2-vercel)
 15. [Troubleshooting](#15-troubleshooting)
 16. [Continuous deploy (GitHub Actions)](#16-continuous-deploy-github-actions)
+17. [SSH without an IP rule (Session Manager)](#17-ssh-without-an-ip-rule-session-manager)
 
 ---
 
@@ -560,7 +561,7 @@ curl -s https://kairos-deterium.duckdns.org/health/
 
 Docker starts at boot and every container restarts on its own (`restart: unless-stopped`), so nothing needs
 to be run. If SSH is refused, your home IP has probably changed: edit the security group's SSH rule and choose
-**My IP** again.
+**My IP** again, or use the `kairos-ssm` alias from §17, which needs no IP rule.
 
 **Before starting again after a long pause, check:**
 
@@ -624,7 +625,7 @@ Everything else, including `NEXT_PUBLIC_AUTH_STRICT` and the demo login, should 
 | Elasticsearch restarts or is killed | Check `free -h` and `dmesg | tail`. Confirm swap is on and `vm.max_map_count` is 262144. |
 | Copilot answers arrive all at once instead of streaming | Something is buffering Server-Sent Events. Keep `infra/caddy/Caddyfile` without an `encode` block. |
 | Many `429` responses during a demo | Raise `RATE_LIMIT_PER_MINUTE` in `.env`, then recreate `kairos-backend-api`. |
-| `ssh` to the server hangs and times out (not "refused") | Your current IP isn't the one on the security group's SSH rule — this can happen any time your IP changes, not only after a stop/start. HTTPS still works because 80/443 stay open to everyone; only 22 is IP-locked. Fix: EC2 console → Security Groups → the group attached to the instance (may be named `launch-wizard-1`, not `kairos-backend-sg` — see section 6) → Inbound rules → edit the SSH rule → source **My IP** → Save. |
+| `ssh` to the server hangs and times out (not "refused") | Use `ssh kairos-ssm` (§17), which goes through Session Manager and ignores the IP rule. Otherwise: your current IP isn't the one on the security group's SSH rule — this can happen any time your IP changes, not only after a stop/start. HTTPS still works because 80/443 stay open to everyone; only 22 is IP-locked. Fix: EC2 console → Security Groups → the group attached to the instance (may be named `launch-wizard-1`, not `kairos-backend-sg` — see section 6) → Inbound rules → edit the SSH rule → source **My IP** → Save. |
 
 ---
 
@@ -657,3 +658,30 @@ The last step, **Verify the API is up**, runs `curl -sf --max-time 15 https://<A
 
 Once the three secrets exist and the security group is updated, the workflow deploys for real and its
 status (green/red) reflects whether the deploy succeeded — no other change needed. Third-party actions in this and the other workflows are pinned to a commit SHA (with the version in a comment) rather than a moving tag.
+
+---
+
+## 17. SSH without an IP rule (Session Manager)
+
+Set up 2026-10-24. The SSH rule in the security group is locked to one IP, so every time the deployer's IP
+changed, SSH and `tools/deploy_backend.sh` timed out. AWS Systems Manager Session Manager tunnels SSH through
+AWS instead, so no inbound port or IP rule is involved.
+
+| Piece | Where | What it is |
+|---|---|---|
+| Instance role | EC2 `i-012800d81f549557b` → IAM role `kairos-ec2-ssm` | `AmazonSSMManagedInstanceCore`, so the instance's SSM agent (preinstalled on Ubuntu 24.04) can register |
+| Deploy user | IAM user `kairos-deploy`, inline policy `kairos-ssm-deploy` | May only start an `AWS-StartSSHSession` to this one instance and end its own sessions. No console access |
+| Its access key | `~/.aws/credentials`, profile `kairos-deploy` (`aws configure --profile kairos-deploy`, region `ap-south-1`) | Never in the project `.env`, never in git, never in chat or a screenshot |
+| Plugin | `session-manager-plugin` on `PATH` (`brew install --cask session-manager-plugin`; or unpack Homebrew's signed `.pkg` into `~/.local/bin` if its installer step did not run) | Lets the AWS CLI open the tunnel |
+| SSH alias | `Host kairos-ssm` in `~/.ssh/config`: `HostName` is the instance id, `ProxyCommand` runs `aws ssm start-session --profile kairos-deploy --region ap-south-1 --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p`, and `HostKeyAlias kairos-deterium.duckdns.org` reuses the host key already trusted | `ssh kairos-ssm` works from any network |
+
+`tools/_deploy_common.sh` picks `kairos-ssm` automatically when the alias exists (override with `KAIROS_SERVER`),
+so `make deploy-backend` and `tools/deploy_backend.sh` need no IP change. SSH still needs `~/.ssh/kairos-aws.pem`:
+the tunnel only replaces the network path.
+
+Once `ssh kairos-ssm` works, the security group's port 22 rule can be deleted, which closes SSH to the internet
+entirely. Keep the rule if you still need direct SSH from a machine without the alias.
+
+To revoke access: deactivate the access key on `kairos-deploy` in IAM (or delete the user). Rotate the key by
+creating a second one, running `aws configure --profile kairos-deploy` with it, then deleting the first.
+

@@ -200,11 +200,12 @@ let refreshInFlight: Promise<boolean> | null = null;
 // When a refresh last succeeded in this page load (module state, so a reload starts at 0).
 let refreshedAt = 0;
 
-/** True once the session was refreshed during this page load. The shell refreshes before it renders
- *  a page, so a server page that failed on the old cookie meets a token that already looks valid;
- *  this is how the error boundary still knows a reload would fix it. */
-export function refreshedThisPageLoad(): boolean {
-  return refreshedAt > 0;
+/** True when the session was refreshed in the last minute. The shell refreshes before it renders a
+ *  page, so a server page that failed on the old cookie meets a token that already looks valid; this
+ *  is how the error boundary still knows a reload would fix it. Bounded, so an unrelated error an hour
+ *  after the last refresh shows its message instead of reloading the app first. */
+export function refreshedJustNow(): boolean {
+  return refreshedAt > 0 && Date.now() - refreshedAt < 60_000;
 }
 
 /** Single-flight: when the hourly token expires, every subscriber 401s at once, and N parallel
@@ -247,6 +248,13 @@ async function refreshOnce(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Full navigation to sign-in from module code, which has no router. A hard load also drops every
+ *  in-memory cache the signed-out session filled. */
+function goToLogin(): void {
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- module scope, no router
+  if (typeof window !== "undefined") window.location.assign("/login");
 }
 
 export async function fetchWithSession(path: string, init: RequestInit, timeoutMs = WRITE_TIMEOUT_MS): Promise<Response> {
@@ -296,14 +304,14 @@ export async function postJson<T>(path: string, body: unknown, timeoutMs = WRITE
     if (!refreshed) {
       // clear session and redirect — no router available outside components
       expireSession();
-      if (typeof window !== "undefined") window.location.href = "/login";
+      goToLogin();
       throw new Error(`${path} → HTTP 401`);
     }
     res = await makeReq(getToken());
   }
   if (res.status === 401) {
     expireSession();
-    if (typeof window !== "undefined") window.location.assign("/login");
+    goToLogin();
   }
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
   return (await res.json()) as T;
@@ -336,7 +344,7 @@ async function postSse(
     },
     timeoutMs,
   );
-  if (res.status === 401 && typeof window !== "undefined") window.location.assign("/login");
+  if (res.status === 401) goToLogin();
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
   if (!res.body) throw new Error(`${path} → no response body to stream`);
 
@@ -469,14 +477,14 @@ async function getJson<T>(path: string, timeoutMs = 4000, requireAuth = false): 
   if (res.status === 401 && sentToken) {
     if (!await refreshAccessToken()) {
       expireSession();
-      if (typeof window !== "undefined") window.location.assign("/login");
+      goToLogin();
       throw new Error(`${path} → HTTP 401`);
     }
     res = await makeRequest();
   }
   if (res.status === 401 && sentToken) {
     expireSession();
-    if (typeof window !== "undefined") window.location.assign("/login");
+    goToLogin();
   }
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}`);
   return (await res.json()) as T;

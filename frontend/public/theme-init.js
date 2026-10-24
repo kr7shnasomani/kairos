@@ -8,7 +8,7 @@
     if (t === "dark" || t === "light") root.setAttribute("data-theme", t);
     if (localStorage.getItem("kairos-contrast") === "high") root.setAttribute("data-contrast", "high");
     if (localStorage.getItem("kairos-devtools") === "show") root.setAttribute("data-devtools", "show");
-  } catch (e) {
+  } catch {
     // Storage disabled: keep the server-rendered light theme.
   }
 })();

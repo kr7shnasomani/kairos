@@ -64,6 +64,15 @@ describe("ElicitationPage", () => {
     expect(screen.queryByText("Responses queued")).not.toBeInTheDocument();
   });
 
+  it("blames the server, not the answers, for a 5xx", async () => {
+    vi.mocked(enqueueWrite).mockClear();
+    vi.mocked(submitElicitationResponses).mockRejectedValueOnce(new Error("/elicitation/WO-118/responses → HTTP 503"));
+    await answerAndSubmit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not save these responses just now/);
+    expect(enqueueWrite).not.toHaveBeenCalled();
+  });
+
   it("queues the submission when the network is down", async () => {
     vi.mocked(enqueueWrite).mockClear().mockResolvedValueOnce(undefined);
     vi.mocked(submitElicitationResponses).mockRejectedValueOnce(new TypeError("Failed to fetch"));

@@ -179,6 +179,8 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=422, content={"detail": "A referenced record does not exist."})
         if code == "23505":  # unique violation
             return JSONResponse(status_code=409, content={"detail": "A record with these identifiers already exists."})
+        if code == "22P02":  # invalid input syntax, e.g. a malformed uuid in a by-id path: no such record
+            return JSONResponse(status_code=404, content={"detail": "Not found."})
         return JSONResponse(status_code=500, content={"detail": "Database request failed. Check logs for details."})
 
     @app.exception_handler(Exception)

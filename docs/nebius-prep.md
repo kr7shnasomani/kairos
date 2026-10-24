@@ -310,7 +310,7 @@ engineer) runs on calendar time and should start whenever possible.
 | Q3 as first written (anchor the chart window to the dataset's dates) | Would hide a genuinely quiet period in production. Replaced by the honest empty-window message |
 
 Project debt found while doing this work is recorded in
-[`status.md` § Pending](./status.md#pending--as-of-2026-09-28), P10, P12, P13 (P9, P11, P14 are fixed), not repeated here.
+[`status.md` § Pending](./status.md#pending--as-of-2026-10-25), P10, P12, P13 (P9, P11, P14 are fixed), not repeated here.
 
 ## Decisions still open
 

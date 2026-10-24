@@ -15,6 +15,12 @@
 #   arrives as its own PR and is a decision, not a chore.
 #
 #
+# COOLDOWN (2026-10-24, README.md > Supply-Chain Security):
+#   A version update is proposed only once the release is 7 days old, by which time a hijacked
+#   release is usually pulled. pip, npm and gomod also wait 14 days for a major. docker and
+#   github-actions accept only `default-days` (the validator rejects semver-*-days there).
+#   Security updates ignore the cooldown by design.
+#
 # WHY NEW PRs MAY NOT APPEAR EVEN THOUGH IT IS RUNNING:
 #   Every ecosystem below groups all patterns into ONE PR. While that group PR is open, Dependabot
 #   REBASES it in place rather than opening another — so a working setup looks idle from the PR
@@ -31,6 +37,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       python:
         patterns: ["*"]
@@ -44,6 +53,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       npm:
         patterns: ["*"]
@@ -57,6 +69,9 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     groups:
       go:
         patterns: ["*"]
@@ -73,6 +88,8 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     ignore:
       # The frontend image stays on the Node 24 LTS line, as CI and Vercel do. Moving the runtime is
       # one decision for all three places, not a base-image bump.
@@ -91,6 +108,8 @@ updates:
       time: "06:00"
       timezone: "Asia/Kolkata"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]

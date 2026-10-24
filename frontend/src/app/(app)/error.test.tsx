@@ -5,8 +5,10 @@ import ErrorBoundary from "./error";
 const flags = vi.hoisted(() => ({ refreshed: false }));
 vi.mock("@/lib/api", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/api")>()),
-  refreshedThisPageLoad: () => flags.refreshed,
+  refreshedJustNow: () => flags.refreshed,
 }));
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 const reload = vi.fn();
 const jwt = (exp: number) => `h.${btoa(JSON.stringify({ exp }))}.s`;
@@ -60,6 +62,18 @@ describe("app error boundary", () => {
 
     expect(await screen.findByText("Something went wrong")).toBeInTheDocument();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("Try again refetches the route (retry), not just a re-render of the failed payload (reset)", async () => {
+    localStorage.setItem("kairos-token", jwt(4e9));
+    const reset = vi.fn();
+    const retry = vi.fn();
+
+    render(<ErrorBoundary error={new Error("boom")} reset={reset} retry={retry} />);
+    (await screen.findByRole("button", { name: "Try again" })).click();
+
+    expect(retry).toHaveBeenCalledOnce();
+    expect(reset).not.toHaveBeenCalled();
   });
 
   it("shows the error when the session is valid and was not refreshed", async () => {

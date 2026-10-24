@@ -55,6 +55,16 @@ export interface FlushResult {
 }
 
 let flushInFlight: Promise<FlushResult> | null = null;
+// Rejected writes not yet shown to the user. Sign-in flushes before the shell mounts, so the count is
+// kept here until the shell takes it, rather than read only from the shell's own flush calls.
+let unreportedRejections = 0;
+
+/** Writes the server rejected on replay since the last call, reset to zero once read. */
+export function takeRejectedWrites(): number {
+  const n = unreportedRejections;
+  unreportedRejections = 0;
+  return n;
+}
 
 /** Single-flight: login and every `online` event call this, and two overlapping flushes read the
  *  same items and replayed each write twice. */
@@ -130,6 +140,7 @@ async function flushOnce(): Promise<FlushResult> {
         failed++;
       }
     }
+    unreportedRejections += rejected;
     return { replayed, failed, rejected };
   } finally {
     db.close();

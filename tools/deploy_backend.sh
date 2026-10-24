@@ -10,14 +10,15 @@
 # pick up, see docs/status.md Known Pitfalls), then verify. Rollback: restore the
 # backup directory it prints and re-tag the two `rollback-*` images.
 #
-# Needs: SSH on port 22 open to your current IP in the security group, and the key at $SSH_KEY.
+# Needs: the `kairos-ssm` Session Manager alias (docs/DEPLOY.md) and the key at $SSH_KEY, or, without
+# the alias, SSH on port 22 open to your current IP in the security group.
 set -euo pipefail
 # shellcheck source=tools/_deploy_common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_deploy_common.sh"
 cd "$ROOT"
 
 if [ "${1:-}" = "--files" ]; then
-  remote true || { echo "cannot reach $SERVER over SSH: open port 22 to your IP first" >&2; exit 2; }
+  remote true || { echo "cannot reach $SERVER over SSH: check the kairos-deploy AWS profile (Session Manager), or open port 22 to your IP" >&2; exit 2; }
   rsync -az --delete "${RSYNC_EXCLUDES[@]}" -e "ssh ${SSH_OPTS[*]}" ./ "$SERVER:~/kairos/"
   echo "files copied, nothing rebuilt or restarted. If backend code, the Caddyfile or a policy changed, use --yes instead."
   exit 0
@@ -28,7 +29,7 @@ if [ "${1:-}" != "--yes" ]; then
   read -r -p "Type 'deploy' to continue: " ok; [ "$ok" = "deploy" ] || { echo "aborted"; exit 1; }
 fi
 
-remote true || { echo "cannot reach $SERVER over SSH: open port 22 to your IP first" >&2; exit 2; }
+remote true || { echo "cannot reach $SERVER over SSH: check the kairos-deploy AWS profile (Session Manager), or open port 22 to your IP" >&2; exit 2; }
 for k in MOC_WEBHOOK_SECRET CONNECTOR_SHARED_SECRET; do
   remote "grep -q '^$k=' ~/kairos/.env" || { echo "server .env is missing $k: the API or connector would refuse to start" >&2; exit 3; }
 done

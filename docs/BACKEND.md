@@ -365,8 +365,8 @@ Qdrant treats a missing key as non-matching, so requiring `active` would silentl
 
 LLM synthesis + embedding. Never originates knowledge — only assembles retrieved context.
 
-- `synthesize(query, context, query_category, aliases=None)` — `nvidia/nemotron-3-super-120b-a12b` on the first
-  configured tier (NIM by default), falling through the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
+- `synthesize(query, context, query_category, aliases=None)` — Nemotron 3 on the first configured tier
+  (NIM by default, `nvidia/nemotron-3-ultra-550b-a55b`), falling through the cascade below. A safety gate runs **twice**: on the evidence before synthesis, and on the
   result after it (an honest "not specified in the sources" must not render as a hedged answer).
 - `evidence_gate(...)` / `result_gate(...)` — those two gates, as separate methods returning a
   refusal dict or `None`. Extracted so `synthesize()` and `synthesize_stream()` call the **same**
@@ -429,8 +429,9 @@ LLM synthesis + embedding. Never originates knowledge — only assembles retriev
 > own method because `/api/generate` is a different wire format, not a different URL.
 >
 > **Token Factory is wired but unkeyed**, so it is inert until `NEBIUS_TOKEN_FACTORY_API_KEY` is set.
-> It serves the same Nemotron build as NIM, so promoting it changes who serves the model rather than
-> which model answers, and the benchmark counts `tokenfactory` and `nim` alike as the pinned model.
+> It is configured for Nemotron 3 Super (`NEBIUS_TOKEN_FACTORY_MODEL`) while NIM serves Nemotron 3 Ultra
+> since 2026-10-25, so set it to Token Factory's Ultra id first if both tiers should answer with one
+> model. The benchmark counts `tokenfactory` and `nim` alike as the pinned Nemotron family.
 > Fill `GEMINI_API_KEY` (Google's OpenAI-compatible endpoint) to add a generous free-tier cloud
 > fallback; set `OLLAMA_BASE_URL` to add the local air-gapped tier (intentionally empty by
 > default, because an accidental local Ollama once consumed ~6 GB RAM). Embeddings stay Jina → Ollama.
@@ -1080,7 +1081,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `NVIDIA_NIM_API_KEY` | `""` | Required for NIM synthesis, NER, and OCR |
-| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
+| `NVIDIA_NIM_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` | LLM synthesis (sent with `chat_template_kwargs.enable_thinking=false`, see `NVIDIA_NIM_DISABLE_THINKING`) |
 | `NVIDIA_NIM_NER_MODEL` | `meta/llama-3.2-11b-vision-instruct` | NER extraction. Was `mistralai/ministral-14b-instruct-2512`, **deprecated by NVIDIA** — the endpoint hangs until timeout and `NERService` degrades silently to its regex fallback (ASSET_TAG only). Verify any replacement responds before switching. |
 | `NVIDIA_NIM_NER_TIMEOUT` | `120.0` | NER's own per-attempt cap (3 attempts on a timeout or 5xx). Separate from `NVIDIA_NIM_TIMEOUT`, which must stay under the 90 s synthesis budget; NER runs in background ingestion, and a miss drops the document to the regex fallback. |
 | `NVIDIA_NIM_OCR_MODEL` | `nvidia/nemotron-ocr-v2` | OCR for scanned docs/images |
@@ -1092,7 +1093,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `GROQ_WHISPER_MODEL` | `whisper-large-v3` | STT via Groq API |
 | `NEBIUS_TOKEN_FACTORY_API_KEY` | `""` | **Tier 1 of the cascade when set**, ahead of NIM. Empty ⇒ skipped, which is the shipped default. |
 | `NEBIUS_TOKEN_FACTORY_BASE_URL` | `https://api.tokenfactory.nebius.com/v1` | OpenAI-compatible endpoint |
-| `NEBIUS_TOKEN_FACTORY_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | The same Nemotron build NIM serves, so a Token Factory answer is not a fallback |
+| `NEBIUS_TOKEN_FACTORY_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | Nemotron 3 Super. Since 2026-10-25 NIM serves Ultra, so the two tiers name different Nemotron 3 models; both count as the pinned family in the benchmark. Set it to Token Factory's Ultra id to match before keying the tier |
 | `NEBIUS_TOKEN_FACTORY_DISABLE_THINKING` | `true` | Sends Nemotron's thinking-off flag to Token Factory. Its own switch, separate from NIM's, so a 400 there is fixed without touching NIM |
 | `NEBIUS_TOKEN_FACTORY_TIMEOUT` | `25.0` | A fallthrough costs this cap plus NIM's, so 25 + 60 = 85 s stays inside the frontend's 90 s synthesis budget. NIM answers in ~1.5 s at p50, so 25 s only cuts off a Token Factory call that is already failing |
 | `OPENROUTER_API_KEY` | `""` | **Tier 3 of the cascade** (tier 2 while Token Factory is unkeyed). Empty ⇒ skipped. |

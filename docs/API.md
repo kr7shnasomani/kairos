@@ -96,7 +96,7 @@ Exchange email + password for a JWT pair.
 }
 ```
 
-**Errors:** `401` invalid credentials (the same generic `Invalid credentials` whether the account exists or not; the upstream reason is logged, never returned), `429` after 5 failed attempts for one account or 20 from one IP within 15 minutes (`services/login_throttle.py`; fails open if Redis is down; a success clears the account's count), `400` malformed payload
+**Errors:** `401` invalid credentials (the same generic `Invalid credentials` whether the account exists or not; the upstream reason is logged, never returned), `429` after 5 wrong passwords for one account from one IP, or 20 from one IP, within 15 minutes (`services/login_throttle.py`). The account count is per IP so nobody can lock another person's account, the public demo account included. Only a rejected password counts, never an outage or Supabase's own 429; it fails open if Redis is down, and a success clears that account's count, `400` malformed payload
 
 > **Critical:** This handler uses a fresh anon Supabase client (never the service-role client). Using the service-role client for auth operations contaminates its session and causes RLS violations on all subsequent table writes.
 
@@ -205,7 +205,7 @@ Opt-in liveness probe for a **rate-limited model provider**. Makes the smallest 
 
 **Response `200`:**
 ```json
-{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-super-120b-a12b", "served_model": "nvidia/nemotron-3-super-120b-a12b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
+{ "provider": "nim", "ok": true, "status": 200, "model": "nvidia/nemotron-3-ultra-550b-a55b", "served_model": "nvidia/nemotron-3-ultra-550b-a55b", "model_mismatch": null, "latency_ms": 2603, "detail": null }
 ```
 
 For a synthesis tier the probe sends the tier's own provider-specific body keys (Nemotron's thinking-off flag), so a provider that rejects them fails here rather than on every real answer. `served_model` is the model the provider says it ran; `model_mismatch` is `null` when it matches the pin (casing ignored) and a record otherwise. Both are `null` for Jina and Groq.
@@ -1183,7 +1183,7 @@ leave the line out.
 
 `uncertainty` carries the model's own statement of what it could not establish; `rate_limited` is
 `true` only when **every** provider tier returned HTTP 429 (see above). `model` names the provider tier
-that actually answered — `nim` (Nemotron 3 Super 120B), `openrouter` (Llama 3.1 70B) or `gemini` — and
+that actually answered — `nim` (Nemotron 3 Ultra 550B), `tokenfactory` (Nemotron 3 Super 120B, when keyed), `openrouter` (Llama 3.1 70B) or `gemini` — and
 `served_model`, when present, is the exact model id the provider reported.
 
 **`pending_moc` — the change-under-review warning.** Non-empty when an asset the answer is about has

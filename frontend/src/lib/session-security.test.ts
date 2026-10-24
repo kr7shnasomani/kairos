@@ -207,4 +207,16 @@ describe("offline write queue", () => {
     expect(b).toBe(a);
     expect(rows).toEqual([]);
   });
+
+  it("keeps a rejection for the shell to report, even from the flush at sign-in", async () => {
+    rows = [{ id: 1, url: "http://x/a", method: "POST", body: "{}", user: "user-b" }];
+    localStorage.setItem("kairos-token", jwt("user-b"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 422 })));
+    const { flushQueue, takeRejectedWrites } = await import("./idb");
+
+    await flushQueue(); // login() runs this before the shell has mounted
+
+    expect(takeRejectedWrites()).toBe(1);
+    expect(takeRejectedWrites()).toBe(0); // reported once
+  });
 });

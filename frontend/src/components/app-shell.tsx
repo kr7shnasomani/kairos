@@ -8,7 +8,7 @@ import { MobileAppHeader } from "./mobile-app-header";
 import { CommandPalette, ShortcutsHelp, type PaletteItem } from "./command-palette";
 import { getMe, logout } from "@/lib/auth";
 import { GOVERNOR_UPDATED, expireSession, getToken, getGovernorState, getPlantState, isStrictAuth } from "@/lib/api";
-import { flushQueue, type FlushResult } from "@/lib/idb";
+import { flushQueue, takeRejectedWrites } from "@/lib/idb";
 import { getUserInitials } from "@/lib/user-initials";
 import { ADMIN_VIEW_ROLES, routeAllowed, roleHome } from "./use-role";
 import type { Role, User, GovernorEventState, GovernorState, PlantState } from "@/lib/types";
@@ -18,9 +18,6 @@ import { Button } from "./ui";
 import { PageSkeleton } from "./skeleton";
 import { Icon as SharedIcon, isIconName, type IconName as SharedIconName } from "./icon";
 import { getSearchShortcut } from "@/lib/search-shortcut";
-
-// Flush results already counted into the rejected-writes notice (see `onOnline`).
-const countedFlushes = new WeakSet<FlushResult>();
 
 // Staff surfaces (Assure group + RCA) are hidden from field workers. Dev-bypass (no session)
 // defaults to engineer, so an unauthenticated demo still sees everything.
@@ -319,7 +316,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         }
         setUser(profile);
       }
-      if (alive) setAuthed(true);
+      if (!alive) return;
+      setAuthed(true);
+      showRejectedWrites(); // from the flush at sign-in
     }
     void authorize();
     // Service worker: production only. In dev it caches the app shell and fights
@@ -333,12 +332,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
     }
     // Flush write queue on reconnect
+    function showRejectedWrites() {
+      // Taken once, so overlapping `online` events sharing one single-flight flush count it once.
+      const n = takeRejectedWrites();
+      if (n) setRejectedWrites((count) => count + n);
+    }
     async function onOnline() {
-      const result = await flushQueue();
-      // flushQueue is single-flight: overlapping `online` events share one result, so count it once.
-      if (!alive || !result.rejected || countedFlushes.has(result)) return;
-      countedFlushes.add(result);
-      setRejectedWrites((n) => n + result.rejected);
+      await flushQueue();
+      if (alive) showRejectedWrites();
     }
     window.addEventListener("online", onOnline);
     return () => {

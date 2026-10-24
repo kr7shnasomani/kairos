@@ -458,3 +458,45 @@ def test_sla_escalation_runs_once_per_row_even_when_two_reads_overlap():
 
     assert first["conflicts_escalated"] == 1 and second["conflicts_escalated"] == 0
     assert [a["entity_id"] for a in audits] == ["C-1"]
+
+
+def test_sla_escalation_chunks_a_large_backlog():
+    """Every id goes into the request URL, so a large backlog is sent in chunks, not one request."""
+    from api.services import sla_service
+
+    calls: list = []
+
+    class _T:
+        def update(self, _values):
+            return self
+
+        def in_(self, _col, ids):
+            calls.append(list(ids))
+            self.ids = ids
+            return self
+
+        def is_(self, *_a):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[{"item_id": i} for i in self.ids])
+
+    rows = [{"item_id": f"Q-{n}"} for n in range(sla_service._ESCALATE_CHUNK * 2 + 5)]
+    sb = SimpleNamespace(table=lambda _n: _T())
+    out = asyncio.run(sla_service._escalate(sb, "quarantine_items", "item_id", rows, {"escalated_at": "now"}))
+
+    assert [len(c) for c in calls] == [sla_service._ESCALATE_CHUNK, sla_service._ESCALATE_CHUNK, 5]
+    assert len(out) == len(rows)
+
+
+def test_a_malformed_id_is_a_404_not_a_500():
+    """`GET /briefs/governor` matched `/{brief_id}`, Postgres raised 22P02 on the non-uuid id, and the
+    shared Supabase handler answered 500. A malformed id names no record: 404, for every by-id route."""
+    from postgrest.exceptions import APIError
+
+    from api.main import app
+
+    handler = app.exception_handlers[APIError]
+    request = SimpleNamespace(url="https://api/briefs/governor")
+    resp = asyncio.run(handler(request, APIError({"code": "22P02", "message": "invalid input syntax for type uuid"})))
+    assert resp.status_code == 404

@@ -54,7 +54,7 @@ def all_tiers(settings: Settings) -> list[Provider]:
             api_key=settings.NEBIUS_TOKEN_FACTORY_API_KEY,
             model=settings.NEBIUS_TOKEN_FACTORY_MODEL,
             timeout=settings.NEBIUS_TOKEN_FACTORY_TIMEOUT,
-            # Same Nemotron build as NIM, so it needs the same flag, behind its own switch.
+            # A Nemotron 3 model like NIM's, so it needs the same flag, behind its own switch.
             extra_body=no_thinking if settings.NEBIUS_TOKEN_FACTORY_DISABLE_THINKING else {},
         ),
         Provider(

@@ -8,6 +8,7 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
+from gotrue.errors import AuthApiError, AuthInvalidCredentialsError
 from pydantic import BaseModel
 from supabase import create_client
 
@@ -36,6 +37,13 @@ class TokenResponse(BaseModel):
     user_id: str
 
 
+def _wrong_credentials(exc: Exception) -> bool:
+    """Supabase refused these credentials (a 4xx other than its own rate limit), as opposed to failing."""
+    if isinstance(exc, AuthInvalidCredentialsError):
+        return True
+    return isinstance(exc, AuthApiError) and 400 <= (exc.status or 0) < 500 and exc.status != 429
+
+
 @router.post("/login", response_model=TokenResponse, summary="Exchange credentials for JWT")
 async def login(payload: LoginRequest, request: Request, settings: SettingsDep, redis: RedisDep) -> TokenResponse:
     ip = client_ip(request)
@@ -57,7 +65,10 @@ async def login(payload: LoginRequest, request: Request, settings: SettingsDep, 
         # The upstream text distinguishes "no such user" from "wrong password", which lets a caller
         # enumerate accounts. Log it, answer the same thing every time.
         log.info("auth.login_failed", error=str(e))
-        await login_throttle.record_failure(redis, ip, payload.email)
+        # Only a rejected password counts toward the throttle. An outage, a timeout or Supabase's own
+        # 429 is not the user's guess, and counting it locked people out after the service recovered.
+        if _wrong_credentials(e):
+            await login_throttle.record_failure(redis, ip, payload.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not result.session:
         await login_throttle.record_failure(redis, ip, payload.email)

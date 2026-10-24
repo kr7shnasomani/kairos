@@ -149,7 +149,13 @@ export default function ElicitationPage() {
       // Only a request that never got an answer is queued. A 4xx used to be queued too, the replay
       // then dropped it as unreplayable, and the worker had been told the interview was saved.
       if (!isNetworkFailure(err)) {
-        setSubmitError("The server rejected these responses, so nothing was saved. Check the answers and submit again.");
+        // postJson's error names the status ("→ HTTP 503"). A 5xx is the server's fault, not the answers'.
+        const serverFault = /HTTP 5\d\d/.test(err instanceof Error ? err.message : "");
+        setSubmitError(
+          serverFault
+            ? "The server could not save these responses just now. Your answers are still here: submit again in a moment."
+            : "The server rejected these responses, so nothing was saved. Check the answers and submit again.",
+        );
         return;
       }
       try {

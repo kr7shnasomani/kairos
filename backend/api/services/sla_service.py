@@ -67,16 +67,26 @@ class SLAService:
         }
 
 
+_ESCALATE_CHUNK = 100
+
+
 async def _escalate(supabase, table: str, key: str, rows: list[dict], values: dict) -> list[dict]:
     """Mark `rows` escalated in one update, only where still unescalated. Returns the rows it changed."""
     import asyncio
     if not rows:
         return []
     by_id = {r[key]: r for r in rows}
-    changed = await asyncio.to_thread(
-        lambda: supabase.table(table).update(values).in_(key, list(by_id)).is_("escalated_at", "null").execute()
-    )
-    return [by_id[r[key]] for r in (changed.data or []) if r.get(key) in by_id]
+    ids = list(by_id)
+    escalated: list[dict] = []
+    # Chunked: every id goes into the URL, and one request for a large backlog can pass the gateway's
+    # URL limit and escalate nothing.
+    for start in range(0, len(ids), _ESCALATE_CHUNK):
+        chunk = ids[start:start + _ESCALATE_CHUNK]
+        changed = await asyncio.to_thread(
+            lambda c=chunk: supabase.table(table).update(values).in_(key, c).is_("escalated_at", "null").execute()
+        )
+        escalated += [by_id[r[key]] for r in (changed.data or []) if r.get(key) in by_id]
+    return escalated
 
 
 async def _audit(supabase, entity_type: str, key: str, rows: list[dict], details) -> None:

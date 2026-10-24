@@ -72,7 +72,10 @@ json() { python3 -c "import sys,json; d=json.load(sys.stdin); $1"; }
 signin() {  # signin <persona> <token>
   export AGENT_BROWSER_SESSION="e2e-$1"
   agent-browser open "$BASE/login" >/dev/null
-  agent-browser eval "localStorage.setItem('kairos-token', '$2')" >/dev/null
+  # Both stores a real sign-in writes (lib/api.ts storeSession): server-rendered pages read the
+  # `kairos-access` cookie, so with only localStorage they rendered unauthenticated. The local API's
+  # development bypass hid that; production answered 401 and the page showed its error screen.
+  agent-browser eval "localStorage.setItem('kairos-token', '$2'); document.cookie = 'kairos-access=' + encodeURIComponent('$2') + '; Path=/; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '')" >/dev/null
 }
 
 visit() {  # visit <route> <expected-pathname>

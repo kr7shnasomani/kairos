@@ -41,7 +41,7 @@ const API_GROUPS: { group: string; layer: string; endpoint: string; probe: strin
 // In cascade order. Token Factory is tier 1 only when its key is set; unkeyed, NIM leads.
 const MODELS: { key: string; sub: string }[] = [
   { key: "tokenfactory", sub: "LLM synthesis, tier 1 only when its key is set" },
-  { key: "nim", sub: "LLM synthesis, nemotron-3-super-120b" },
+  { key: "nim", sub: "LLM synthesis, nemotron-3-ultra-550b" },
   { key: "openrouter", sub: "LLM fallback, llama-3.1-70b" },
   { key: "gemini", sub: "LLM fallback, gemini-2.5-flash-lite" },
   { key: "jina", sub: "Embeddings, powers Search & RAG" },

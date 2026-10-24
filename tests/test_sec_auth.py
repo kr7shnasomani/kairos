@@ -247,6 +247,17 @@ def _raising_client(message):
     return lambda *a, **k: SimpleNamespace(auth=auth)
 
 
+def _rejecting_client():
+    """Supabase's answer to a wrong password: AuthApiError, status 400."""
+    from gotrue.errors import AuthApiError
+
+    def _reject(*a, **k):
+        raise AuthApiError("Invalid login credentials", 400, "invalid_credentials")
+
+    auth = SimpleNamespace(sign_in_with_password=_reject)
+    return lambda *a, **k: SimpleNamespace(auth=auth)
+
+
 class _MemRedis:
     """Enough of redis.asyncio for the login throttle."""
 
@@ -267,8 +278,8 @@ class _MemRedis:
         self.store.pop(key, None)
 
 
-def _login_request():
-    return SimpleNamespace(headers={"x-forwarded-for": "203.0.113.9"}, client=None)
+def _login_request(ip="203.0.113.9"):
+    return SimpleNamespace(headers={"x-forwarded-for": ip}, client=None)
 
 
 def test_login_does_not_echo_upstream_error(monkeypatch):
@@ -279,18 +290,43 @@ def test_login_does_not_echo_upstream_error(monkeypatch):
     assert exc.value.detail == "Invalid credentials"
 
 
+def _login_codes(redis, attempts, ip="203.0.113.9"):
+    codes = []
+    for _ in range(attempts):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(auth_router.login(auth_router.LoginRequest(email="a@b.c", password="x"), _login_request(ip), _settings(), redis))
+        codes.append(exc.value.status_code)
+    return codes
+
+
 def test_login_is_throttled_after_repeated_failures_for_one_account(monkeypatch):
     from api.services import login_throttle
 
-    monkeypatch.setattr(auth_router, "create_client", _raising_client("Invalid login credentials"))
-    redis = _MemRedis()
-    codes = []
-    for _ in range(login_throttle.MAX_FAILURES_PER_EMAIL + 1):
-        with pytest.raises(HTTPException) as exc:
-            asyncio.run(auth_router.login(auth_router.LoginRequest(email="a@b.c", password="x"), _login_request(), _settings(), redis))
-        codes.append(exc.value.status_code)
+    monkeypatch.setattr(auth_router, "create_client", _rejecting_client())
     # Five wrong passwords answer 401; the sixth is refused before Supabase is asked.
-    assert codes == [401] * login_throttle.MAX_FAILURES_PER_EMAIL + [429]
+    assert _login_codes(_MemRedis(), login_throttle.MAX_FAILURES_PER_ACCOUNT + 1) == (
+        [401] * login_throttle.MAX_FAILURES_PER_ACCOUNT + [429]
+    )
+
+
+def test_one_ip_failing_cannot_lock_the_account_for_everyone(monkeypatch):
+    """The demo account's email ships in the public bundle: a per-email lock let anyone shut the
+    one-click demo for every visitor with five wrong passwords."""
+    from api.services import login_throttle
+
+    monkeypatch.setattr(auth_router, "create_client", _rejecting_client())
+    redis = _MemRedis()
+    _login_codes(redis, login_throttle.MAX_FAILURES_PER_ACCOUNT + 1, ip="198.51.100.66")
+    assert _login_codes(redis, 1, ip="203.0.113.9") == [401]  # asked Supabase, not refused
+
+
+def test_an_upstream_failure_is_not_counted_as_a_wrong_password(monkeypatch):
+    from api.services import login_throttle
+
+    monkeypatch.setattr(auth_router, "create_client", _raising_client("connection reset by peer"))
+    assert _login_codes(_MemRedis(), login_throttle.MAX_FAILURES_PER_ACCOUNT + 2) == (
+        [401] * (login_throttle.MAX_FAILURES_PER_ACCOUNT + 2)
+    )
 
 
 def test_login_throttle_fails_open_when_redis_is_down():

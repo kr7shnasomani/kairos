@@ -5,7 +5,11 @@
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SSH_KEY="${KAIROS_SSH_KEY:-$HOME/.ssh/kairos-aws.pem}"
-SERVER="${KAIROS_SERVER:-ubuntu@kairos-deterium.duckdns.org}"
+# The `kairos-ssm` SSH alias (Session Manager, no open port, no IP rule; docs/DEPLOY.md) when this
+# machine defines it, else direct SSH to the public host, which needs port 22 open to your IP.
+if ssh -G kairos-ssm 2>/dev/null | grep -qi '^proxycommand '; then _default_server=kairos-ssm
+else _default_server=ubuntu@kairos-deterium.duckdns.org; fi
+SERVER="${KAIROS_SERVER:-$_default_server}"
 API_URL="${KAIROS_API_URL:-https://kairos-deterium.duckdns.org}"
 WEB_URL="${KAIROS_WEB_URL:-https://kairos.deterium.xyz}"
 VERCEL_SCOPE="${KAIROS_VERCEL_SCOPE:-kr1shnasomani-preview}"

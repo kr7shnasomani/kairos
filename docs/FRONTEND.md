@@ -696,7 +696,7 @@ README § Supply-Chain Security.
 | `h-screen` → `h-dvh` | ✅ converted |
 | Token colors only (no `bg-white`, `text-gray-*`) | ✅ clean |
 | `@xyflow/react` in `package-lock.json` | ✅ resolved |
-| Test suite | **396 tests / 86 files**, all passing (2026-10-22; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
+| Test suite | **399 tests / 86 files**, all passing (2026-10-24; in a container mount `benchmark/` at `/benchmark` for `landing-figures.test.ts`) |
 | eslint | ✅ 0 errors (3 pre-existing unused-var warnings) |
 
 ---
