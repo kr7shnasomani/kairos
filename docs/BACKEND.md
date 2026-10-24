@@ -428,10 +428,10 @@ LLM synthesis + embedding. Never originates knowledge — only assembles retriev
 > same retry on 502/503/504, same `verify_served_model` check, same failure shape. Ollama keeps its
 > own method because `/api/generate` is a different wire format, not a different URL.
 >
-> **Token Factory is wired but unkeyed**, so it is inert until `NEBIUS_TOKEN_FACTORY_API_KEY` is set.
-> It is configured for Nemotron 3 Super (`NEBIUS_TOKEN_FACTORY_MODEL`) while NIM serves Nemotron 3 Ultra
-> since 2026-10-25, so set it to Token Factory's Ultra id first if both tiers should answer with one
-> model. The benchmark counts `tokenfactory` and `nim` alike as the pinned Nemotron family.
+> **Token Factory is tier 1 on the server and locally since 2026-10-25**; `.env.example` ships it unkeyed, so an unconfigured deployment skips it.
+> It serves Nemotron 3 Super 120B (paid, a third of Ultra's price) while NIM serves Ultra 550B for free,
+> so a fallback answer comes from a different Nemotron 3 model; the benchmark counts `tokenfactory` and
+> `nim` alike as the pinned family.
 > Fill `GEMINI_API_KEY` (Google's OpenAI-compatible endpoint) to add a generous free-tier cloud
 > fallback; set `OLLAMA_BASE_URL` to add the local air-gapped tier (intentionally empty by
 > default, because an accidental local Ollama once consumed ~6 GB RAM). Embeddings stay Jina → Ollama.
@@ -1093,7 +1093,7 @@ All settings in `api/config.py` via `pydantic-settings`. Source: `.env` file.
 | `GROQ_WHISPER_MODEL` | `whisper-large-v3` | STT via Groq API |
 | `NEBIUS_TOKEN_FACTORY_API_KEY` | `""` | **Tier 1 of the cascade when set**, ahead of NIM. Empty ⇒ skipped, which is the shipped default. |
 | `NEBIUS_TOKEN_FACTORY_BASE_URL` | `https://api.tokenfactory.nebius.com/v1` | OpenAI-compatible endpoint |
-| `NEBIUS_TOKEN_FACTORY_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | Nemotron 3 Super. Since 2026-10-25 NIM serves Ultra, so the two tiers name different Nemotron 3 models; both count as the pinned family in the benchmark. Set it to Token Factory's Ultra id to match before keying the tier |
+| `NEBIUS_TOKEN_FACTORY_MODEL` | `nvidia/nemotron-3-super-120b-a12b` | Nemotron 3 Super, chosen 2026-10-25 for price ($0.30 / $0.90 per 1M tokens against Ultra's $1.00 / $3.00). NIM serves Ultra as the free fallback |
 | `NEBIUS_TOKEN_FACTORY_DISABLE_THINKING` | `true` | Sends Nemotron's thinking-off flag to Token Factory. Its own switch, separate from NIM's, so a 400 there is fixed without touching NIM |
 | `NEBIUS_TOKEN_FACTORY_TIMEOUT` | `25.0` | A fallthrough costs this cap plus NIM's, so 25 + 60 = 85 s stays inside the frontend's 90 s synthesis budget. NIM answers in ~1.5 s at p50, so 25 s only cuts off a Token Factory call that is already failing |
 | `OPENROUTER_API_KEY` | `""` | **Tier 3 of the cascade** (tier 2 while Token Factory is unkeyed). Empty ⇒ skipped. |

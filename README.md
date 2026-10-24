@@ -123,26 +123,27 @@ For the full design, including the 13-layer breakdown, knowledge-graph mechanics
 |---|---|
 | **Backend** | FastAPI (Python 3.12), Temporal (durable workflows), Celery (task queues), Go (Gin) OT connectors |
 | **Datastores** | Neo4j Aura (graph, cloud), Qdrant Cloud (vector), Elasticsearch (exact), Redis (streams/cache), Supabase (Postgres · Auth · Storage · Vault) |
-| **AI models** | NVIDIA NIM (LLM · NER · OCR), Groq Whisper (STT), Jina (embeddings). Cloud-only, no local weights. Synthesis runs on Nemotron 3 Ultra 550B on NVIDIA NIM through a provider cascade (`services/model_providers.py`): Nebius Token Factory when its key is set (configured for Nemotron 3 Super), then NVIDIA NIM, then the fallbacks OpenRouter (Llama 3.1 70B), Gemini and Ollama. A tier with no key is skipped |
+| **AI models** | NVIDIA NIM (LLM · NER · OCR), Groq Whisper (STT), Jina (embeddings). Cloud-only, no local weights. Synthesis runs on Nemotron 3 through a provider cascade (`services/model_providers.py`): Nebius Token Factory serving Super 120B (live since 25 Oct), then NVIDIA NIM serving Ultra 550B, then the fallbacks OpenRouter (Llama 3.1 70B), Gemini and Ollama. A tier with no key is skipped |
 | **Frontend** | Next.js 16, React 19, Tailwind CSS v4, TypeScript (strict) |
 | **Platform** | Docker Compose, OPA (authz), Supabase Vault (secrets), OpenTelemetry → Grafana Cloud (traces + metrics) |
 
 ## Built on NVIDIA and Nebius
 
-Kairos runs its reasoning on **NVIDIA Nemotron 3**. **Nebius Token Factory** is the first tier of the
-synthesis cascade when its key is set, configured for Nemotron 3 Super 120B
-(`nvidia/nemotron-3-super-120b-a12b`). NVIDIA NIM is the second tier and currently serves Nemotron 3
-Ultra 550B (`nvidia/nemotron-3-ultra-550b-a55b`), because Super stopped answering for our NIM key on
-22 Oct.
+Kairos runs its reasoning on **NVIDIA Nemotron 3**. **Nebius Token Factory** is the first tier of
+the synthesis cascade, live since 25 Oct, serving **Nemotron 3 Super 120B**
+(`nvidia/nemotron-3-super-120b-a12b`): it answers in about 1 to 5 s, the current benchmark was
+measured on it, and it costs a third of Ultra per token. NVIDIA NIM is the second tier and serves
+**Nemotron 3 Ultra 550B** (`nvidia/nemotron-3-ultra-550b-a55b`), so if Token Factory is ever
+unavailable a larger Nemotron model answers instead.
 
 ### Where each model is used
 
 | Task | Model | Served by |
 |---|---|---|
-| Copilot answers (plain and streamed), with citations and the safety gate | Nemotron 3 (Super on Token Factory, Ultra on NIM) | Nebius Token Factory, then NVIDIA NIM |
-| RCA agent: investigation plan, hypotheses, and the evidence check on each hypothesis | Nemotron 3 (Super on Token Factory, Ultra on NIM) | Nebius Token Factory, then NVIDIA NIM |
-| Drafting a Management of Change from a conflict | Nemotron 3 (Super on Token Factory, Ultra on NIM) | Nebius Token Factory, then NVIDIA NIM |
-| Off-boarding and elicitation interview questions | Nemotron 3 (Super on Token Factory, Ultra on NIM) | Nebius Token Factory, then NVIDIA NIM |
+| Copilot answers (plain and streamed), with citations and the safety gate | Nemotron 3 Super 120B (Ultra 550B on fallback) | Nebius Token Factory, then NVIDIA NIM |
+| RCA agent: investigation plan, hypotheses, and the evidence check on each hypothesis | Nemotron 3 Super 120B (Ultra 550B on fallback) | Nebius Token Factory, then NVIDIA NIM |
+| Drafting a Management of Change from a conflict | Nemotron 3 Super 120B (Ultra 550B on fallback) | Nebius Token Factory, then NVIDIA NIM |
+| Off-boarding and elicitation interview questions | Nemotron 3 Super 120B (Ultra 550B on fallback) | Nebius Token Factory, then NVIDIA NIM |
 | OCR on scanned and handwritten documents | Nemotron OCR v2 (`nvidia/nemotron-ocr-v2`) | NVIDIA NIM |
 | Entity extraction (NER) and P&ID vision | Llama 3.2 11B Vision | NVIDIA NIM |
 | Embeddings, speech to text | Jina `jina-embeddings-v3`, Groq `whisper-large-v3` | Jina, Groq |
@@ -346,6 +347,13 @@ right design for adoption. Two gaps limited how much traffic could move. The cat
 model, so `nemotron-ocr-v2` stays on NIM. It also has no NVIDIA embedding model, and switching
 embedding providers means re-embedding the corpus. A Nemotron OCR model and an NVIDIA embedding model
 on Token Factory would let a project like this run entirely on Nebius.
+
+In use since 25 Oct, Token Factory answered Copilot-sized requests (2.5k prompt tokens) in 1.1 to 1.4 s
+on both Ultra and Super, accepted `chat_template_kwargs.enable_thinking: false`, and echoed the
+requested model id back, which is what our served-model check needs. One snag: model ids are cased
+inconsistently in the catalog (`nvidia/Nemotron-3-Ultra-550b-a55b` but
+`nvidia/nemotron-3-super-120b-a12b`), and NIM spells the same Ultra model in lower case, so a project
+switching providers has to match ids case-insensitively.
 
 **NVIDIA NIM model lifecycle.** This caused the most lost time:
 

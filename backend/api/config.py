@@ -141,9 +141,9 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Nebius Token Factory — tier 1 when configured, ahead of NIM.
     #
-    # OpenAI-compatible, and it serves the same NVIDIA Nemotron builds as NIM, so promoting it does
-    # not change which model answers — only who serves it. Empty key = tier skipped, which is the
-    # default, so an unconfigured deployment behaves exactly as it did before this tier existed.
+    # OpenAI-compatible and serves NVIDIA Nemotron models. Since 2026-10-25 it runs Super 120B, the
+    # cheaper paid option, while NIM runs Ultra 550B for free as the fallback. Empty key = tier
+    # skipped, which is the default, so an unconfigured deployment goes straight to NIM.
     # -------------------------------------------------------------------------
     NEBIUS_TOKEN_FACTORY_API_KEY: str = ""
     NEBIUS_TOKEN_FACTORY_BASE_URL: str = "https://api.tokenfactory.nebius.com/v1"

@@ -31,10 +31,9 @@ counts, the demo-polish and accessibility fixes, and the docs for all of it. CI 
 $29.50 plus a $1 trial), $25 Tavily credit available to claim. LangSmith, Toloka and Tandem credits
 were assessed and declined (see *Decisions still open*).
 
-**The Token Factory key is in the local `.env` and no call has been made with it.** The user paused
-spending on 2026-09-22, so N2, N3 and N4 wait for an explicit go-ahead. Note that the key being
-present is enough: whenever the stack runs, Token Factory is tier 1 and every answer spends credits.
-Commenting the key line out reverts the cascade to NIM with no code change.
+**Token Factory is live as tier 1 since 2026-10-25, locally and on the server, serving Nemotron 3
+Super 120B** (`status.md` P40), with NIM serving Ultra 550B for free as the fallback. Every answer spends credits; commenting the key line out reverts the
+cascade to NIM with no code change.
 
 **Two sessions, one working tree.** A parallel session owns the UI overhaul (section 5, uncommitted
 at the time of writing: 103 files, two routes removed). Backend and plan work is owned here. Anything
@@ -51,7 +50,7 @@ end-of-cycle work. The build items are the focus.
 | # | Item | Effort | State |
 |---|---|---|---|
 | E1 | **Open-source licence**, visible in the repo's About box. | minutes | **Done 24 Oct 2026:** this repo relicensed to Apache 2.0 (owner decision), replacing the mirror plan |
-| E2 | **A runtime call to Nebius Token Factory.** Code path is in place as tier 1; it activates the moment `NEBIUS_TOKEN_FACTORY_API_KEY` is set. Adoption means the running project makes a runtime call to the Token Factory inference API, or is deployed on Nebius AI Cloud compute. A key sitting unused in `.env` is not adoption. | 0.5 to 1 d | **The one hard build blocker** |
+| E2 | **Done 2026-10-25: a runtime call to Nebius Token Factory.** Code path is in place as tier 1; it activates the moment `NEBIUS_TOKEN_FACTORY_API_KEY` is set. Adoption means the running project makes a runtime call to the Token Factory inference API, or is deployed on Nebius AI Cloud compute. A key sitting unused in `.env` is not adoption. | 0.5 to 1 d | **Done 2026-10-25:** live Copilot answers come from `tokenfactory` (status.md P40) |
 | E3 | Provider refactor. Optional for activation, worth it for reuse. See N1. | done | **Done 21 Sep 2026**: `services/model_providers.py` |
 | E4 | Demo video, public on YouTube, **under 3 minutes**, audio covering the Token Factory and Nemotron usage. | refinement only | Existing video needs a recut and new narration |
 | E5 | README: Nemotron usage, Token Factory, and what changed recently. | 0.5 d | **Done 24 Oct 2026:** README sections *Built on NVIDIA and Nebius*, *Changes during the hackathon* and *Feedback* |
@@ -120,7 +119,7 @@ one call path, everything else unchanged.
 | # | Item | Effort | Why |
 |---|---|---|---|
 | N1 | **Done 21 Sep 2026.** Provider registry (`services/model_providers.py`); Token Factory is tier 1 when `NEBIUS_TOKEN_FACTORY_API_KEY` is set, NIM stays behind it on the same model. Only the key is outstanding. How it works: `docs/BACKEND.md`, provider cascade. | done | Satisfies E2 once keyed |
-| N2 | **Prepared 2026-09-22, paused by the user 2026-09-22 (no calls until they say so).** Once cleared, check two things: `verify_served_model` (`services/llm.py:652`) against Token Factory's model id spelling, and whether `chat_template_kwargs.enable_thinking` is honoured there (`llm.py:615`). | 2 h | A mismatch flags every answer |
+| N2 | **Done 2026-10-25:** the served-model id echoes the request (case differs from NIM; the check is case-insensitive) and `enable_thinking: false` is accepted. Originally: **prepared 2026-09-22, paused by the user 2026-09-22.** Once cleared, check two things: `verify_served_model` (`services/llm.py:652`) against Token Factory's model id spelling, and whether `chat_template_kwargs.enable_thinking` is honoured there (`llm.py:615`). | 2 h | A mismatch flags every answer |
 | N3 | NER to Nemotron Nano, P&ID vision to Nemotron Nano V2 12B. Re-check extraction F1 after. | 1 to 2 d | Makes NVIDIA models load-bearing rather than incidental |
 | N4 | Re-run the benchmarks against Token Factory. | 0.5 d + credits | The 41/46 was measured through NIM |
 | N5 | Model size routing, Nano for extraction, Super for the copilot, Ultra for RCA, with the answering model shown in the UI. | 1 to 2 d | Matches the model table above, each task on the smallest model that holds quality |
@@ -316,7 +315,7 @@ Project debt found while doing this work is recorded in
 
 | | Decision | Blocks |
 |---|---|---|
-| 1 | Whether the Token Factory key stays active in `.env` (spends credits on every answer) or is commented out until the work resumes | N2, N3, N4 |
+| 1 | ~~Whether the Token Factory key stays active~~ **Decided 2026-10-25: active, locally and on the server, serving Super 120B (price)** | nothing |
 | 2 | Whether to grow the corpus with public documents, and accept the cloud write plus the answer-key work | I3, T4 |
 | 3 | U1: collapse nav groups by default. Recommendation is to drop it | nothing; closes an item |
 

@@ -1183,7 +1183,7 @@ leave the line out.
 
 `uncertainty` carries the model's own statement of what it could not establish; `rate_limited` is
 `true` only when **every** provider tier returned HTTP 429 (see above). `model` names the provider tier
-that actually answered — `nim` (Nemotron 3 Ultra 550B), `tokenfactory` (Nemotron 3 Super 120B, when keyed), `openrouter` (Llama 3.1 70B) or `gemini` — and
+that actually answered — `nim` (Nemotron 3 Ultra 550B), `tokenfactory` (Nemotron 3 Super 120B, tier 1 since 2026-10-25), `openrouter` (Llama 3.1 70B) or `gemini` — and
 `served_model`, when present, is the exact model id the provider reported.
 
 **`pending_moc` — the change-under-review warning.** Non-empty when an asset the answer is about has
