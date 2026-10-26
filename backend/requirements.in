@@ -84,7 +84,7 @@ openpyxl==3.1.5
 Pillow==13.0.0
 # Not imported by our code: kept pinned because qdrant-client 1.9.1 needs numpy and an unpinned
 # resolve would move it to 2.x, untested against that client.
-numpy==1.26.4
+numpy==2.5.4
 
 # --- Utilities ---
 structlog==24.2.0
