@@ -26,7 +26,7 @@ python-dotenv==1.2.4
 neo4j==5.21.0
 qdrant-client==1.9.1
 elasticsearch==8.13.1
-redis==5.0.6
+redis==8.1.0
 supabase==2.5.3
 
 # --- Async Task Queue ---
