@@ -15,7 +15,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /kairos-connector ./cmd/connector/...
 
 # ---- release --------------------------------------------------------------
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS release
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS release
 # hadolint ignore=DL3018
 RUN apk --no-cache add ca-certificates wget \
     && addgroup -S -g 1001 kairos && adduser -S -u 1001 -G kairos kairos
